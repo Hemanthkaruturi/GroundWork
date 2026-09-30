@@ -55,7 +55,7 @@ class ShellGate(CheckBase):
     def test_writes_outside_the_project_are_not_ours_to_gate(self):
         self.close_gate()
         self.assertFalse(self.blocked("cp src/app.py /tmp/backup.py")[0])
-        self.assertFalse(self.blocked(f"echo 1 > {self.root}/elsewhere.py")[0])
+        self.assertFalse(self.blocked(f"echo 1 > {self.root.as_posix()}/elsewhere.py")[0])
 
     def test_enforcement_modes_and_bypass_apply_to_the_shell_too(self):
         self.close_gate()

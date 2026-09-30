@@ -11,7 +11,7 @@ GroundWork is a plugin for Claude Code that makes a coding agent work from a sha
 
 ## What the hooks do
 
-All hooks use exec form (`command: python3`, with a separate argument list) to run the explicit path `${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py` with one sub-command each (`session-context`, `prompt-reminder`, `stop-brevity`, `gate`, `skill-notice`, `gate-bash`).
+All hooks run the explicit path `${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py` with one sub-command each (using `python3`, or `python` if `python3` isn't available) (`session-context`, `prompt-reminder`, `stop-brevity`, `gate`, `skill-notice`, `gate-bash`).
 
 - **`gate`** (before Write, Edit, MultiEdit and NotebookEdit) and **`gate-bash`** (before Bash) can only **deny** a tool call, with a plain-language reason, when the project's approved documents don't yet allow code changes. They never return "allow", so they can't approve anything or widen permissions. If nothing needs blocking they print nothing and Claude Code's normal permission flow applies.
 - **`skill-notice`** (before the Skill tool) only adds a short reminder to Claude's context. It doesn't approve or deny.
@@ -39,7 +39,7 @@ Then run `/groundwork-specflow:bootstrap` in your project.
 
 ## Requirements
 
-Claude Code, Python 3.10 or newer available as `python3` on PATH, and git. On Windows, if your Python executable is named `python`, change each hook's `command` from `python3` to `python` in `hooks/hooks.json`.
+Claude Code, Python 3.10 or newer (found as `python3` or `python` on PATH), and git. No configuration is needed on any platform.
 
 ## Privacy
 

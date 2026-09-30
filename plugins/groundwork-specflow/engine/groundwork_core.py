@@ -65,17 +65,32 @@ class Ctx:
         return os.environ.get("GROUNDWORK_ENFORCEMENT") or self.config.get("enforcement", "block")
 
 
+def _exists(p: Path) -> bool:
+    """Path.exists() that treats unreadable places (permission denied, e.g. /tmp) as absent."""
+    try:
+        return p.exists()
+    except OSError:
+        return False
+
+
+def _isdir(p: Path) -> bool:
+    try:
+        return p.is_dir()
+    except OSError:
+        return False
+
+
 def _existing(p: Path) -> Path:
     p = p.resolve()
-    while not p.exists() and p != p.parent:
+    while not _exists(p) and p != p.parent:
         p = p.parent
-    return p if p.is_dir() else p.parent
+    return p if _isdir(p) else p.parent
 
 
 def find_git_root(start: Path) -> Path | None:
     p = _existing(start)
     for d in [p, *p.parents]:
-        if (d / ".git").exists():
+        if _exists(d / ".git"):
             return d
     return None
 
@@ -85,8 +100,8 @@ def child_repos(d: Path) -> list[Path]:
         kids = sorted(d.iterdir())
     except OSError:
         return []
-    return [k for k in kids if k.is_dir() and k.name not in SKIP_DIRS
-            and not k.name.startswith(".") and (k / ".git").exists()]
+    return [k for k in kids if _isdir(k) and k.name not in SKIP_DIRS
+            and not k.name.startswith(".") and _exists(k / ".git")]
 
 
 def read_config(root: Path) -> dict:
@@ -110,7 +125,7 @@ def _find_workspace_above(repo: Path) -> Path | None:
     unrelated repos), so we require PROJECT.md or a config marker above.
     """
     for d in repo.parents:
-        if read_config(d).get("level") == "workspace" or (d / "PROJECT.md").exists():
+        if read_config(d).get("level") == "workspace" or _exists(d / "PROJECT.md"):
             return d
         if d == Path.home() or d == d.parent:
             break
@@ -137,7 +152,7 @@ def detect(path: Path | str, session_cwd: Path | str | None = None) -> Ctx:
         return Ctx("standalone", git, repo=git, config=cfg)
     # not inside any git repo
     for d in [start, *start.parents]:
-        if read_config(d).get("level") == "workspace" or (d / "PROJECT.md").exists() \
+        if read_config(d).get("level") == "workspace" or _exists(d / "PROJECT.md") \
                 or (d == start and child_repos(d)):
             return Ctx("workspace", d, workspace=d, config=read_config(d))
         if d == Path.home() or d == d.parent:

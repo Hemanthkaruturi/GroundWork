@@ -84,6 +84,21 @@ class Detection(Base):
         self.assertEqual(self.level(self.root / "projects" / "a"), "STANDALONE")
 
 
+class Unreadable(Base):
+    @unittest.skipIf(os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0),
+                     "needs POSIX permissions and a non-root user")
+    def test_unreadable_folder_does_not_crash_the_gate(self):
+        # editing a file in a place like /tmp, whose subfolders we cannot read, must still give an answer
+        locked = self.root / "locked"
+        locked.mkdir()
+        (locked / "inner").mkdir()
+        locked.chmod(0)
+        self.addCleanup(locked.chmod, 0o700)
+        r = ca(self.root, "gate", stdin=json.dumps({"cwd": str(self.root), "tool_input": {"file_path": str(self.root / "app.py")}}))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn("Traceback", r.stderr)
+
+
 class Lifecycle(Base):
     def setUp(self):
         super().setUp()

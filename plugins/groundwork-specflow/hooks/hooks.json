@@ -6,11 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py",
-              "session-context"
-            ]
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py\" session-context || python \"${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py\" session-context"
           }
         ]
       }
@@ -20,11 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py",
-              "prompt-reminder"
-            ]
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py\" prompt-reminder || python \"${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py\" prompt-reminder"
           }
         ]
       }
@@ -34,11 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py",
-              "stop-brevity"
-            ]
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py\" stop-brevity || python \"${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py\" stop-brevity"
           }
         ]
       }
@@ -49,11 +37,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py",
-              "gate"
-            ]
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py\" gate || python \"${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py\" gate"
           }
         ]
       },
@@ -62,11 +46,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py",
-              "skill-notice"
-            ]
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py\" skill-notice || python \"${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py\" skill-notice"
           }
         ]
       },
@@ -75,11 +55,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py",
-              "gate-bash"
-            ]
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py\" gate-bash || python \"${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py\" gate-bash"
           }
         ]
       }

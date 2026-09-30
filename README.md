@@ -73,7 +73,7 @@ Point it at an existing project and it reads the code, drafts the documents from
 
 ## Install and use
 
-**You need:** [Claude Code](https://claude.com/claude-code), Python 3.10+ (`python3` on PATH) and git.
+**You need:** [Claude Code](https://claude.com/claude-code), Python 3.10+ (`python3` or `python` on PATH) and git.
 
 **1. Install the plugin.** Inside Claude Code, run:
 
@@ -101,6 +101,22 @@ GroundWork explains where it is, interviews you with clickable choices, and writ
 ```
 
 That's it. Come back any time and ask it to resume.
+
+**5. Keep it up to date.** New versions are released from time to time. The easiest way to receive them is to turn on automatic updates once: in Claude Code, run `/plugin`, open **Marketplaces**, select `groundwork-specflow`, and choose **Enable auto-update**. Updates then install in the background when you start a session.
+
+To update by hand instead, run this in Claude Code:
+
+```
+/plugin marketplace update groundwork-specflow
+```
+
+Then run this in a terminal:
+
+```
+claude plugin update groundwork-specflow@groundwork-specflow
+```
+
+Restart Claude Code (or run `/reload-plugins`) to start using the new version. If it says you already have the latest version, there is nothing new to install yet.
 
 ---
 

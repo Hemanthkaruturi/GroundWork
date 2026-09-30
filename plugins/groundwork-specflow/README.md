@@ -37,6 +37,10 @@ All hooks run the explicit path `${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py` wit
 
 Then run `/groundwork-specflow:bootstrap` in your project.
 
+## Update
+
+To get new versions automatically, run `/plugin`, open **Marketplaces**, select `groundwork-specflow`, and choose **Enable auto-update**. To update by hand, run `/plugin marketplace update groundwork-specflow` in Claude Code, then `claude plugin update groundwork-specflow@groundwork-specflow` in a terminal, and restart Claude Code.
+
 ## Requirements
 
 Claude Code, Python 3.10 or newer (found as `python3` or `python` on PATH), and git. No configuration is needed on any platform.

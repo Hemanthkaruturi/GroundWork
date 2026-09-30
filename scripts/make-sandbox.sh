@@ -31,6 +31,6 @@ Sandbox ready in $SB
   b-legacy-repo/  -> expect level STANDALONE, foundation docs missing
   c-shop/         -> expect level WORKSPACE (repos: shop-api, shop-web)
 Start Claude in one with the plugin loaded, e.g.:
-  cd $SB/c-shop && claude --plugin-dir $(cd "$(dirname "$0")/.." && pwd)/plugins/groundwork
+  cd $SB/c-shop && claude --plugin-dir $(cd "$(dirname "$0")/.." && pwd)/plugins/groundwork-specflow
 See docs/manual-testing.md for the full script.
 MSG

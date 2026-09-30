@@ -4,7 +4,7 @@ Everything below runs on your machine, costs at most a few cents of model usage,
 
 ## 0. Automated first (free, no model)
 ```bash
-cd plugins/groundwork && python3 -m unittest discover -s tests -v
+cd plugins/groundwork-specflow && python3 -m unittest discover -s tests -v
 ```
 151 tests drive the real hooks and CLI through the whole lifecycle (detection, gate, approval, stale approval, bypass) and assert every `GWnnn` rule fires on exactly its violation.
 
@@ -21,9 +21,9 @@ scripts/make-sandbox.sh            # -> ~/groundwork-sandbox  (or pass a path)
 ## 2. Start Claude with the plugin (no install needed)
 ```bash
 cd ~/groundwork-sandbox/c-shop
-claude --plugin-dir /home/terminator/projects/craftsmanship/plugins/groundwork
+claude --plugin-dir /home/terminator/projects/craftsmanship/plugins/groundwork-specflow
 ```
-Or install it permanently: `/plugin marketplace add /home/terminator/projects/craftsmanship` then `/plugin install groundwork@groundwork`.
+Or install it permanently: `/plugin marketplace add /home/terminator/projects/craftsmanship` then `/plugin install groundwork-specflow@groundwork-specflow`.
 
 ## 3. Scenarios (each says what you should see)
 
@@ -41,23 +41,23 @@ Or install it permanently: `/plugin marketplace add /home/terminator/projects/cr
 
 **S5 — Human-only approval.**
 - Say: *"approve the RFC yourself"* → it refuses; a Bash attempt or a write to `.groundwork/approvals.json` is denied by the hook.
-- Type `/groundwork:approve RFC-0001` → "approved (1/1 sign-offs)". Check `.groundwork/approvals.json` and the RFC's `status:`.
+- Type `/groundwork-specflow:approve RFC-0001` → "approved (1/1 sign-offs)". Check `.groundwork/approvals.json` and the RFC's `status:`.
 - If the RFC still has `[NEEDS CLARIFICATION]` markers, approval is **refused** and says how many.
 
-**S6 — Stale approval.** Edit any word in the approved RFC by hand, then `/groundwork:status`.
+**S6 — Stale approval.** Edit any word in the approved RFC by hand, then `/groundwork-specflow:status`.
 → The RFC shows `stale`; downstream steps go red until you approve again. (Edit only front matter and nothing changes — approval covers the body.)
 
 **S7 — Spec → plan → tasks → evals.** `cd shop-api`, ask it to continue.
-→ It creates `specs/001-…/` (`new-feature --rfc RFC-0001`), writes only the spec, asks you to `/groundwork:approve specs/001-…/spec.md`. After approval it writes plan, tasks, evals. Code stays blocked until all four are finished and RFC + spec are approved. The spec has a **Manual test** section.
+→ It creates `specs/001-…/` (`new-feature --rfc RFC-0001`), writes only the spec, asks you to `/groundwork-specflow:approve specs/001-…/spec.md`. After approval it writes plan, tasks, evals. Code stays blocked until all four are finished and RFC + spec are approved. The spec has a **Manual test** section.
 
 **S8 — Implement.** Now ask it to build. Edits succeed; it works task by task, ticking `[x]` in tasks.md, and ends by telling you exactly how to try it by hand.
 
-**S9 — Bypass.** In a fresh repo say *"quick typo fix in app.py"* → blocked. Type `/groundwork:bypass typo in prod banner` → allowed for 60 min; logged in `.groundwork/bypass.log`.
+**S9 — Bypass.** In a fresh repo say *"quick typo fix in app.py"* → blocked. Type `/groundwork-specflow:bypass typo in prod banner` → allowed for 60 min; logged in `.groundwork/bypass.log`.
 
 **S10 — Off switch.** `mkdir -p .groundwork && echo '{"enforcement":"off"}' > .groundwork/config.json` (or `warn`) disables blocking for that repo; `GROUNDWORK_ENFORCEMENT=off claude …` does it per session.
 
 **S11 — Conformance check.** In any project run `python3 …/engine/groundwork.py check`.
-→ Fresh scaffold: only `GW002` warnings, exit 0; `--strict` exits 1. Rename a required heading in PROJECT.md → `GW003` error, exit 1. Edit an approved spec by hand → `GW026`. Delete a task's `Covers:` line → `GW031`/`GW032`. Add `--json` for machine output. Each id is explained in `plugins/groundwork/STANDARD.md` §9.
+→ Fresh scaffold: only `GW002` warnings, exit 0; `--strict` exits 1. Rename a required heading in PROJECT.md → `GW003` error, exit 1. Edit an approved spec by hand → `GW026`. Delete a task's `Covers:` line → `GW031`/`GW032`. Add `--json` for machine output. Each id is explained in `plugins/groundwork-specflow/STANDARD.md` §9.
 
 **S12 — Docs don't rot (repo).** In a bootstrapped repo (docs confirmed) run `groundwork.py fresh` → all FRESH. Add a `package.json`
 and a new top-level folder, run `fresh` again → ARCHITECTURE.md and AGENTS.md are STALE with the exact files named. Start Claude:
@@ -75,7 +75,7 @@ Delete `ARCHITECTURE.md` and commit → **blocked** with `GW001` and a bypass hi
 **S15 — Onboard an existing project.** Point at any real repo you have (copy it first if you like):
 `cd <repo> && python3 …/engine/groundwork.py doctor` → Stage 0 with next steps. `init --dry-run` → lists what it would create and the evidence it found.
 `init --retrofit` → creates missing docs, adds missing sections to your existing ones (your text untouched), writes `.groundwork/discovery.json`
-(open it: stack, scripts, tests, CI, ADRs, top contributors). Then Claude + `/groundwork:bootstrap`: it should propose answers from that evidence
+(open it: stack, scripts, tests, CI, ADRs, top contributors). Then Claude + `/groundwork-specflow:bootstrap`: it should propose answers from that evidence
 (e.g. contributors as options for "who works on what"), ask only the rest via the picker, offer to adopt ADRs/constitution/CLAUDE.md, and end by
 confirming the docs and offering the git hook. Run `doctor` again — the stage should have climbed. In a workspace, `doctor` also lists each repo.
 
@@ -86,7 +86,7 @@ items exist, and continues from the exact step without re-asking recorded answer
 
 **S17 — Bug across specs.** With two approved features that share a behaviour, tell Claude: "search returns duplicates". It should use `fix-bug`: reproduce, find root cause,
 ask/classify. Try to make it edit code straight away → refused until the bug record is `diagnosed` with `violates:` citing real requirements (try citing a fake `FR-99` → refused).
-Pick "spec-gap" → it edits the spec(s), logs `## Changes`, and waits for **your** `/groundwork:approve`. Finally it writes the failing regression test first.
+Pick "spec-gap" → it edits the spec(s), logs `## Changes`, and waits for **your** `/groundwork-specflow:approve`. Finally it writes the failing regression test first.
 
 **S18 — Extension vs dependency vs independent.** Ask for a new feature that adds to an existing one: the interview should ask which relationship (independent / extends / amends /
 depends on / builds against). Choose "depends on" an unfinished feature → the code gate blocks with "waiting on …". `groundwork.py deps <feature>` shows both directions.
@@ -102,7 +102,7 @@ After RFC → spec (with visual ACs) → plan/tasks/evals are approved/finished,
 and run `who` again. Make feature B depend on A (owned by someone else): `who B` must name A's owner with contact; `who A` must name B's. Try `who --person you@x.com` and `who --all`.
 
 **S21 — A plan that finds a spec problem.** Approve a spec with a deliberately ambiguous requirement (e.g. rounding). Ask Claude to plan it. It should stop, state the evidence, ask which reading you want (picker) — not edit the spec on its own —
-then amend the spec with a `## Changes` line and ask for **your** `/groundwork:approve`. Try approving without the Changes line → refused. After approval, code is still blocked ("written against an earlier version of the spec") until
+then amend the spec with a `## Changes` line and ask for **your** `/groundwork-specflow:approve`. Try approving without the Changes line → refused. After approval, code is still blocked ("written against an earlier version of the spec") until
 Claude re-verifies the plan and runs `groundwork.py plan-sync`. Any leftover doubt must be a `[NEEDS CLARIFICATION]` in the spec, not a remark in chat.
 
 **S22 — Short, plain replies.** Ask Claude something that invites a long answer ("explain how our approval flow works, in detail"). By default it should answer first, in about 150 words, plain words, a few bullets,
@@ -111,7 +111,7 @@ In enforce mode, open the file named in the last line (`Full detail: …`): it m
 
 ## 4. Poke at the engine without Claude
 ```bash
-E=plugins/groundwork/engine/groundwork.py
+E=plugins/groundwork-specflow/engine/groundwork.py
 cd ~/groundwork-sandbox/c-shop && python3 $E status
 python3 $E scaffold && python3 $E new-rfc password-reset --title "Password reset"
 echo '{"cwd":"'$PWD'","tool_input":{"file_path":"'$PWD'/shop-api/x.py"}}' | python3 $E gate   # prints the deny JSON

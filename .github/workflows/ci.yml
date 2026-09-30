@@ -24,4 +24,4 @@ jobs:
           git config --global user.name "ci"
           git config --global user.email "ci@example.com"
       - name: Run tests
-        run: python -m unittest discover -s plugins/groundwork/tests
+        run: python -m unittest discover -s plugins/groundwork-specflow/tests

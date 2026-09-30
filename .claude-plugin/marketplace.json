@@ -1,11 +1,13 @@
 {
-  "name": "groundwork",
+  "name": "groundwork-specflow",
   "description": "Standards that make coding agents work from a shared plan: documents first, humans approve, then code.",
-  "owner": { "name": "Hemanth Karuturi" },
+  "owner": {
+    "name": "Hemanth Karuturi"
+  },
   "plugins": [
     {
-      "name": "groundwork",
-      "source": "./plugins/groundwork",
+      "name": "groundwork-specflow",
+      "source": "./plugins/groundwork-specflow",
       "description": "Craftsmanship standards for coding agents: documents first, humans approve, then code."
     }
   ]

@@ -73,21 +73,21 @@ Point it at an existing project and it reads the code, drafts the documents from
 
 ## Install and use
 
-**You need:** [Claude Code](https://claude.com/claude-code), Python 3 and git.
+**You need:** [Claude Code](https://claude.com/claude-code), Python 3.10+ (`python3` on PATH) and git.
 
 **1. Install the plugin.** Inside Claude Code, run:
 
 ```
 /plugin marketplace add Hemanthkaruturi/GroundWork
-/plugin install groundwork@groundwork
+/plugin install groundwork-specflow@groundwork-specflow
 ```
 
-Run the first command and wait for "Successfully added marketplace" before the second. If you see `Marketplace "groundwork" not found`, the marketplace hasn't been added yet.
+Run the first command and wait for "Successfully added marketplace" before the second. If you see `Marketplace "groundwork-specflow" not found`, the marketplace hasn't been added yet.
 
 **2. Set up your project.** Open Claude Code in your project (new or existing) and run:
 
 ```
-/groundwork:bootstrap
+/groundwork-specflow:bootstrap
 ```
 
 GroundWork explains where it is, interviews you with clickable choices, and writes your project documents without inventing facts.
@@ -97,7 +97,7 @@ GroundWork explains where it is, interviews you with clickable choices, and writ
 **4. Approve when you're happy.** Only you can do this, so the agent can't do it for you:
 
 ```
-/groundwork:approve
+/groundwork-specflow:approve
 ```
 
 That's it. Come back any time and ask it to resume.

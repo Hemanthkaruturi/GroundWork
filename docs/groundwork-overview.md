@@ -98,7 +98,7 @@ Stage 1/5: Scaffolded  ●●○○○○
 People
   ! no people listed under 'Who works on what' in PROJECT.md — nobody can be contacted about anything
 Next steps
-  1. fill it in with the bootstrap skill (/groundwork:bootstrap)
+  1. fill it in with the bootstrap skill (/groundwork-specflow:bootstrap)
 ```
 After the documents are filled in and confirmed, the same command says `Stage 3/5: Current`, and the next step is "install the git hook".
 
@@ -129,11 +129,11 @@ the Write/Edit tools; do not route around the gate.
 The agent tries to approve its own RFC:
 ```
 DENIED: approvals and bypasses are human acts. Ask the user to run
-/groundwork:approve or /groundwork:bypass themselves.
+/groundwork-specflow:approve or /groundwork-specflow:bypass themselves.
 ```
 Priya types the command herself:
 ```
-> /groundwork:approve RFC-0001
+> /groundwork-specflow:approve RFC-0001
 RFC-0001-product-search.md: approved (1/1 sign-offs: Priya Nair)
 ```
 If anyone edits the RFC afterwards, its status becomes `stale` and it must be approved again.
@@ -158,7 +158,7 @@ spec.md still has 14 [TODO]/[NEEDS CLARIFICATION] marker(s). Resolve them before
 ### 5.7 A plan finds a problem in the spec
 While planning, the agent notices "rounded" in FR-2 is ambiguous. It shows the evidence and asks Priya which reading she wants (picker). Priya says "nearest cent". Then:
 ```
-> /groundwork:approve specs/001-product-search/spec.md
+> /groundwork-specflow:approve specs/001-product-search/spec.md
 this spec was approved before and has changed since. Record what changed and why as a dated
 line under '## Changes' ... then approve again.
 ```
@@ -253,7 +253,7 @@ shop-api: installed pre-commit
 > git commit -m "x"        # after deleting ARCHITECTURE.md
 ERROR   GW001  shop-api/ARCHITECTURE.md: required foundation item is missing
 2 error(s), 2 warning(s)
-groundwork: commit blocked. Fix the findings above, or bypass once with --no-verify.
+groundwork-specflow: commit blocked. Fix the findings above, or bypass once with --no-verify.
 ```
 
 ### 5.14 Adding it to an existing project
@@ -321,7 +321,7 @@ The step-by-step version is in `docs/manual-testing.md`.
 
 - **16 skills:** workflow, bootstrap, interview, write-rfc, write-spec, write-plan, write-tasks, write-evals, write-contract, implement, handover, refresh, resume, fix-bug, ownership, plain-writing.
 - **Hooks:** session start (awareness and in-flight work), every prompt (triage and style reminder), before edits and shell commands (the gate), when another skill loads, and at reply end (optional length limit).
-- **Commands you type:** `/groundwork:approve`, `/groundwork:bypass` (emergencies, logged), `/groundwork:status`.
+- **Commands you type:** `/groundwork-specflow:approve`, `/groundwork-specflow:bypass` (emergencies, logged), `/groundwork-specflow:status`.
 - **A command-line engine** (`groundwork.py`): `init`, `doctor`, `check`, `fresh`, `confirm`, `board`, `note`, `who`, `record`, `deps`, `hooks`, and more. Pure Python, no dependencies, no Claude needed.
 - **Quality:** about 150 automated tests cover the whole lifecycle. Every numbered rule has a test that breaks exactly that rule.
 
@@ -350,14 +350,14 @@ The step-by-step version is in `docs/manual-testing.md`.
 ```bash
 # try it without installing
 cd your-project
-claude --plugin-dir /path/to/craftsmanship/plugins/groundwork
+claude --plugin-dir /path/to/craftsmanship/plugins/groundwork-specflow
 
 # existing project? see where it stands
-python3 /path/to/craftsmanship/plugins/groundwork/engine/groundwork.py doctor
-python3 /path/to/craftsmanship/plugins/groundwork/engine/groundwork.py init --dry-run
+python3 /path/to/craftsmanship/plugins/groundwork-specflow/engine/groundwork.py doctor
+python3 /path/to/craftsmanship/plugins/groundwork-specflow/engine/groundwork.py init --dry-run
 ```
 
-Then run `/groundwork:bootstrap` in Claude. Full reference: `plugins/groundwork/STANDARD.md`. Hands-on scenarios: `docs/manual-testing.md`.
+Then run `/groundwork-specflow:bootstrap` in Claude. Full reference: `plugins/groundwork-specflow/STANDARD.md`. Hands-on scenarios: `docs/manual-testing.md`.
 
 ## 12. Where it goes next
 

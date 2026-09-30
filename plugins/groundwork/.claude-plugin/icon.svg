@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="GroundWork">
+  <defs>
+    <linearGradient id="navy" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b3aa8"/>
+      <stop offset="1" stop-color="#0a2260"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2b90ff"/>
+      <stop offset="1" stop-color="#0b5be0"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="48" fill="#ffffff"/>
+  <!-- G body -->
+  <path d="M92 30 H166 L204 66 V104 H204 V180 L176 206 H98 L58 172 V64 Z" fill="url(#navy)"/>
+  <!-- folded corner, top right -->
+  <path d="M166 30 L204 66 H166 Z" fill="url(#blue)"/>
+  <!-- ribbon, bottom left -->
+  <path d="M58 150 L150 194 L98 206 L58 172 Z" fill="url(#blue)"/>
+  <!-- checklist page -->
+  <rect x="72" y="54" width="86" height="96" rx="7" fill="#ffffff"/>
+  <!-- G crossbar -->
+  <path d="M132 118 H204 V180 L176 206 H150 V150 H118 Z" fill="url(#navy)"/>
+  <g stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <circle cx="88" cy="74" r="9" fill="#10a36b" stroke="none"/>
+    <circle cx="88" cy="99" r="9" fill="#10a36b" stroke="none"/>
+    <circle cx="88" cy="124" r="9" fill="#10a36b" stroke="none"/>
+    <path d="M83.5 74.5 l3.5 3.5 l6-7"/>
+    <path d="M83.5 99.5 l3.5 3.5 l6-7"/>
+    <path d="M83.5 124.5 l3.5 3.5 l6-7"/>
+  </g>
+  <g fill="#a3aec4">
+    <rect x="104" y="71" width="40" height="6" rx="3"/>
+    <rect x="104" y="96" width="46" height="6" rx="3"/>
+    <rect x="104" y="121" width="26" height="6" rx="3"/>
+  </g>
+</svg>

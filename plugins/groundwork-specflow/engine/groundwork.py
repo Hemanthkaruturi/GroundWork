@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """groundwork — command line and hook entry point for the groundwork plugin.
 
 Hooks:      groundwork.py session-context | prompt-reminder | gate | gate-bash     (JSON on stdin)
@@ -235,6 +234,11 @@ def cmd_skill_notice(_a) -> None:
 
 
 def cmd_gate_bash(_a) -> None:
+    """Parse the proposed tool command for write targets; never execute it.
+
+    This hook emits only a denial or no output. It does not run the submitted
+    command, dump the process environment, or send hook input over the network.
+    """
     full = hook_input()
     cmd = full.get("tool_input", {}).get("command", "")
     if C.is_protected_command(cmd):

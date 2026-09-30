@@ -208,7 +208,7 @@ For every RFC, feature and bug the project MUST be able to say **whom to contact
 - A document with `signoffs_required: N` is approved when N distinct people have approved the same body.
 - A document MUST NOT be approved while unfinished.
 - An agent MUST NOT create, edit or run anything that produces an approval record.
-- The gate applies to every route by which code is written, not only the editor tools: shell redirections and heredocs, `tee`, `sed -i`, `cp`/`mv`, `curl -o`, `patch`/`git apply` and inline interpreter scripts that write files are judged exactly like a Write. (A script *file* that writes files when run is opaque to static analysis and is not covered.)
+- The gate applies to every route by which code is written, not only the editor tools: shell redirections and heredocs, `tee`, `sed -i`, `cp`/`mv`, downloads saved to files, `patch`/`git apply` and inline interpreter scripts that write files are judged exactly like a Write. These are proposed agent tool commands that the gate parses for write targets; the plugin never executes them. (A script *file* that writes files when run is opaque to static analysis and is not covered.)
 - Other skills and plugins are craft tools for the implement step and do not exempt any part of the path: a request to change how something *looks* is a change request like any other.
 - Implementation MUST NOT begin (no task marked `[~]` or `[x]`) until the spec is approved, and the spec may be approved only under an approved RFC.
 

@@ -22,6 +22,7 @@ All hooks use exec form (`command: python3`, with a separate argument list) to r
 ## What it runs, reads and sends
 
 - It runs a local Python 3 script, `engine/groundwork.py`, using only the standard library. There are no dependencies to install.
+- The Bash hook parses the proposed tool command as text to identify file writes. It never executes that command, dumps the process environment, or transmits hook input. Download commands mentioned in the standard are examples of writes to check, not commands the plugin runs.
 - Discovery and freshness scans skip common secret files (`.env*`, keys, credential files, Terraform variables/state) and file symlinks.
 - It reads and writes files inside your project: the documents it manages, plus a `.groundwork/` folder for approvals, notes and freshness records.
 - It runs `git` to read your repository and, to record who approved or owns something, your local git identity (`git config user.name` and `user.email`) or the `USER` variable. That identity stays in your project files. It is never sent anywhere.

@@ -1,0 +1,36 @@
+---
+name: implement
+description: Implement the active feature task by task, keeping docs in sync and giving the user a manual test. Use when spec, plan, tasks and evals are complete and the gate allows code.
+---
+
+# Implement
+
+`python3 "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py" status` must show every pipeline step ticked. If a hook denies an edit, do the
+step it names; do not try to route around it (shell redirects, other tools) — that is a violation.
+
+- **Other skills are tools, not a shortcut.** Design/frontend/testing skills (e.g. `frontend-design`) may be used here, in this step, to *realise the approved spec* — every choice must trace to a requirement in it. If such a skill was loaded before the spec was approved, stop and triage: it does not exempt you from the interview → RFC → spec path, and writing files by shell is gated like the Write tool.
+- Respect relationships: `groundwork.py deps <feature>` shows what this depends on (must be implemented) and what depends on it. Changing behaviour other features rely on means updating and re-approving the affected specs first.
+- Work **one task at a time**: mark it `[~]`, do it, run the repo's checks (AGENTS.md), verify "Done when",
+  mark it `[x]`. Never mark done with a failing or skipped check; report failures with their output.
+- **Python: use `uv` for everything** — `uv add`/`uv add --dev` to add packages, `uv sync`, `uv run <cmd>`; never `pip install`, `python -m pip`,
+  `python -m venv` or hand-edited `uv.lock`. (Legacy `requirements.txt` project you weren't asked to migrate: `uv pip`.)
+- Follow ARCHITECTURE.md, CONSTITUTION.md and the pinned contract. Use the repo's existing patterns and vocabulary.
+- If reality contradicts the spec or plan, **stop** and use the discovery protocol in the **write-plan** skill: state the evidence, ask the user which reading is right (picker), amend the upstream document with a dated `## Changes` line saying what changed and why, get it re-approved, re-verify the downstream documents, `groundwork.py plan-sync` — then continue. Never leave a spec doubt as a chat footnote and never decide it yourself.
+  Behaviour change ⇒ spec change in the same change.
+- Update ARCHITECTURE.md / CONTRACTS/ / AGENTS.md in the same change if you altered what they describe, then run `groundwork.py confirm <doc>`.
+  Run `groundwork.py fresh` before you finish; if it reports stale documents, use the **refresh** skill.
+- Before declaring done, run `python3 "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py" check --strict` and fix every finding: it verifies the documents
+  conform to the standard and that every FR has a task and every AC an evaluation.
+- Any question for the user (a spec/plan contradiction, a choice) goes through `AskUserQuestion`, never as prose.
+- Don't commit or push unless asked.
+
+## Always end with a manual test
+When done (or at each meaningful milestone) tell the user, concretely: what to run, what to click/curl,
+what output to expect, and how to see a failure case. Use/extend the spec's §8. Say plainly what you verified
+and what you did not.
+
+When the feature's tasks are done record it: `groundwork.py record implemented --ref <feature> --via claude-code` (the person is the git identity of the human you work for). Commit messages carry `Refs: <NNN-slug>` so `groundwork.py who` can list everyone who touched it.
+Before you stop for any reason, leave a trail: `groundwork.py note "<where I stopped; next action>"`. Then continue with **handover**.
+
+## Write for the reader
+Replies and documents are short, plain and decision-first: answer/decision in the first line, about 150 words, short sentences, everyday words, no bare IDs or jargon (say what they mean), no re-telling of steps. See the **plain-writing** skill.

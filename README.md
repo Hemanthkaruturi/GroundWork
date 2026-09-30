@@ -118,6 +118,14 @@ claude plugin update groundwork-specflow@groundwork-specflow
 
 Restart Claude Code (or run `/reload-plugins`) to start using the new version. If it says you already have the latest version, there is nothing new to install yet.
 
+**Installed the plugin before it was renamed?** It used to be called `groundwork`. If updating fails with `Plugin "groundwork" not found`, run this once in Claude Code, then restart:
+
+```
+/plugin install groundwork-specflow@groundwork
+```
+
+Your project's `.groundwork/` records and documents keep working. Commands now start with `/groundwork-specflow:`.
+
 ---
 
 <p align="center">Released under the <a href="LICENSE">MIT License</a>. <a href="PRIVACY.md">Privacy</a>.</p>

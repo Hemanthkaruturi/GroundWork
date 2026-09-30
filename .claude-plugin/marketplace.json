@@ -10,5 +10,8 @@
       "source": "./plugins/groundwork-specflow",
       "description": "Craftsmanship standards for coding agents: documents first, humans approve, then code."
     }
-  ]
+  ],
+  "renames": {
+    "groundwork": "groundwork-specflow"
+  }
 }

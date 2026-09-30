@@ -104,4 +104,4 @@ That's it. Come back any time and ask it to resume.
 
 ---
 
-<p align="center">Released under the <a href="LICENSE">MIT License</a>.</p>
+<p align="center">Released under the <a href="LICENSE">MIT License</a>. <a href="PRIVACY.md">Privacy</a>.</p>

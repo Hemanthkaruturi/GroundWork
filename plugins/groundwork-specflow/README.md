@@ -41,6 +41,10 @@ Then run `/groundwork-specflow:bootstrap` in your project.
 
 Claude Code, Python 3.10 or newer available as `python3` on PATH, and git. On Windows, if your Python executable is named `python`, change each hook's `command` from `python3` to `python` in `hooks/hooks.json`.
 
+## Privacy
+
+GroundWork runs locally, collects no data and makes no network requests. See the [Privacy Policy](https://github.com/Hemanthkaruturi/GroundWork/blob/main/PRIVACY.md).
+
 ## License
 
 MIT.

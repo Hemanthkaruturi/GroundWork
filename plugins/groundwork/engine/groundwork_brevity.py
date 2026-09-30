@@ -57,7 +57,7 @@ def budget_for(path: Path, kind: str | None = None) -> int | None:
 def last_reply_text(transcript: Path) -> str:
     """All assistant text since the last real user message."""
     try:
-        rows = [json.loads(ln) for ln in transcript.read_text().splitlines() if ln.strip()]
+        rows = [json.loads(ln) for ln in transcript.read_text(encoding="utf-8").splitlines() if ln.strip()]
     except (OSError, ValueError):
         return ""
     texts: list[str] = []
@@ -94,8 +94,8 @@ def save_full_reply(root: Path, text: str) -> Path:
     d = root / ".groundwork" / "replies"
     d.mkdir(parents=True, exist_ok=True)
     gi = d.parent / ".gitignore"
-    if gi.exists() and "replies/" not in gi.read_text():
-        gi.write_text(gi.read_text().rstrip("\n") + "\nreplies/\n")
+    if gi.exists() and "replies/" not in gi.read_text(encoding="utf-8"):
+        gi.write_text(gi.read_text(encoding="utf-8").rstrip("\n") + "\nreplies/\n", encoding="utf-8")
     p = d / (time.strftime("%Y%m%d-%H%M%S") + ".md")
-    p.write_text(text.rstrip() + "\n")
+    p.write_text(text.rstrip() + "\n", encoding="utf-8")
     return p

@@ -31,7 +31,7 @@ TEST_DIRS = ["tests", "test", "__tests__", "spec", "e2e", "cypress"]
 
 def _git(repo: Path, *args: str) -> str:
     try:
-        return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True,
+        return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, encoding="utf-8",
                               timeout=10).stdout.strip()
     except (OSError, subprocess.SubprocessError):
         return ""
@@ -39,7 +39,7 @@ def _git(repo: Path, *args: str) -> str:
 
 def _read(p: Path, limit: int = 200_000) -> str:
     try:
-        return p.read_text(errors="replace")[:limit]
+        return p.read_text(errors="replace", encoding="utf-8")[:limit]
     except OSError:
         return ""
 

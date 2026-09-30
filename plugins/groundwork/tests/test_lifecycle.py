@@ -52,7 +52,7 @@ class Resume(CheckBase):
 
     def test_interview_progress_survives_in_the_rfc_draft(self):
         rfc = Path(ca(self.ws, "new-rfc", "login").stdout.strip())
-        rfc.write_text(rfc.read_text().replace("| 1 | [TODO] | [TODO] |", "| 1 | Who logs in? | Buyers |\n| 2 | Which IdP? | Google |"))
+        rfc.write_text(rfc.read_text(encoding="utf-8").replace("| 1 | [TODO] | [TODO] |", "| 1 | Who logs in? | Buyers |\n| 2 | Which IdP? | Google |"), encoding="utf-8")
         w = by_ref(board(self.ws), "RFC-0002")
         self.assertIn("2 interview answer(s)", w["state"])
 
@@ -74,7 +74,7 @@ class Resume(CheckBase):
         ca(self.ws, "approve", "RFC-0002", "--as", "lead")                 # approved, no spec: shows as in flight
         self.assertIn("RFC-0002", [i["ref"] for i in board(self.ws)])
         new = Path(ca(self.ws, "new-rfc", "new-way").stdout.strip()); fill(new)
-        new.write_text(new.read_text().replace("supersedes: []", "supersedes: [RFC-0002]"))
+        new.write_text(new.read_text(encoding="utf-8").replace("supersedes: []", "supersedes: [RFC-0002]"), encoding="utf-8")
         ca(self.ws, "approve", "RFC-0003", "--as", "lead")
         refs = [i["ref"] for i in board(self.ws)]
         self.assertNotIn("RFC-0002", refs)                                  # superseded: no longer waiting for a spec
@@ -102,7 +102,7 @@ class Relations(CheckBase):
         d, why = denied(self.api, self.code())
         self.assertTrue(d); self.assertIn("waiting on 001-widgets", why); self.assertIn("not yet implemented", why)
         t = self.fdir / "tasks.md"
-        t.write_text(re.sub(r"- \[ \]", "- [x]", t.read_text()))          # 001 implemented
+        t.write_text(re.sub(r"- \[ \]", "- [x]", t.read_text(encoding="utf-8")), encoding="utf-8")          # 001 implemented
         self.assertFalse(denied(self.api, self.code())[0])
 
     def test_builds_against_needs_only_approved_spec_and_finished_plan(self):
@@ -123,7 +123,7 @@ class Relations(CheckBase):
         finish(wf, self.ws, web)
         d, why = denied(web, web / "src" / "ui.js")
         self.assertTrue(d); self.assertIn("api/001-widgets", why)
-        t = self.fdir / "tasks.md"; t.write_text(re.sub(r"- \[ \]", "- [x]", t.read_text()))
+        t = self.fdir / "tasks.md"; t.write_text(re.sub(r"- \[ \]", "- [x]", t.read_text(encoding="utf-8")), encoding="utf-8")
         self.assertFalse(denied(web, web / "src" / "ui.js")[0])
 
     def test_deps_command_shows_relations_and_downstream(self):
@@ -150,7 +150,7 @@ class Relations(CheckBase):
         self.build_ready(f2)
         self.assertIn("GW072", check(self.ws)[1])
         base = self.fdir / "spec.md"
-        base.write_text(base.read_text().rstrip() + "\n\n## Changes\n- 2026-09-30: 002-second changes FR-1 (widgets now optional)\n")
+        base.write_text(base.read_text(encoding="utf-8").rstrip() + "\n\n## Changes\n- 2026-09-30: 002-second changes FR-1 (widgets now optional)\n", encoding="utf-8")
         ca(self.api, "approve", str(base), "--as", "lead")               # re-approval after the amendment
         self.assertNotIn("GW072", check(self.ws)[1])
 
@@ -166,12 +166,12 @@ class Relations(CheckBase):
     def test_started_before_dependency_is_an_error(self):
         f2 = self.feature("second", depends_on="001-widgets")
         self.build_ready(f2)
-        t = f2 / "tasks.md"; t.write_text(t.read_text().replace("- [ ] **T001**", "- [x] **T001**"))
+        t = f2 / "tasks.md"; t.write_text(t.read_text(encoding="utf-8").replace("- [ ] **T001**", "- [x] **T001**"), encoding="utf-8")
         self.assertIn("GW074", check(self.ws)[1])
 
     def test_rfc_supersedes_must_exist(self):
         rfc = self.rfc
-        rfc.write_text(rfc.read_text().replace("supersedes: []", "supersedes: [RFC-0099]"))
+        rfc.write_text(rfc.read_text(encoding="utf-8").replace("supersedes: []", "supersedes: [RFC-0099]"), encoding="utf-8")
         self.assertIn("GW015", check(self.ws)[1])
 
 
@@ -181,13 +181,13 @@ class Bugs(CheckBase):
         return p
 
     def diagnose(self, p, classification, **front):
-        t = p.read_text()
+        t = p.read_text(encoding="utf-8")
         t = t.replace("classification: unclassified", f"classification: {classification}")
         for k, v in front.items():
             t = re.sub(rf"^{k}:.*$", f"{k}: {v}", t, flags=re.M)
         t = t.replace("status: open", "status: diagnosed")
         t = re.sub(r"\[TODO[^\]]*\]", "done", t)
-        p.write_text(t)
+        p.write_text(t, encoding="utf-8")
 
     def code(self):
         return self.api / "src" / "fix.py"
@@ -229,7 +229,7 @@ class Bugs(CheckBase):
         d, why = denied(self.api, self.code())
         self.assertTrue(d); self.assertIn("Changes", why)
         base = self.fdir / "spec.md"
-        base.write_text(base.read_text().rstrip() + f"\n\n## Changes\n- 2026-09-30: {bid} — FR-1 now covers empty input\n")
+        base.write_text(base.read_text(encoding="utf-8").rstrip() + f"\n\n## Changes\n- 2026-09-30: {bid} — FR-1 now covers empty input\n", encoding="utf-8")
         d, why = denied(self.api, self.code())
         self.assertTrue(d); self.assertIn("re-approve", why)               # amended but the human hasn't re-approved
         ca(self.api, "approve", str(base), "--as", "lead")
@@ -253,26 +253,26 @@ class Bugs(CheckBase):
     def test_fixed_needs_the_regression_test_to_exist_and_verification(self):
         p = self.new_bug()
         self.diagnose(p, "code-bug", violates="[FR-1@001-widgets]", regression_test="tests/test_fix.py")
-        p.write_text(p.read_text().replace("status: diagnosed", "status: fixed"))
+        p.write_text(p.read_text(encoding="utf-8").replace("status: diagnosed", "status: fixed"), encoding="utf-8")
         self.assertIn("GW063", check(self.ws)[1])                          # test file missing and §7 still empty
-        (self.api / "tests").mkdir(); (self.api / "tests" / "test_fix.py").write_text("")
+        (self.api / "tests").mkdir(); (self.api / "tests" / "test_fix.py").write_text("", encoding="utf-8")
         self.assertIn("GW063", check(self.ws)[1])                          # test exists, §7 still empty
         p.write_text(re.sub(r"## 7\. Verification\n.*", "## 7. Verification\nVerified by hand; suite green; docs unchanged.\n",
-                            p.read_text(), flags=re.S))
+                            p.read_text(encoding="utf-8"), flags=re.S), encoding="utf-8")
         self.assertNotIn("GW063", check(self.ws)[1])
 
     def test_open_bug_is_not_an_error_but_diagnosed_with_gaps_is(self):
         p = self.new_bug()
         self.assertEqual(check(self.ws)[0], 0)
         self.assertIn("GW064", check(self.ws)[1])
-        p.write_text(p.read_text().replace("status: open", "status: diagnosed"))
+        p.write_text(p.read_text(encoding="utf-8").replace("status: open", "status: diagnosed"), encoding="utf-8")
         code, ids, _ = check(self.ws)
         self.assertIn("GW065", ids); self.assertEqual(code, 1)
 
     def test_closed_bug_leaves_the_board(self):
         p = self.new_bug()
         self.assertIn("bugs/001-crash", [i["ref"] for i in board(self.api)])
-        p.write_text(p.read_text().replace("status: open", "status: closed"))
+        p.write_text(p.read_text(encoding="utf-8").replace("status: open", "status: closed"), encoding="utf-8")
         self.assertNotIn("bugs/001-crash", [i["ref"] for i in board(self.api)])
 
 

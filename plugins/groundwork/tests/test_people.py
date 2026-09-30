@@ -48,10 +48,10 @@ class Ownership(CheckBase):
 
     def test_creation_sets_owner_to_the_git_identity_and_ledger(self):
         ca(self.api, "new-feature", "third", "--rfc", "RFC-0001")
-        meta = (self.api / "specs" / "002-third" / "spec.md").read_text()
+        meta = (self.api / "specs" / "002-third" / "spec.md").read_text(encoding="utf-8")
         self.assertNotIn("owner:\n", meta)
         self.assertIn("requested_by: Lead Person", meta)                     # inherited from the RFC
-        ledger = (self.api / ".groundwork" / "ledger.jsonl").read_text()
+        ledger = (self.api / ".groundwork" / "ledger.jsonl").read_text(encoding="utf-8")
         self.assertIn('"event": "created"', ledger)
 
     def test_person_reverse_lookup_and_team_map(self):
@@ -88,7 +88,7 @@ class OwnershipChecks(CheckBase):
     def test_conforming_fixture_is_clean_but_finished_work_needs_implementer_and_support(self):
         self.assertEqual(check(self.ws, "--strict")[0], 0)
         t = self.fdir / "tasks.md"
-        t.write_text(t.read_text().replace("- [ ]", "- [x]"))
+        t.write_text(t.read_text(encoding="utf-8").replace("- [ ]", "- [x]"), encoding="utf-8")
         ids = check(self.ws)[1]
         self.assertTrue({"GW082", "GW083"} <= ids)
         ca(self.api, "record", "implemented", "--ref", "001-widgets", "--by", "dev2@example.com")
@@ -109,7 +109,7 @@ class OwnershipChecks(CheckBase):
 
     def test_doctor_flags_missing_people_table(self):
         pm = self.ws / "PROJECT.md"
-        pm.write_text(pm.read_text().replace("| Lead Person | Tech lead | everything | lead@example.com |\n| Dev Two | Backend dev | api | dev2@example.com |", ""))
+        pm.write_text(pm.read_text(encoding="utf-8").replace("| Lead Person | Tech lead | everything | lead@example.com |\n| Dev Two | Backend dev | api | dev2@example.com |", ""), encoding="utf-8")
         d = json.loads(ca(self.ws, "doctor", "--json").stdout)
         self.assertTrue(any(i["area"] == "People" and i["status"] == "warn" for i in d["items"]))
 

@@ -39,7 +39,7 @@ def edges(ctx: C.Ctx) -> list[Edge]:
             sp = fdir / "spec.md"
             if not sp.is_file():
                 continue
-            meta, _ = C.split_fm(sp.read_text())
+            meta, _ = C.split_fm(sp.read_text(encoding="utf-8"))
             for kind in KINDS:
                 for raw in C.list_of(meta, kind):
                     trc, tfd = C.resolve_feature(rc, raw)
@@ -88,7 +88,7 @@ def downstream(ctx: C.Ctx, target: Node) -> dict[str, list[str]]:
             res["features"].append(f"{fmt(e.src)}  ({e.kind})")
     for rc in contexts(ctx):
         for bp in B.bug_paths(rc):
-            meta, _ = C.split_fm(bp.read_text())
+            meta, _ = C.split_fm(bp.read_text(encoding="utf-8"))
             hits = [r for r in C.list_of(meta, "violates") if node_of(rc, r.partition("@")[2].strip()) == target]
             hits += [a for a in C.list_of(meta, "amends") if node_of(rc, a) == target]
             if hits:
@@ -103,11 +103,11 @@ def describe(ctx: C.Ctx, ref: str) -> str:
         p = C.find_rfc(ctx, ref)
         if not p:
             return f"No such RFC: {ref}"
-        rid = C.split_fm(p.read_text())[0].get("id", p.stem)
+        rid = C.split_fm(p.read_text(encoding="utf-8"))[0].get("id", p.stem)
         lines.append(f"{rid}: specs built from it")
         for rc in contexts(ctx):
             for fdir in C.feature_dirs(rc):
-                m, _ = C.split_fm((fdir / "spec.md").read_text()) if (fdir / "spec.md").is_file() else ({}, "")
+                m, _ = C.split_fm((fdir / "spec.md").read_text(encoding="utf-8")) if (fdir / "spec.md").is_file() else ({}, "")
                 if m.get("rfc") == rid:
                     lines.append(f"  - {rc.repo.name}/{fdir.name}")
         for r in C.rfcs(ctx):

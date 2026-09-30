@@ -83,7 +83,7 @@ def hook_input() -> dict:
         return {}
     log = os.environ.get("GROUNDWORK_HOOK_LOG")        # opt-in diagnostics: what did the harness actually send?
     if log:
-        with open(log, "a") as f:
+        with open(log, "a", encoding="utf-8") as f:
             f.write(json.dumps({"argv": sys.argv[1:], "input": data}) + "\n")
     return data
 
@@ -279,15 +279,15 @@ def cmd_bypass(a) -> None:
     f = root / ".groundwork" / "bypass.json"
     f.parent.mkdir(parents=True, exist_ok=True)
     until = time.time() + a.minutes * 60
-    f.write_text(json.dumps({"reason": a.reason, "by": C.signer(), "until": until}) + "\n")
-    with (root / ".groundwork" / "bypass.log").open("a") as log:
+    f.write_text(json.dumps({"reason": a.reason, "by": C.signer(), "until": until}) + "\n", encoding="utf-8")
+    with (root / ".groundwork" / "bypass.log").open("a", encoding="utf-8") as log:
         log.write(f"{time.strftime('%F %T')} {C.signer()} {a.minutes}min: {a.reason}\n")
     print(f"Gate bypassed for {a.minutes} minutes in {root}. Logged to .groundwork/bypass.log.")
 
 
 def _write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text)
+    path.write_text(text, encoding="utf-8")
 
 
 GITIGNORE = "active\nbypass.json\nbypass.log\ndiscovery.json\n"
@@ -318,8 +318,8 @@ def scaffold_at(ctx: C.Ctx, dry: bool = False) -> list[str]:
         gi = base / ".groundwork" / ".gitignore"
         if not gi.exists():
             _write(gi, GITIGNORE)
-        elif "discovery.json" not in gi.read_text():
-            gi.write_text(gi.read_text().rstrip("\n") + "\ndiscovery.json\n")
+        elif "discovery.json" not in gi.read_text(encoding="utf-8"):
+            gi.write_text(gi.read_text(encoding="utf-8").rstrip("\n") + "\ndiscovery.json\n", encoding="utf-8")
         if "standard" not in C.read_config(base):
             C.write_config(base, standard=C.STANDARD_VERSION)
     return made
@@ -344,18 +344,18 @@ def retrofit_at(ctx: C.Ctx, dry: bool = False) -> list[str]:
         p = C._find_ci(base, f)
         if p is None or key not in K.FOUNDATION_SECTIONS:
             continue
-        text = p.read_text()
+        text = p.read_text(encoding="utf-8")
         missing = K.missing_sections(text, K.FOUNDATION_SECTIONS[key], numbered=False)
         if not missing:
             continue
-        tpl = [m.group(1).strip() for m in __import__("re").finditer(r"^## (.+)$", (C.TEMPLATES / key).read_text(), __import__("re").M)]
+        tpl = [m.group(1).strip() for m in __import__("re").finditer(r"^## (.+)$", (C.TEMPLATES / key).read_text(encoding="utf-8"), __import__("re").M)]
         add = ""
         for name in missing:
             full = next((h for h in tpl if K._norm(h).startswith(K._norm(name))), name)
             add += f"\n## {full}\n[TODO: this required section was added by `groundwork.py init --retrofit`; fill it in]\n"
         done.append(f"{p.name}: +{', '.join(missing)}")
         if not dry:
-            p.write_text(text.rstrip("\n") + "\n" + add)
+            p.write_text(text.rstrip("\n") + "\n" + add, encoding="utf-8")
     return done
 
 
@@ -455,8 +455,8 @@ def cmd_new_feature(a) -> None:
            for k in ("extends", "depends_on", "builds_against", "amends")}
     if any(val != "[]" for val in rel.values()):
         sp = fdir / "spec.md"
-        sp.write_text(C.set_fm(sp.read_text(), rel))
-    rmeta, _ = C.split_fm(rfc.read_text())
+        sp.write_text(C.set_fm(sp.read_text(encoding="utf-8"), rel), encoding="utf-8")
+    rmeta, _ = C.split_fm(rfc.read_text(encoding="utf-8"))
     P.auto_created(ctx, "feature", fdir / "spec.md", getattr(a, "requested_by", None) or rmeta.get("requested_by") or None)
     _write(ctx.repo / ".groundwork" / "active", slug + "\n")
     print(f"{fdir}\nActive feature set to {slug}. Owner: {C.signer()}.")
@@ -587,12 +587,12 @@ def cmd_plan_sync(_a) -> None:
     spec = C.doc_state(fdir / "spec.md", ctx)
     if not spec.approved:
         raise SystemExit(f"spec.md is {spec.status}; plan/tasks/evals can only be synced to an APPROVED spec.")
-    h = C.body_hash((fdir / "spec.md").read_text())
+    h = C.body_hash((fdir / "spec.md").read_text(encoding="utf-8"))
     done = []
     for name in ("plan", "tasks", "evals"):
         f = fdir / f"{name}.md"
-        if f.is_file() and not C.PLACEHOLDER.search(f.read_text()):
-            f.write_text(C.set_fm(f.read_text(), {"spec_version": h}))
+        if f.is_file() and not C.PLACEHOLDER.search(f.read_text(encoding="utf-8")):
+            f.write_text(C.set_fm(f.read_text(encoding="utf-8"), {"spec_version": h}), encoding="utf-8")
             done.append(name + ".md")
     print("Pinned to the current approved spec: " + (", ".join(done) or "nothing (no finished documents yet)"))
 
@@ -608,6 +608,11 @@ def cmd_activate(a) -> None:
 
 
 def main() -> None:
+    for stream in (sys.stdin, sys.stdout, sys.stderr):      # Windows defaults to a legacy code page
+        try:
+            stream.reconfigure(encoding="utf-8")
+        except (AttributeError, ValueError, OSError):
+            pass
     ap = argparse.ArgumentParser(prog="groundwork")
     sub = ap.add_subparsers(dest="cmd", required=True)
     for n, fn in (("session-context", cmd_session_context), ("prompt-reminder", cmd_prompt_reminder),

@@ -16,7 +16,7 @@ ENV.pop("GROUNDWORK_ENFORCEMENT", None)
 
 def ca(cwd, *args, stdin=None):
     return subprocess.run([sys.executable, str(CA), *args], cwd=cwd, input=stdin,
-                          capture_output=True, text=True, env=ENV)
+                          capture_output=True, text=True, encoding="utf-8", env=ENV)
 
 
 def git_init(p):
@@ -37,8 +37,8 @@ def denied(cwd, path):
 
 def fill(path):
     """Simulate the agent finishing a document: strip every unresolved marker."""
-    t = Path(path).read_text()
-    Path(path).write_text(re.sub(r"\[(TODO|NEEDS CLARIFICATION)[^\]]*\]", "filled", t))
+    t = Path(path).read_text(encoding="utf-8")
+    Path(path).write_text(re.sub(r"\[(TODO|NEEDS CLARIFICATION)[^\]]*\]", "filled", t), encoding="utf-8")
 
 
 class Base(unittest.TestCase):
@@ -69,7 +69,7 @@ class Detection(Base):
 
     def test_repo_under_project_md_is_repo_level(self):
         git_init(self.root / "ws" / "api")
-        (self.root / "ws" / "PROJECT.md").write_text("# p")
+        (self.root / "ws" / "PROJECT.md").write_text("# p", encoding="utf-8")
         self.assertEqual(self.level(self.root / "ws" / "api"), "REPO")
 
     def test_gate_agrees_with_session_workspace_before_project_md_exists(self):
@@ -90,7 +90,7 @@ class Lifecycle(Base):
         self.ws = self.root / "ws"
         self.api = self.ws / "api"
         git_init(self.api)
-        (self.ws / "PROJECT.md").write_text("# ws")   # marks the workspace
+        (self.ws / "PROJECT.md").write_text("# ws", encoding="utf-8")   # marks the workspace
 
     def test_full_path(self):
         code = self.api / "src" / "app.py"
@@ -125,7 +125,7 @@ class Lifecycle(Base):
         self.assertIn("marker", r.stderr + r.stdout)
         fill(rfc)
         # forged frontmatter is worthless
-        rfc.write_text(rfc.read_text().replace("status: draft", "status: approved"))
+        rfc.write_text(rfc.read_text(encoding="utf-8").replace("status: draft", "status: approved"), encoding="utf-8")
         r = ca(self.api, "new-feature", "widgets", "--rfc", "RFC-0001")
         self.assertEqual(r.returncode, 0, r.stderr)
         st = ca(self.api, "status").stdout
@@ -158,7 +158,7 @@ class Lifecycle(Base):
         self.assertIn("implement", ca(self.api, "status").stdout)
 
         # 7. editing the approved spec makes approval stale -> blocked again
-        spec.write_text(spec.read_text() + "\nA new requirement.\n")
+        spec.write_text(spec.read_text(encoding="utf-8") + "\nA new requirement.\n", encoding="utf-8")
         d, why = denied(self.api, code)
         self.assertTrue(d); self.assertIn("stale", why)
 
@@ -166,7 +166,7 @@ class Lifecycle(Base):
         ca(self.ws, "scaffold")
         rfc = Path(ca(self.ws, "new-rfc", "x").stdout.strip())
         fill(rfc)
-        rfc.write_text(rfc.read_text().replace("signoffs_required: 1", "signoffs_required: 2"))
+        rfc.write_text(rfc.read_text(encoding="utf-8").replace("signoffs_required: 1", "signoffs_required: 2"), encoding="utf-8")
         self.assertIn("in-review", ca(self.ws, "approve", str(rfc), "--as", "a").stdout)
         self.assertIn("in-review", ca(self.ws, "approve", str(rfc), "--as", "a").stdout)  # same person twice
         self.assertIn("approved", ca(self.ws, "approve", str(rfc), "--as", "b").stdout)
@@ -178,16 +178,16 @@ class Lifecycle(Base):
         r = ca(self.api, "bypass", "prod", "is", "down")
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertFalse(denied(self.api, code)[0])
-        self.assertIn("prod is down", (self.api / ".groundwork" / "bypass.log").read_text())
-        b = json.loads((self.api / ".groundwork" / "bypass.json").read_text()); b["until"] = 1
-        (self.api / ".groundwork" / "bypass.json").write_text(json.dumps(b))
+        self.assertIn("prod is down", (self.api / ".groundwork" / "bypass.log").read_text(encoding="utf-8"))
+        b = json.loads((self.api / ".groundwork" / "bypass.json").read_text(encoding="utf-8")); b["until"] = 1
+        (self.api / ".groundwork" / "bypass.json").write_text(json.dumps(b), encoding="utf-8")
         self.assertTrue(denied(self.api, code)[0])
 
     def test_enforcement_off_and_warn(self):
         ca(self.api, "scaffold")
         for mode, blocked in (("off", False), ("warn", False), ("block", True)):
             cfg = self.api / ".groundwork" / "config.json"
-            cfg.write_text(json.dumps({"enforcement": mode}))
+            cfg.write_text(json.dumps({"enforcement": mode}), encoding="utf-8")
             self.assertEqual(denied(self.api, self.api / "x.py")[0], blocked, mode)
 
     def test_workspace_level_code_is_not_gated_but_prompt_reminder_works(self):

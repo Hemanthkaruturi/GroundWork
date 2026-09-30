@@ -51,7 +51,7 @@ def _newest(p: Path) -> float:
 
 def last_note(path: Path) -> str:
     try:
-        lines = [ln for ln in (path / "log.md").read_text().splitlines() if ln.startswith("- ")]
+        lines = [ln for ln in (path / "log.md").read_text(encoding="utf-8").splitlines() if ln.startswith("- ")]
         return lines[-1][2:] if lines else ""
     except OSError:
         return ""
@@ -80,7 +80,7 @@ def collect(ctx: C.Ctx, include_done: bool = False) -> list[Work]:
     cited: dict[str, list[str]] = {}
     for rc in repos:
         for fdir in C.feature_dirs(rc):
-            m, _ = C.split_fm((fdir / "spec.md").read_text()) if (fdir / "spec.md").is_file() else ({}, "")
+            m, _ = C.split_fm((fdir / "spec.md").read_text(encoding="utf-8")) if (fdir / "spec.md").is_file() else ({}, "")
             if m.get("rfc"):
                 cited.setdefault(m["rfc"], []).append(f"{rc.repo.name}/{fdir.name}" if prefix else fdir.name)
     rf = C.rfcs(ctx) if ctx.level != "unknown" else []
@@ -89,7 +89,7 @@ def collect(ctx: C.Ctx, include_done: bool = False) -> list[Work]:
         rid = r.meta.get("id") or r.path.stem
         if rid in superseded and not include_done:
             continue
-        text = r.path.read_text()
+        text = r.path.read_text(encoding="utf-8")
         n = interview_rows(text)
         if not r.approved:
             state = ("stale — edited after approval; needs re-approval" if r.status == "stale" else
@@ -139,7 +139,7 @@ def collect(ctx: C.Ctx, include_done: bool = False) -> list[Work]:
             out.append(Work("bug", f"{rname}/bugs/{bp.stem}" if prefix else f"bugs/{bp.stem}",
                             (f"{rname}/" if prefix else "") + f"bug {bp.stem}", f"{b.status} ({b.classification})",
                             b.next, "fix-bug", _newest(bp), active=(abug == bp.stem), repo=rname,
-                            owner=str(C.split_fm(bp.read_text())[0].get("owner", ""))))
+                            owner=str(C.split_fm(bp.read_text(encoding="utf-8"))[0].get("owner", ""))))
     out.sort(key=lambda w: (not w.active, -w.mtime))
     return out
 
@@ -175,7 +175,7 @@ def add_note(ctx: C.Ctx, text: str) -> Path:
         target = (ctx.workspace if ctx.level == "workspace" else (ctx.repo or ctx.root)) / ".groundwork" / "journal.md"
     target.parent.mkdir(parents=True, exist_ok=True)
     if not target.exists() and target.name == "log.md":
-        target.write_text("# Log\n\n> Append-only. Where work stopped, decisions taken on the way, what to do next.\n\n")
-    with target.open("a") as f:
+        target.write_text("# Log\n\n> Append-only. Where work stopped, decisions taken on the way, what to do next.\n\n", encoding="utf-8")
+    with target.open("a", encoding="utf-8") as f:
         f.write(line)
     return target

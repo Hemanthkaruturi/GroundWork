@@ -91,7 +91,7 @@ def child_repos(d: Path) -> list[Path]:
 
 def read_config(root: Path) -> dict:
     try:
-        return json.loads((root / ".groundwork" / "config.json").read_text())
+        return json.loads((root / ".groundwork" / "config.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
 
@@ -213,7 +213,7 @@ def _approvals_file(root: Path) -> Path:
 
 def load_approvals(root: Path) -> dict:
     try:
-        return json.loads(_approvals_file(root).read_text())
+        return json.loads(_approvals_file(root).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
 
@@ -221,7 +221,7 @@ def load_approvals(root: Path) -> dict:
 def signer() -> str:
     for cmd in (["git", "config", "user.email"], ["git", "config", "user.name"]):
         try:
-            out = subprocess.run(cmd, capture_output=True, text=True, timeout=5).stdout.strip()
+            out = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=5).stdout.strip()
             if out:
                 return out
         except (OSError, subprocess.SubprocessError):
@@ -248,7 +248,7 @@ def doc_state(path: Path, ctx: Ctx) -> DocState:
     path = Path(path)
     if not path.is_file():
         return DocState(path, False, "missing", [], 1, 0, {})
-    text = path.read_text()
+    text = path.read_text(encoding="utf-8")
     meta, body = split_fm(text)
     needed = int(meta.get("signoffs_required", "1") or 1)
     root = owner_root(path, ctx)
@@ -275,7 +275,7 @@ def approve(path: Path, ctx: Ctx, who: str | None = None) -> DocState:
     path = Path(path).resolve()
     if not path.is_file():
         raise SystemExit(f"no such document: {path}")
-    text = path.read_text()
+    text = path.read_text(encoding="utf-8")
     meta, _ = split_fm(text)
     if not meta:
         raise SystemExit(f"{path.name} has no front matter; it is not a governed document")
@@ -303,13 +303,13 @@ def approve(path: Path, ctx: Ctx, who: str | None = None) -> DocState:
     store[rel] = rec
     f = _approvals_file(root)
     f.parent.mkdir(parents=True, exist_ok=True)
-    f.write_text(json.dumps(store, indent=2) + "\n")
+    f.write_text(json.dumps(store, indent=2) + "\n", encoding="utf-8")
     needed = int(meta.get("signoffs_required", "1") or 1)
     done = len({s["who"] for s in rec["signers"]}) >= needed
     path.write_text(set_fm(text, {
         "status": "approved" if done else "in-review",
         "approved_by": "[" + ", ".join(s["who"] for s in rec["signers"]) + "]",
-    }))
+    }), encoding="utf-8")
     return doc_state(path, ctx)
 
 
@@ -337,7 +337,7 @@ def _gaps_at(level: str, base: Path | None, prefix: str) -> tuple[list[str], lis
         p = _find_ci(base, f)
         if p is None:
             missing.append(prefix + f)
-        elif PLACEHOLDER.search(p.read_text()):
+        elif PLACEHOLDER.search(p.read_text(encoding="utf-8")):
             unfinished.append(prefix + f)
     for d in spec["dirs"]:
         if not (base / d).is_dir():
@@ -379,7 +379,7 @@ def active_slug(ctx: Ctx) -> str | None:
     if not ctx.repo:
         return None
     try:
-        return (ctx.repo / ".groundwork" / "active").read_text().strip() or None
+        return (ctx.repo / ".groundwork" / "active").read_text(encoding="utf-8").strip() or None
     except OSError:
         return None
 
@@ -460,11 +460,11 @@ def feature_steps(ctx: Ctx, slug: str) -> list[Step]:
         ok = s.exists and s.placeholders == 0
         steps.append(Step(name, ok, f"{name}.md " + ("missing" if not s.exists else
                           f"has {s.placeholders} unresolved marker(s)" if s.placeholders else "complete")))
-    shash = body_hash((fdir / "spec.md").read_text()) if (fdir / "spec.md").is_file() else ""
+    shash = body_hash((fdir / "spec.md").read_text(encoding="utf-8")) if (fdir / "spec.md").is_file() else ""
     stale_docs = []
     for name in ("plan", "tasks", "evals"):
         f = fdir / f"{name}.md"
-        pinned = split_fm(f.read_text())[0].get("spec_version", "") if f.is_file() else ""
+        pinned = split_fm(f.read_text(encoding="utf-8"))[0].get("spec_version", "") if f.is_file() else ""
         if pinned and pinned != shash:
             stale_docs.append(f"{name}.md")
     steps.append(Step("sync", not stale_docs, "plan/tasks/evals match the approved spec" if not stale_docs else
@@ -478,7 +478,7 @@ def task_counts(ctx: Ctx, slug: str) -> tuple[int, int]:
     p = ctx.repo / "specs" / slug / "tasks.md"
     if not p.is_file():
         return 0, 0
-    t = p.read_text()
+    t = p.read_text(encoding="utf-8")
     done = len(re.findall(r"^\s*- \[x\]", t, re.M | re.I))
     return done, done + len(re.findall(r"^\s*- \[[ ~]\]", t, re.M))
 
@@ -552,7 +552,7 @@ def is_doc_path(path: Path, root: Path) -> bool:
 
 def bypass_active(root: Path) -> dict | None:
     try:
-        b = json.loads((root / ".groundwork" / "bypass.json").read_text())
+        b = json.loads((root / ".groundwork" / "bypass.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
     return b if b.get("until", 0) > time.time() else None
@@ -629,7 +629,7 @@ def is_protected_command(cmd: str) -> bool:
 # --- scaffolding ----------------------------------------------------------------------
 
 def render(template: str, **vars: str) -> str:
-    t = (TEMPLATES / template).read_text()
+    t = (TEMPLATES / template).read_text(encoding="utf-8")
     for k, v in vars.items():
         t = t.replace("{{" + k + "}}", v)
     return t
@@ -650,7 +650,7 @@ def write_config(root: Path, **updates) -> dict:
     cfg.update(updates)
     f = root / ".groundwork" / "config.json"
     f.parent.mkdir(parents=True, exist_ok=True)
-    f.write_text(json.dumps(cfg, indent=2) + "\n")
+    f.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
     return cfg
 
 

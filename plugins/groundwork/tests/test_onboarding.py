@@ -26,11 +26,11 @@ class Init(Base):
     def test_as_repo_does_git_init_and_scaffolds(self):
         self.assertEqual(ca(self.root, "init", "--as", "repo").returncode, 0)
         self.assertTrue((self.root / ".git").exists() and (self.root / "PROJECT.md").exists())
-        self.assertEqual(json.loads((self.root / ".groundwork" / "config.json").read_text())["standard"], "0.5.0")
+        self.assertEqual(json.loads((self.root / ".groundwork" / "config.json").read_text(encoding="utf-8"))["standard"], "0.5.0")
 
     def test_as_workspace_marks_it(self):
         self.assertEqual(ca(self.root, "init", "--as", "workspace").returncode, 0)
-        self.assertEqual(json.loads((self.root / ".groundwork" / "config.json").read_text())["level"], "workspace")
+        self.assertEqual(json.loads((self.root / ".groundwork" / "config.json").read_text(encoding="utf-8"))["level"], "workspace")
         self.assertTrue((self.root / "CONTRACTS").is_dir())
 
     def test_dry_run_writes_nothing(self):
@@ -43,10 +43,10 @@ class Init(Base):
         git_init(self.root / "r")
         r = self.root / "r"
         ca(r, "init")
-        (r / "PROJECT.md").write_text("# mine\n")
+        (r / "PROJECT.md").write_text("# mine\n", encoding="utf-8")
         out = ca(r, "init").stdout
         self.assertIn("nothing (foundation already present)", out)
-        self.assertEqual((r / "PROJECT.md").read_text(), "# mine\n")
+        self.assertEqual((r / "PROJECT.md").read_text(encoding="utf-8"), "# mine\n")
 
     def test_workspace_init_covers_child_repos(self):
         git_init(self.root / "ws" / "api"); git_init(self.root / "ws" / "web")
@@ -57,9 +57,9 @@ class Init(Base):
 
     def test_retrofit_is_additive(self):
         git_init(self.root / "r"); r = self.root / "r"
-        (r / "ARCHITECTURE.md").write_text("# Old\n\n## Overview\nOur real overview.\n")
+        (r / "ARCHITECTURE.md").write_text("# Old\n\n## Overview\nOur real overview.\n", encoding="utf-8")
         ca(r, "init", "--retrofit")
-        t = (r / "ARCHITECTURE.md").read_text()
+        t = (r / "ARCHITECTURE.md").read_text(encoding="utf-8")
         self.assertIn("Our real overview.", t)
         self.assertIn("## Data flow", t)
         self.assertEqual(t.count("## Overview"), 1)
@@ -67,15 +67,15 @@ class Init(Base):
 
     def test_discovery_records_evidence_and_only_preexisting_docs(self):
         r = self.root / "r"; git_init(r)
-        (r / "src").mkdir(); (r / "src" / "main.py").write_text("print(1)\n")
-        (r / "package.json").write_text('{"name":"demo","scripts":{"test":"jest"},"dependencies":{"express":"4"}}')
-        (r / "README.md").write_text("# Demo\nA demo.\n"); (r / "docs" / "adr").mkdir(parents=True)
-        (r / "tests").mkdir(); (r / "tests" / "test_a.py").write_text("")
-        (r / ".github" / "workflows").mkdir(parents=True); (r / ".github" / "workflows" / "ci.yml").write_text("on: push")
+        (r / "src").mkdir(); (r / "src" / "main.py").write_text("print(1)\n", encoding="utf-8")
+        (r / "package.json").write_text('{"name":"demo","scripts":{"test":"jest"},"dependencies":{"express":"4"}}', encoding="utf-8")
+        (r / "README.md").write_text("# Demo\nA demo.\n", encoding="utf-8"); (r / "docs" / "adr").mkdir(parents=True)
+        (r / "tests").mkdir(); (r / "tests" / "test_a.py").write_text("", encoding="utf-8")
+        (r / ".github" / "workflows").mkdir(parents=True); (r / ".github" / "workflows" / "ci.yml").write_text("on: push", encoding="utf-8")
         subprocess.run(["git", "-C", str(r), "add", "-A"], env=G, check=True)
         subprocess.run(["git", "-C", str(r), "commit", "-qm", "x"], env=G, check=True)
         ca(r, "init")
-        d = json.loads((r / ".groundwork" / "discovery.json").read_text())
+        d = json.loads((r / ".groundwork" / "discovery.json").read_text(encoding="utf-8"))
         self.assertIn("Python", d["languages"])
         self.assertEqual(d["manifests"]["package.json"]["scripts"], ["test"])
         self.assertIn("src/main.py", d["entry_points"])
@@ -85,7 +85,7 @@ class Init(Base):
         self.assertIn("README.md", d["existing_docs"])
         self.assertNotIn("PROJECT.md", d["existing_docs"])            # created by init, not pre-existing
         self.assertEqual(d["adoptable"]["agent_instructions"], [])
-        self.assertIn("discovery.json", (r / ".groundwork" / ".gitignore").read_text())
+        self.assertIn("discovery.json", (r / ".groundwork" / ".gitignore").read_text(encoding="utf-8"))
 
 
 class Doctor(CheckBase):
@@ -127,7 +127,7 @@ class Doctor(CheckBase):
         self.assertTrue(any(s.startswith("[web]") for s in d["next_steps"]))
 
     def test_stale_docs_hold_stage_at_2(self):
-        (self.api / "package.json").write_text("{}")
+        (self.api / "package.json").write_text("{}", encoding="utf-8")
         self.assertEqual(doctor(self.api)["stage"], 2)
 
     def test_text_report_renders(self):
@@ -135,7 +135,7 @@ class Doctor(CheckBase):
         self.assertIn("Stage", out); self.assertIn("Foundation", out); self.assertEqual(ca(self.api, "doctor").returncode, 0)
 
     def test_enforcement_off_is_flagged(self):
-        (self.api / ".groundwork" / "config.json").write_text('{"standard":"0.5.0","enforcement":"off"}')
+        (self.api / ".groundwork" / "config.json").write_text('{"standard":"0.5.0","enforcement":"off"}', encoding="utf-8")
         self.assertTrue(any("enforcement: off" in i["label"] for i in doctor(self.api)["items"]))
 
 
@@ -153,26 +153,26 @@ class UvPolicy(Base):
     def test_templates_carry_the_rule(self):
         t = Path(__file__).resolve().parents[1] / "templates"
         for f in ("AGENTS.repo.md", "AGENTS.workspace.md"):
-            self.assertIn("uv", (t / f).read_text())
-            self.assertNotIn("pip install <", (t / f).read_text())
+            self.assertIn("uv", (t / f).read_text(encoding="utf-8"))
+            self.assertNotIn("pip install <", (t / f).read_text(encoding="utf-8"))
 
     def test_skills_carry_the_rule(self):
         s = Path(__file__).resolve().parents[1] / "skills"
         for n in ("bootstrap", "implement"):
-            self.assertIn("uv", (s / n / "SKILL.md").read_text())
+            self.assertIn("uv", (s / n / "SKILL.md").read_text(encoding="utf-8"))
 
     def test_discovery_flags_other_python_managers(self):
         r = self.root / "r"; git_init(r)
-        (r / "app.py").write_text("print(1)\n"); (r / "requirements.txt").write_text("flask\n")
-        (r / "poetry.lock").write_text("")
+        (r / "app.py").write_text("print(1)\n", encoding="utf-8"); (r / "requirements.txt").write_text("flask\n", encoding="utf-8")
+        (r / "poetry.lock").write_text("", encoding="utf-8")
         ca(r, "init")
-        py = json.loads((r / ".groundwork" / "discovery.json").read_text())["python"]
+        py = json.loads((r / ".groundwork" / "discovery.json").read_text(encoding="utf-8"))["python"]
         self.assertEqual((py["present"], py["uses_uv"], py["other_managers"]), (True, False, ["pip", "poetry"]))
-        (r / "uv.lock").write_text("")
+        (r / "uv.lock").write_text("", encoding="utf-8")
         ca(r, "init")
-        self.assertTrue(json.loads((r / ".groundwork" / "discovery.json").read_text())["python"]["uses_uv"])
+        self.assertTrue(json.loads((r / ".groundwork" / "discovery.json").read_text(encoding="utf-8"))["python"]["uses_uv"])
 
     def test_non_python_project_has_no_python_noise(self):
-        r = self.root / "js"; git_init(r); (r / "index.js").write_text("1")
+        r = self.root / "js"; git_init(r); (r / "index.js").write_text("1", encoding="utf-8")
         ca(r, "init")
-        self.assertFalse(json.loads((r / ".groundwork" / "discovery.json").read_text())["python"]["present"])
+        self.assertFalse(json.loads((r / ".groundwork" / "discovery.json").read_text(encoding="utf-8"))["python"]["present"])

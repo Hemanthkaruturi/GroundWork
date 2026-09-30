@@ -22,7 +22,7 @@ class Freshness(CheckBase):
         self.assertEqual(check(self.ws, "--strict")[0], 0)
 
     def test_repo_change_makes_repo_architecture_stale_until_confirmed(self):
-        (self.api / "package.json").write_text('{"name":"api"}')
+        (self.api / "package.json").write_text('{"name":"api"}', encoding="utf-8")
         (self.api / "billing").mkdir()
         f = fresh(self.api)["ARCHITECTURE.md"]
         self.assertEqual(f["status"], "stale")
@@ -38,16 +38,16 @@ class Freshness(CheckBase):
         self.assertTrue(all(d["status"] == "fresh" for d in fresh(self.api).values()))
 
     def test_groundwork_own_folders_do_not_make_architecture_stale(self):
-        (self.api / "bugs").mkdir(); (self.api / "bugs" / "x.md").write_text("x")
+        (self.api / "bugs").mkdir(); (self.api / "bugs" / "x.md").write_text("x", encoding="utf-8")
         ca(self.api, "new-feature", "another", "--rfc", "RFC-0001")           # creates specs/002-...
         f = fresh(self.api)["ARCHITECTURE.md"]
         self.assertFalse(any("toplevel" in r for r in f["reasons"]), f)
 
     def test_old_baselines_that_listed_specs_are_not_flagged(self):
         fp = self.api / ".groundwork" / "freshness.json"
-        data = json.loads(fp.read_text())
+        data = json.loads(fp.read_text(encoding="utf-8"))
         data["ARCHITECTURE.md"]["snapshot"]["toplevel"] = sorted(data["ARCHITECTURE.md"]["snapshot"]["toplevel"] + ["specs"])
-        fp.write_text(json.dumps(data))
+        fp.write_text(json.dumps(data), encoding="utf-8")
         self.assertEqual(fresh(self.api)["ARCHITECTURE.md"]["status"], "fresh")
 
     def test_teammate_changes_repo_docs_workspace_notices_without_any_agent(self):
@@ -83,13 +83,13 @@ class Freshness(CheckBase):
 
     def test_age_makes_any_document_stale(self):
         p = self.ws / ".groundwork" / "freshness.json"
-        data = json.loads(p.read_text())
+        data = json.loads(p.read_text(encoding="utf-8"))
         data["PROJECT.md"]["epoch"] = int(time.time()) - 200 * 86400
-        p.write_text(json.dumps(data))
+        p.write_text(json.dumps(data), encoding="utf-8")
         f = fresh(self.ws)["PROJECT.md"]
         self.assertEqual(f["status"], "stale")
         self.assertTrue(any("not reviewed for" in r for r in f["reasons"]))
-        (self.ws / ".groundwork" / "config.json").write_text(json.dumps({"level": "workspace", "freshness_days": 400}))
+        (self.ws / ".groundwork" / "config.json").write_text(json.dumps({"level": "workspace", "freshness_days": 400}), encoding="utf-8")
         self.assertEqual(fresh(self.ws)["PROJECT.md"]["status"], "fresh")
 
     def test_finished_but_never_confirmed_is_flagged(self):

@@ -48,7 +48,7 @@ def people(ctx: C.Ctx) -> list[Person]:
     p = people_home(ctx)
     if not p:
         return []
-    m = re.search(r"^## Who works on what[^\n]*\n(.*?)(?=^## |\Z)", p.read_text(), re.M | re.S)
+    m = re.search(r"^## Who works on what[^\n]*\n(.*?)(?=^## |\Z)", p.read_text(encoding="utf-8"), re.M | re.S)
     if not m:
         return []
     rows = [ln for ln in m.group(1).splitlines() if ln.strip().startswith("|")]
@@ -131,7 +131,7 @@ def read_ledger(kind: str, owner: C.Ctx, key: str) -> list[dict]:
     f = ledger_file(kind, owner)
     out = []
     try:
-        for ln in f.read_text().splitlines():
+        for ln in f.read_text(encoding="utf-8").splitlines():
             try:
                 e = json.loads(ln)
             except ValueError:
@@ -144,7 +144,7 @@ def read_ledger(kind: str, owner: C.Ctx, key: str) -> list[dict]:
 
 
 def set_role(doc: Path, role: str, value: str | list[str], append: bool = False) -> None:
-    text = doc.read_text()
+    text = doc.read_text(encoding="utf-8")
     meta, _ = C.split_fm(text)
     if role in LIST_ROLES:
         cur = C.list_of(meta, role) if append else []
@@ -152,7 +152,7 @@ def set_role(doc: Path, role: str, value: str | list[str], append: bool = False)
         rendered = "[" + ", ".join(new) + "]"
     else:
         rendered = value if isinstance(value, str) else ", ".join(value)
-    doc.write_text(C.set_fm(text, {role: rendered}))
+    doc.write_text(C.set_fm(text, {role: rendered}), encoding="utf-8")
 
 
 ROLE_FOR_EVENT = {"requested": "requested_by", "owner": "owner", "implemented": "implemented_by", "support": "support",
@@ -178,7 +178,7 @@ def record(ctx: C.Ctx, event: str, ref: str, by: str | None = None, via: str | N
             e[k] = v
     f = ledger_file(kind, owner)
     f.parent.mkdir(parents=True, exist_ok=True)
-    with f.open("a") as fh:
+    with f.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(e) + "\n")
     role = ROLE_FOR_EVENT.get(event)
     if role:
@@ -199,7 +199,7 @@ def auto_created(ctx: C.Ctx, kind: str, doc: Path, requested_by: str | None = No
     rec = {"ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "event": "created", "ref": key_of(kind, doc), "by": me}
     f = ledger_file(kind, owner_ctx)
     f.parent.mkdir(parents=True, exist_ok=True)
-    with f.open("a") as fh:
+    with f.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(rec) + "\n")
     set_role(doc, "owner", me)
     if requested_by:
@@ -211,7 +211,7 @@ def auto_created(ctx: C.Ctx, kind: str, doc: Path, requested_by: str | None = No
 def _git_contributors(repo: Path, slug: str) -> list[tuple[str, int]]:
     try:
         out = subprocess.run(["git", "-C", str(repo), "log", "--format=%an <%ae>", f"--grep={slug}", "-i"],
-                             capture_output=True, text=True, timeout=10).stdout.splitlines()
+                             capture_output=True, text=True, encoding="utf-8", timeout=10).stdout.splitlines()
     except (OSError, subprocess.SubprocessError):
         return []
     counts: dict[str, int] = {}
@@ -235,7 +235,7 @@ def describe(ctx: C.Ctx, ref: str) -> str:
         return f"No feature, RFC or bug matches '{ref}'."
     kind, owner, doc = loc
     ppl = people(ctx)
-    meta, _ = C.split_fm(doc.read_text())
+    meta, _ = C.split_fm(doc.read_text(encoding="utf-8"))
     key = key_of(kind, doc)
     events = read_ledger(kind, owner, key)
     lines = [f"{key}  [{kind}]  {meta.get('title', '')}".rstrip(), ""]
@@ -285,14 +285,14 @@ def describe(ctx: C.Ctx, ref: str) -> str:
         for e in mine:
             trc, tfd = C.resolve_feature(owner, f"{e.dst[0]}/{e.dst[1]}" if e.dst[0] != owner.repo.name else e.dst[1])
             if tfd:
-                m2, _ = C.split_fm((tfd / "spec.md").read_text())
+                m2, _ = C.split_fm((tfd / "spec.md").read_text(encoding="utf-8"))
                 lines.append(f"    it {e.kind.replace('_', ' ')} {e.dst[0]}/{e.dst[1]} — owner: {show(ppl, m2.get('owner', ''))}")
                 seen = True
         for item in down["features"]:
             tref = item.split("  (")[0]
             trc, tfd = C.resolve_feature(owner, tref)
             if tfd:
-                m2, _ = C.split_fm((tfd / "spec.md").read_text())
+                m2, _ = C.split_fm((tfd / "spec.md").read_text(encoding="utf-8"))
                 lines.append(f"    affects {item} — owner: {show(ppl, m2.get('owner', ''))}")
                 seen = True
         if not seen:
@@ -323,9 +323,9 @@ def _all_items(ctx: C.Ctx):
     for rc in R.contexts(ctx):
         for fdir in C.feature_dirs(rc):
             if (fdir / "spec.md").is_file():
-                yield "feature", f"{rc.repo.name}/{fdir.name}", C.split_fm((fdir / "spec.md").read_text())[0]
+                yield "feature", f"{rc.repo.name}/{fdir.name}", C.split_fm((fdir / "spec.md").read_text(encoding="utf-8"))[0]
         for bp in B.bug_paths(rc):
-            yield "bug", f"{rc.repo.name}/bugs/{bp.stem}", C.split_fm(bp.read_text())[0]
+            yield "bug", f"{rc.repo.name}/bugs/{bp.stem}", C.split_fm(bp.read_text(encoding="utf-8"))[0]
 
 
 def table(ctx: C.Ctx) -> str:

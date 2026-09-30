@@ -15,16 +15,16 @@ class ChangeProtocol(CheckBase):
 
     def amend_spec(self, note=None, text="\nFR-1 now means exact, unrounded.\n"):
         p = self.fdir / "spec.md"
-        body = p.read_text() + text
+        body = p.read_text(encoding="utf-8") + text
         if note:
             if not re.search(r"^## Changes\b", body, re.M):
                 body = body.rstrip() + "\n\n## Changes\n"
             body = body.rstrip() + f"\n- 2026-09-30: {note}\n"
-        p.write_text(body)
+        p.write_text(body, encoding="utf-8")
         return p
 
     def test_first_approval_needs_no_changelog(self):
-        self.assertFalse(re.search(r"^## Changes\b", (self.fdir / "spec.md").read_text(), re.M))
+        self.assertFalse(re.search(r"^## Changes\b", (self.fdir / "spec.md").read_text(encoding="utf-8"), re.M))
         self.assertFalse(denied(self.api, self.code())[0])
 
     def test_reapproval_without_explanation_is_refused(self):
@@ -37,9 +37,9 @@ class ChangeProtocol(CheckBase):
     def test_reapproval_with_explanation_is_accepted_and_each_change_needs_its_own_line(self):
         p = self.amend_spec("FR-1 means the exact, unrounded payment (found while planning; user chose this reading)")
         self.assertEqual(ca(self.api, "approve", str(p), "--as", "lead").returncode, 0)
-        p.write_text(p.read_text() + "\nAnother tweak.\n")                       # changed again, no new line
+        p.write_text(p.read_text(encoding="utf-8") + "\nAnother tweak.\n", encoding="utf-8")                       # changed again, no new line
         self.assertNotEqual(ca(self.api, "approve", str(p), "--as", "lead").returncode, 0)
-        p.write_text(p.read_text().rstrip() + "\n- 2026-10-01: clarified the empty-result case\n")
+        p.write_text(p.read_text(encoding="utf-8").rstrip() + "\n- 2026-10-01: clarified the empty-result case\n", encoding="utf-8")
         self.assertEqual(ca(self.api, "approve", str(p), "--as", "lead").returncode, 0)
 
     def test_after_the_spec_changes_downstream_must_be_reverified_before_code(self):
@@ -60,7 +60,7 @@ class ChangeProtocol(CheckBase):
         ca(self.api, "plan-sync")
         self.assertNotIn("GW037", check(self.ws)[1])
         pl = self.fdir / "plan.md"
-        pl.write_text(re.sub(r"^spec_version:.*$", "spec_version:", pl.read_text(), flags=re.M))      # unpin it
+        pl.write_text(re.sub(r"^spec_version:.*$", "spec_version:", pl.read_text(encoding="utf-8"), flags=re.M), encoding="utf-8")      # unpin it
         self.assertIn("GW036", check(self.ws)[1])
 
     def test_plan_sync_refuses_an_unapproved_spec(self):

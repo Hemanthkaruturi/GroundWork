@@ -142,7 +142,7 @@ def _base(ctx: C.Ctx) -> Path:
 
 def load(ctx: C.Ctx) -> dict:
     try:
-        return json.loads((_base(ctx) / ".groundwork" / "freshness.json").read_text())
+        return json.loads((_base(ctx) / ".groundwork" / "freshness.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
 
@@ -150,7 +150,7 @@ def load(ctx: C.Ctx) -> dict:
 def _save(ctx: C.Ctx, data: dict) -> None:
     f = _base(ctx) / ".groundwork" / "freshness.json"
     f.parent.mkdir(parents=True, exist_ok=True)
-    f.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
+    f.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def max_age_days(ctx: C.Ctx) -> int:
@@ -166,7 +166,7 @@ def confirm(ctx: C.Ctx, docs: list[str] | None = None, who: str | None = None) -
         p = C._find_ci(base, name)
         if p is None:
             raise SystemExit(f"{name} does not exist")
-        if C.PLACEHOLDER.search(p.read_text()):
+        if C.PLACEHOLDER.search(p.read_text(encoding="utf-8")):
             raise SystemExit(f"{p.name} still has [TODO]/[NEEDS CLARIFICATION] markers; finish it before confirming")
         data[p.name] = {"at": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "epoch": int(time.time()),
                         "by": who or C.signer(), "hash": _file_hash(p), "snapshot": snapshot(ctx, p.name)}
@@ -190,7 +190,7 @@ def assess(ctx: C.Ctx) -> list[DocFreshness]:
         p = C._find_ci(base, name)
         if p is None:
             continue
-        if C.PLACEHOLDER.search(p.read_text()):
+        if C.PLACEHOLDER.search(p.read_text(encoding="utf-8")):
             out.append(DocFreshness(p.name, "unfinished"))
             continue
         rec = data.get(p.name)

@@ -21,7 +21,7 @@ class CheckBase(Base):
         super().setUp()
         self.ws, self.api = self.root / "ws", self.root / "ws" / "api"
         git_init(self.api)
-        (self.ws / "PROJECT.md").write_text("# marker")   # makes ws a workspace for the repo scaffold
+        (self.ws / "PROJECT.md").write_text("# marker", encoding="utf-8")   # makes ws a workspace for the repo scaffold
         ca(self.api, "scaffold")
         (self.ws / "PROJECT.md").unlink()
         ca(self.ws, "scaffold")
@@ -30,13 +30,13 @@ class CheckBase(Base):
                 fill(f)
         self.rfc = Path(ca(self.ws, "new-rfc", "widgets").stdout.strip())
         fill(self.rfc)
-        (self.ws / "DECISIONS" / "README.md").write_text("| RFC-0001 | Widgets | approved | |\n")
+        (self.ws / "DECISIONS" / "README.md").write_text("| RFC-0001 | Widgets | approved | |\n", encoding="utf-8")
         ca(self.api, "new-feature", "widgets", "--rfc", "RFC-0001")
         self.fdir = self.api / "specs" / "001-widgets"
         # people: a real directory, and named requester/owner (owner defaults to the git identity, which isn't listed)
         pm = self.ws / "PROJECT.md"
-        pm.write_text(pm.read_text().replace("| filled | filled | filled | filled |",
-                      "| Lead Person | Tech lead | everything | lead@example.com |\n| Dev Two | Backend dev | api | dev2@example.com |"))
+        pm.write_text(pm.read_text(encoding="utf-8").replace("| filled | filled | filled | filled |",
+                      "| Lead Person | Tech lead | everything | lead@example.com |\n| Dev Two | Backend dev | api | dev2@example.com |"), encoding="utf-8")
         for ref in ("RFC-0001", "001-widgets"):
             cwd = self.ws if ref.startswith("RFC") else self.api
             ca(cwd, "record", "requested", "--ref", ref, "--who", "Lead Person")
@@ -50,7 +50,7 @@ class CheckBase(Base):
         assert ca(self.api, "confirm").returncode == 0
 
     def edit(self, path, fn):
-        p = Path(path); p.write_text(fn(p.read_text()))
+        p = Path(path); p.write_text(fn(p.read_text(encoding="utf-8")), encoding="utf-8")
 
     def assertFires(self, rule, *extra):
         code, ids, _ = check(self.ws, *extra)
@@ -84,7 +84,7 @@ class Rules(CheckBase):
         self.assertFires("GW003")
 
     def test_gw005_major_version_mismatch(self):
-        (self.api / ".groundwork" / "config.json").write_text('{"standard": "9.0"}')
+        (self.api / ".groundwork" / "config.json").write_text('{"standard": "9.0"}', encoding="utf-8")
         self.assertFires("GW005")
 
     def test_gw010_rfc_frontmatter(self):
@@ -105,7 +105,7 @@ class Rules(CheckBase):
         self.assertFires("GW013")
 
     def test_gw014_rfc_not_indexed(self):
-        (self.ws / "DECISIONS" / "README.md").write_text("empty\n")
+        (self.ws / "DECISIONS" / "README.md").write_text("empty\n", encoding="utf-8")
         self.assertFires("GW014")
 
     def test_gw020_feature_shape(self):

@@ -39,7 +39,7 @@ PY=$(command -v python3 || command -v python) || {{ echo "groundwork: python not
 
 def hooks_dir(repo: Path) -> Path:
     out = subprocess.run(["git", "-C", str(repo), "rev-parse", "--git-path", "hooks"],
-                         capture_output=True, text=True, check=True).stdout.strip()
+                         capture_output=True, text=True, encoding="utf-8", check=True).stdout.strip()
     p = Path(out)
     return p if p.is_absolute() else repo / p
 
@@ -57,7 +57,7 @@ def target_repos(ctx: C.Ctx) -> list[Path]:
 
 def _ours(p: Path) -> bool:
     try:
-        return MARKER in p.read_text()
+        return MARKER in p.read_text(encoding="utf-8")
     except OSError:
         return False
 
@@ -94,8 +94,9 @@ def install(repo: Path, strict: bool = False, pre_push: bool = False, vendored: 
                 raise SystemExit(f"{orig} already exists; resolve by hand")
             path.rename(orig)
             notes.append(f"kept your existing {name} hook (chained first)")
-        path.write_text(SCRIPT.format(marker=MARKER, verb=verb, strict="--strict " if strict else "",
-                                      engine=str(C.PLUGIN_ROOT / "engine" / "groundwork.py")))
+        script = SCRIPT.format(marker=MARKER, verb=verb, strict="--strict " if strict else "",
+                               engine=(C.PLUGIN_ROOT / "engine" / "groundwork.py").as_posix())
+        path.write_bytes(script.encode("utf-8"))    # bytes: a Windows CRLF would break the #! line
         path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
         notes.append(f"installed {name}" + (" (strict: warnings also block)" if strict else ""))
     return notes
@@ -121,6 +122,6 @@ def status(repo: Path) -> str:
     for name in ("pre-commit", "pre-push"):
         p = d / name
         if p.exists() and _ours(p):
-            found.append(name + (" [strict]" if "--strict" in p.read_text() else ""))
+            found.append(name + (" [strict]" if "--strict" in p.read_text(encoding="utf-8") else ""))
     v = " + vendored engine" if (repo / ".groundwork" / "engine" / "groundwork.py").exists() else ""
     return (", ".join(found) or "not installed") + v

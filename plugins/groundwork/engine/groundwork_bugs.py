@@ -67,7 +67,7 @@ def active_bug(ctx: C.Ctx) -> str | None:
     if not ctx.repo:
         return None
     try:
-        slug = (ctx.repo / ".groundwork" / "active-bug").read_text().strip()
+        slug = (ctx.repo / ".groundwork" / "active-bug").read_text(encoding="utf-8").strip()
     except OSError:
         return None
     return slug if slug and (bugs_dir(ctx) / f"{slug}.md").is_file() else None
@@ -93,7 +93,7 @@ def bug_state(ctx: C.Ctx, slug: str) -> BugState:
     if not path.is_file():
         add("GW060", "error", f"bugs/{slug}.md does not exist")
         return st
-    text = path.read_text()
+    text = path.read_text(encoding="utf-8")
     meta, _ = C.split_fm(text)
     st.status, st.classification = meta.get("status", "?"), meta.get("classification", "?")
     st.title = meta.get("title", slug)
@@ -136,7 +136,7 @@ def bug_state(ctx: C.Ctx, slug: str) -> BugState:
             sp = C.doc_state(fd / "spec.md", rc)
             if not sp.approved:
                 add("GW062", "error", f"violates {rid}@{feat}: that spec is {sp.status}, not approved")
-            elif f"**{rid}**" not in (fd / "spec.md").read_text():
+            elif f"**{rid}**" not in (fd / "spec.md").read_text(encoding="utf-8"):
                 add("GW062", "error", f"violates {rid}@{feat}: no such requirement in that spec")
     elif cls == "spec-gap":
         amends = C.list_of(meta, "amends")
@@ -148,7 +148,7 @@ def bug_state(ctx: C.Ctx, slug: str) -> BugState:
                 add("GW062", "error", f"amends {feat}: that feature does not exist")
                 continue
             sp = C.doc_state(fd / "spec.md", rc)
-            changes = re.search(r"^## Changes\b(.*?)(?=^## |\Z)", (fd / "spec.md").read_text(), re.M | re.S)
+            changes = re.search(r"^## Changes\b(.*?)(?=^## |\Z)", (fd / "spec.md").read_text(encoding="utf-8"), re.M | re.S)
             if not changes or slug not in changes.group(1):
                 add("GW062", "error", f"amends {feat}: amend its spec first — add a line for '{slug}' under '## Changes'")
             elif not sp.approved:
@@ -178,7 +178,7 @@ def new_bug(ctx: C.Ctx, slug: str, title: str | None) -> Path:
     bid = f"{n:03d}-{C.slugify(slug)}"
     p = d / f"{bid}.md"
     p.write_text(C.render("bug.md", id=bid, title=title or slug.replace("-", " ").title(),
-                          date=time.strftime("%F"), author=C.signer()))
+                          date=time.strftime("%F"), author=C.signer()), encoding="utf-8")
     (ctx.repo / ".groundwork").mkdir(exist_ok=True)
-    (ctx.repo / ".groundwork" / "active-bug").write_text(bid + "\n")
+    (ctx.repo / ".groundwork" / "active-bug").write_text(bid + "\n", encoding="utf-8")
     return p

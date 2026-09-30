@@ -13,10 +13,10 @@ GENV = {**ENV, "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com"
 
 
 def commit(repo, msg="c", env=None, *extra):
-    (Path(repo) / "f.txt").write_text(msg + str(os.urandom(4).hex()))
+    (Path(repo) / "f.txt").write_text(msg + str(os.urandom(4).hex()), encoding="utf-8")
     subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True, env=GENV)
     return subprocess.run(["git", "-C", str(repo), "commit", "-qm", msg, *extra], capture_output=True,
-                          text=True, env={**GENV, **(env or {})})
+                          text=True, encoding="utf-8", env={**GENV, **(env or {})})
 
 
 class Hooks(CheckBase):
@@ -51,12 +51,12 @@ class Hooks(CheckBase):
         ca(self.api, "hooks", "install")
         cfg = self.api / ".groundwork" / "config.json"
         for mode, ok in (("warn", True), ("off", True), ("block", False)):
-            cfg.write_text('{"standard": "0.5.0", "enforcement": "%s"}' % mode)
+            cfg.write_text('{"standard": "0.5.0", "enforcement": "%s"}' % mode, encoding="utf-8")
             self.assertEqual(commit(self.api, mode).returncode == 0, ok, mode)
 
     def test_existing_hook_is_chained_and_restored(self):
         hooks = self.api / ".git" / "hooks"
-        (hooks / "pre-commit").write_text("#!/bin/sh\necho theirs >&2\nexit 7\n")
+        (hooks / "pre-commit").write_text("#!/bin/sh\necho theirs >&2\nexit 7\n", encoding="utf-8")
         (hooks / "pre-commit").chmod(0o755)
         out = ca(self.api, "hooks", "install").stdout
         self.assertIn("kept your existing pre-commit", out)
@@ -64,7 +64,7 @@ class Hooks(CheckBase):
         self.assertNotEqual(r.returncode, 0)                        # their hook still gets to block
         self.assertIn("theirs", r.stderr + r.stdout)
         ca(self.api, "hooks", "uninstall")
-        self.assertIn("theirs", (hooks / "pre-commit").read_text())
+        self.assertIn("theirs", (hooks / "pre-commit").read_text(encoding="utf-8"))
         self.assertFalse((hooks / "pre-commit.groundwork-orig").exists())
 
     def test_install_is_idempotent_and_uninstall_clean(self):
@@ -84,16 +84,16 @@ class Hooks(CheckBase):
         eng = self.api / ".groundwork" / "engine" / "groundwork.py"
         self.assertTrue(eng.exists())
         r = subprocess.run([sys.executable, str(eng), "check", "--strict"], cwd=self.api,
-                           capture_output=True, text=True, env=ENV)
+                           capture_output=True, text=True, encoding="utf-8", env=ENV)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         # the vendored copy is a full engine: it can onboard and diagnose too
         for cmd in (["doctor"], ["init", "--dry-run"]):
-            r = subprocess.run([sys.executable, str(eng), *cmd], cwd=self.api, capture_output=True, text=True, env=ENV)
+            r = subprocess.run([sys.executable, str(eng), *cmd], cwd=self.api, capture_output=True, text=True, encoding="utf-8", env=ENV)
             self.assertEqual(r.returncode, 0, cmd and (r.stdout + r.stderr))
         # the hook prefers the vendored copy even if the plugin path is gone
-        hook = (self.api / ".git" / "hooks" / "pre-commit").read_text()
+        hook = (self.api / ".git" / "hooks" / "pre-commit").read_text(encoding="utf-8")
         (self.api / ".git" / "hooks" / "pre-commit").write_text(
-            hook.replace(str(Path(__file__).resolve().parents[1] / "engine" / "groundwork.py"), "/gone/groundwork.py"))
+            hook.replace(str(Path(__file__).resolve().parents[1] / "engine" / "groundwork.py"), "/gone/groundwork.py"), encoding="utf-8")
         self.assertEqual(commit(self.api).returncode, 0)
 
     def test_workspace_install_covers_every_repo(self):

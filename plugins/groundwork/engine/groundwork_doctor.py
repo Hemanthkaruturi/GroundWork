@@ -65,7 +65,7 @@ def _ci_runs_groundwork(base: Path) -> str | None:
     cands += [base / f for f in CI_FILES]
     for p in cands:
         try:
-            if "groundwork" in p.read_text().lower():
+            if "groundwork" in p.read_text(encoding="utf-8").lower():
                 return p.relative_to(base).as_posix()
         except OSError:
             pass
@@ -152,7 +152,7 @@ def diagnose_ctx(ctx: C.Ctx, ws_children: bool = True) -> Diagnosis:
             add("People", "warn", "no people listed under 'Who works on what' in PROJECT.md",
                 "nobody can be contacted about anything", "fill PROJECT.md's people table (bootstrap skill)")
     owned = [i for i in (features if features else []) if (i / "spec.md").is_file()]
-    unowned = [i.name for i in owned if not str(C.split_fm((i / "spec.md").read_text())[0].get("owner", "")).strip()]
+    unowned = [i.name for i in owned if not str(C.split_fm((i / "spec.md").read_text(encoding="utf-8"))[0].get("owner", "")).strip()]
     if unowned:
         add("People", "warn", f"{len(unowned)} feature(s) without an owner: {', '.join(unowned[:4])}",
             fix="groundwork.py record owner --ref <feature> --who <name>")

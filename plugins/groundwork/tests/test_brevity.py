@@ -18,7 +18,7 @@ def transcript(path, turns):
     rows = []
     for role, content in turns:
         rows.append({"type": role, "message": {"role": role, "content": content}})
-    path.write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+    path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
     return path
 
 
@@ -56,7 +56,7 @@ class Docs(CheckBase):
 
     def test_over_budget_spec_warns_and_is_not_an_error(self):
         p = self.fdir / "spec.md"
-        p.write_text(p.read_text() + "\n" + ("A plain and simple sentence. " * 300) + "\n")
+        p.write_text(p.read_text(encoding="utf-8") + "\n" + ("A plain and simple sentence. " * 300) + "\n", encoding="utf-8")
         code, ids, items = check(self.ws)
         self.assertIn("GW090", ids)
         self.assertNotIn("GW091", ids)
@@ -64,20 +64,20 @@ class Docs(CheckBase):
 
     def test_long_sentences_warn(self):
         p = self.ws / "ARCHITECTURE.md"
-        p.write_text(p.read_text() + "\n" + ("This sentence keeps going and going with many extra words so that a busy reader who only "
-                                             "wants the point has to work far too hard to find it. " * 8) + "\n")
+        p.write_text(p.read_text(encoding="utf-8") + "\n" + ("This sentence keeps going and going with many extra words so that a busy reader who only "
+                                             "wants the point has to work far too hard to find it. " * 8) + "\n", encoding="utf-8")
         self.assertIn("GW091", check(self.ws)[1])
 
     def test_brevity_off_silences_it(self):
         p = self.ws / "ARCHITECTURE.md"
-        p.write_text(p.read_text() + "\n" + ("Long sentence " * 40 + ". ") * 8)
+        p.write_text(p.read_text(encoding="utf-8") + "\n" + ("Long sentence " * 40 + ". ") * 8, encoding="utf-8")
         cfg = self.ws / ".groundwork" / "config.json"
-        cfg.write_text(json.dumps({"level": "workspace", "standard": "0.5.0", "brevity": "off"}))
+        cfg.write_text(json.dumps({"level": "workspace", "standard": "0.5.0", "brevity": "off"}), encoding="utf-8")
         self.assertFalse({"GW090", "GW091"} & check(self.ws)[1])
 
     def test_unfinished_documents_are_not_judged(self):
         p = self.fdir / "plan.md"
-        p.write_text(p.read_text() + "\n[TODO: more]\n" + ("Sentence. " * 3000))
+        p.write_text(p.read_text(encoding="utf-8") + "\n[TODO: more]\n" + ("Sentence. " * 3000), encoding="utf-8")
         self.assertNotIn("GW090", check(self.ws)[1])
 
 
@@ -92,7 +92,7 @@ class Reminders(CheckBase):
 class StopHook(CheckBase):
     def run_stop(self, reply, mode="enforce", **extra):
         t = transcript(self.root / "t.jsonl", [("user", TEXT("do it")), ("assistant", TEXT(reply))])
-        (self.api / ".groundwork" / "config.json").write_text(json.dumps({"standard": "0.5.0", "brevity": mode, **extra.pop("cfg", {})}))
+        (self.api / ".groundwork" / "config.json").write_text(json.dumps({"standard": "0.5.0", "brevity": mode, **extra.pop("cfg", {})}), encoding="utf-8")
         payload = {"cwd": str(self.api), "transcript_path": str(t), **extra}
         r = ca(self.api, "stop-brevity", stdin=json.dumps(payload))
         self.assertEqual(r.returncode, 0, r.stderr)
@@ -108,11 +108,11 @@ class StopHook(CheckBase):
         out = self.run_stop(LONG)
         saved = sorted((self.api / ".groundwork" / "replies").glob("*.md"))
         self.assertEqual(len(saved), 1)
-        self.assertEqual(saved[0].read_text().strip(), LONG)                 # the full original, untouched
+        self.assertEqual(saved[0].read_text(encoding="utf-8").strip(), LONG)                 # the full original, untouched
         self.assertIn(str(saved[0]), out["reason"])
         for must in ("did NOT verify", "failed or was skipped", "risks and side effects", "every file or setting", "assumptions", "Full detail:"):
             self.assertIn(must, out["reason"])
-        self.assertIn("replies/", (self.api / ".groundwork" / ".gitignore").read_text())
+        self.assertIn("replies/", (self.api / ".groundwork" / ".gitignore").read_text(encoding="utf-8"))
 
     def test_the_must_keep_rule_is_in_the_session_rules_and_every_prompt(self):
         ctx = hook(self.api, "session-context", {})["additionalContext"]
@@ -122,7 +122,7 @@ class StopHook(CheckBase):
             self.assertIn("did NOT verify", text)
 
     def test_uses_the_final_message_from_the_harness_when_the_transcript_is_behind(self):
-        (self.api / ".groundwork" / "config.json").write_text(json.dumps({"standard": "0.5.0", "brevity": "enforce"}))
+        (self.api / ".groundwork" / "config.json").write_text(json.dumps({"standard": "0.5.0", "brevity": "enforce"}), encoding="utf-8")
         stale = transcript(self.root / "old.jsonl", [("user", TEXT("hi")), ("assistant", TEXT("ok"))])   # last reply not written yet
         r = ca(self.api, "stop-brevity", stdin=json.dumps({"cwd": str(self.api), "transcript_path": str(stale),
                                                            "last_assistant_message": LONG, "stop_hook_active": False}))

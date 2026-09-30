@@ -139,7 +139,7 @@ def check_foundation(ctx: C.Ctx, r: Report) -> None:
         key = f.upper().removesuffix(".MD") + ".md"
         if p is None or key not in FOUNDATION_SECTIONS or f in unfinished:
             continue
-        miss = missing_sections(p.read_text(), FOUNDATION_SECTIONS[key], numbered=False)
+        miss = missing_sections(p.read_text(encoding="utf-8"), FOUNDATION_SECTIONS[key], numbered=False)
         if miss:
             r.err("GW003", p, "missing required section(s): " + "; ".join(miss),
                   "keep the template's headings; see STANDARD.md §4")
@@ -168,10 +168,10 @@ def check_rfcs(ctx: C.Ctx, r: Report) -> None:
     d = ctx.rfc_home / "DECISIONS"
     if not d.is_dir():
         return
-    index = (d / "README.md").read_text() if (d / "README.md").is_file() else ""
+    index = (d / "README.md").read_text(encoding="utf-8") if (d / "README.md").is_file() else ""
     for st in C.rfcs(ctx):
         p, meta = st.path, st.meta
-        text = p.read_text()
+        text = p.read_text(encoding="utf-8")
         if st.placeholders:
             r.warn("GW025", p, f"RFC is unfinished ({st.placeholders} unresolved marker(s))")
         miss = [f for f in RFC_FIELDS if f not in meta]
@@ -219,7 +219,7 @@ def check_features(ctx: C.Ctx, r: Report) -> None:
 
 
 def _feature(ctx: C.Ctx, r: Report, fdir: Path, spec: C.DocState) -> None:
-    stext = (fdir / "spec.md").read_text()
+    stext = (fdir / "spec.md").read_text(encoding="utf-8")
     ref = spec.meta.get("rfc", "")
     rfc_path = C.find_rfc(ctx, ref)
     if rfc_path is None:
@@ -232,7 +232,7 @@ def _feature(ctx: C.Ctx, r: Report, fdir: Path, spec: C.DocState) -> None:
     _approval_claims(r, spec, "GW026")
 
     # work must not start before the spec is approved
-    ttext = (fdir / "tasks.md").read_text()
+    ttext = (fdir / "tasks.md").read_text(encoding="utf-8")
     started = re.search(r"^\s*- \[[x~]\]", ttext, re.M | re.I)
     if started and not spec.approved:
         r.err("GW034", fdir / "tasks.md", f"tasks are started but spec is {spec.status}",
@@ -279,13 +279,13 @@ def _feature(ctx: C.Ctx, r: Report, fdir: Path, spec: C.DocState) -> None:
         f = fdir / f"{name}.md"
         if C.doc_state(f, ctx).placeholders:
             continue
-        pinned = C.split_fm(f.read_text())[0].get("spec_version", "")
+        pinned = C.split_fm(f.read_text(encoding="utf-8"))[0].get("spec_version", "")
         if not pinned:
             r.warn("GW036", f, f"{name}.md is not pinned to a spec version", "groundwork.py plan-sync")
         elif pinned != shash:
             r.err("GW037", f, f"{name}.md was written against an earlier version of the spec (the spec changed since)",
                   "re-verify it against the current spec, then: groundwork.py plan-sync")
-    ptext = (fdir / "plan.md").read_text()
+    ptext = (fdir / "plan.md").read_text(encoding="utf-8")
     if not C.doc_state(fdir / "plan.md", ctx).placeholders:
         miss = missing_sections(ptext, PLAN_SECTIONS, numbered=True)
         if miss:
@@ -293,7 +293,7 @@ def _feature(ctx: C.Ctx, r: Report, fdir: Path, spec: C.DocState) -> None:
 
     if not C.doc_state(fdir / "tasks.md", ctx).placeholders:
         _tasks(r, fdir, ttext, frs, known)
-    etext = (fdir / "evals.md").read_text()
+    etext = (fdir / "evals.md").read_text(encoding="utf-8")
     if not C.doc_state(fdir / "evals.md", ctx).placeholders:
         for ac in acs:
             if not re.search(rf"\b{ac}\b", etext):
@@ -349,14 +349,14 @@ def check_relations(ctx: C.Ctx, r: Report, workspace_wide: bool) -> None:
         src_spec = C.doc_state(sdir / "spec.md", rc)
         trc = next((c for c in R.contexts(ctx) if c.repo.name == e.dst[0]), None)
         if e.kind == "amends" and src_spec.approved and trc:
-            text = (trc.repo / "specs" / e.dst[1] / "spec.md").read_text()
+            text = (trc.repo / "specs" / e.dst[1] / "spec.md").read_text(encoding="utf-8")
             ch = re.search(r"^## Changes\b(.*?)(?=^## |\Z)", text, re.M | re.S)
             if not ch or e.src[1] not in ch.group(1):
                 r.err("GW072", trc.repo / "specs" / e.dst[1] / "spec.md",
                       f"amended by {R.fmt(e.src)} but its '## Changes' section does not record it",
                       "add a dated line naming the amending feature, then get the spec re-approved")
         if e.kind in ("depends_on", "builds_against"):
-            started = re.search(r"^\s*- \[[x~]\]", (sdir / "tasks.md").read_text(), re.M | re.I) if (sdir / "tasks.md").is_file() else None
+            started = re.search(r"^\s*- \[[x~]\]", (sdir / "tasks.md").read_text(encoding="utf-8"), re.M | re.I) if (sdir / "tasks.md").is_file() else None
             if started and C.dependency_problems(rc, src_spec):
                 r.err("GW074", sdir / "tasks.md", "implementation started while dependencies are not ready: "
                       + "; ".join(C.dependency_problems(rc, src_spec)))
@@ -437,7 +437,7 @@ def check_brevity(ctx: C.Ctx, r: Report) -> None:
     for path, kind in docs:
         if not path.is_file():
             continue
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
         if C.PLACEHOLDER.search(C.split_fm(text)[1]):
             continue                                              # unfinished: judged when finished
         budget = V.DOC_BUDGETS.get(kind or "")

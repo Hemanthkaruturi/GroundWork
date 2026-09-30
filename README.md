@@ -1,167 +1,105 @@
-# Groundwork
+<p align="center">
+  <img src="files/groundwork_logo.png" alt="GroundWork" width="240">
+</p>
 
-An open-source plugin that makes coding agents work from a shared, written plan instead of
-improvising. Agents multiply implementation speed *and* inconsistency; Groundwork
-supplies the missing system: standard documents, a mandatory path from idea to code, and
-human approval at the points that matter. Humans can read the documents to understand the
-project; agents get all the context before they write a line.
+<h3 align="center">Coding agents write code fast.<br>GroundWork makes sure it's the right code.</h3>
 
-**Standardize the system. Preserve the craftsmanship.**
+<p align="center">
+  A free, open-source plugin for Claude Code that turns your AI agent from a fast improviser<br>
+  into a teammate that plans first, asks before building, and leaves a paper trail.
+</p>
 
-Full overview for presenting: [`docs/groundwork-overview.md`](docs/groundwork-overview.md).
+---
 
-## The standard
+## The problem
 
-[`plugins/groundwork/STANDARD.md`](plugins/groundwork/STANDARD.md) is the specification: levels, layout, the required
-sections of every document, the path from idea to code, approval semantics, and a catalogue of numbered rules
-(`GW001`…). Projects that follow the same version look and behave the same to any person or agent.
-`groundwork check` verifies conformance with no model and no network, so it runs identically on a laptop, in a
-git hook and in CI:
+AI coding agents are incredibly fast, and they are just as fast at making a mess.
 
-```bash
-python3 plugins/groundwork/engine/groundwork.py check --strict
+- **They build from a one-line request.** You get the wrong thing, delivered quickly.
+- **Every session has its own opinion.** Two agents, two designs, one confused product.
+- **The reasoning lives in a chat window.** Close it, and the "why" is gone forever.
+- **Nobody knows who asked for what.** When something breaks in production, no one knows whom to call.
+- **Docs are written once, then rot.** New teammates and new agents trust information that is no longer true.
+
+An agent is a skilled craftsperson who never attended the design review. Nothing it needs is written down, so it guesses.
+
+## What GroundWork does
+
+GroundWork gives your agent the missing system: a shared, written plan that everyone follows.
+
+> **Standardize the system. Preserve the craftsmanship.**
+
+Before any code is written, the agent interviews you, drafts a short decision document, and waits for **your approval**. Only then does it plan, build in small steps, and hand over cleanly. It can't skip a step, and it can't approve its own work. The rules are enforced by the tool itself, not by asking the agent nicely.
+
+```
+ idea → interview → RFC → you approve → spec → you approve → plan → build → handover
 ```
 
-```yaml
-# .github/workflows/groundwork.yml
-on: [pull_request]
-jobs:
-  groundwork:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: python3 path/to/groundwork/plugins/groundwork/engine/groundwork.py check --strict
-```
+## Why you'll like it
 
-## Resume, bugs, and how features relate
-- **Close the laptop, come back tomorrow, hand it to a teammate.** Everything in flight is derived from files: `groundwork.py board` (also injected at session start)
-  lists RFCs mid-interview, approved RFCs waiting for a spec, features stuck at plan/tasks/evals, half-built work and open bugs, each with its next action,
-  last note (`groundwork.py note "…"`) and blockers. The `resume` skill picks one with the selectable picker and continues exactly there. The interview writes the RFC draft
-  after round one, so even a half-finished interview survives.
-- **Every feature is independent, or says how it relates:** `depends_on` (needs the other implemented), `builds_against` (parallel once the other's spec is approved and plan finished),
-  `extends` (only the delta), `amends` (changes existing behaviour → the old spec gets a dated `## Changes` entry and must be re-approved). Cross-repo works (`repo/NNN-slug`).
-  Cycles, unresolved links and concurrent edits to the same base are flagged; `groundwork.py deps <feature|RFC>` shows what a change affects.
-- **Bugs have a lifecycle** (`fix-bug` skill, `bugs/NNN-slug.md`): reproduce → root cause → classify as `code-bug` (cite the violated FR/AC — across as many specs as apply),
-  `spec-gap` (amend + re-approve the spec) or `design-flaw` (new approved RFC) → regression test first → fix → verify → close. The code gate stays shut until the diagnosis is real.
+**You stay in charge.**
+Nothing gets built until a human approves the plan. Unknowns are flagged instead of guessed, and if the plan changes midway, you decide, and the change is recorded.
 
-## Short, plain replies
-Long replies don't get read, and decisions made on unread text are bad decisions. Groundwork tells the agent — at session start and on every prompt — to lead with the answer or the decision, keep to about
-150 words, use short sentences and everyday words, explain IDs instead of citing them bare, and ask with the picker (label ≤ 5 words, what-happens ≤ 15, recommendation first). Documents get soft
-size budgets and a sentence-length check in `groundwork check`. For a hard limit set `"brevity": "enforce"` in `.groundwork/config.json`: an over-long reply is sent back once to be rewritten
-(`max_reply_words`, default 220; code and tables don't count). **Shorter never means less:** the rules name what must always survive (decisions needed, failures and skipped work, what wasn't verified, risks, every changed file, assumptions, blockers, your next step), and when a reply is shortened the full original is saved to `.groundwork/replies/` and linked, so nothing is dropped. The `plain-writing` skill holds the full style guide.
+**Fewer rework loops.**
+The agent asks its questions up front, as clickable choices instead of walls of text. You catch a wrong assumption in minutes, not after a week of code.
 
-## Who is responsible — and whom to contact
-Every RFC, feature and bug records the **humans** behind it: who requested it (and where the request came from), who owns it, who implemented it, who deployed it (per environment, with version), and who supports it.
-`groundwork.py who <feature>` answers "whom do I call?" in one screen — including the owners of every feature it depends on or that depends on it, so before you change something
-that affects a colleague's work you know exactly who they are. `who --person NAME` lists what someone is responsible for; `who --all` is the team map. Contacts live in PROJECT.md's people table;
-history lives in an append-only, committed ledger. Deployments are recorded by CI:
-```yaml
-      - run: python3 .groundwork/engine/groundwork.py record deployed --ref 001-widgets --env prod --version "$TAG" --by "$GITHUB_ACTOR"
-```
+**Work never gets lost.**
+Close the laptop, switch teammates, or start a fresh session. GroundWork shows what's in flight and resumes exactly where work stopped, without asking the same questions twice.
 
-## Changes flow up only through an explicit amendment
-Planning can discover that a spec is ambiguous — that is valuable. But a plan never edits a spec on its own: the agent states the evidence, **you** choose the reading, the spec gets a dated
-`## Changes` line saying what changed and why (re-approval is refused without one), you re-approve, and the plan/tasks/evals are re-verified and re-pinned to the new spec (`plan-sync`). Until then code stays blocked.
+**Always know who to call.**
+For every feature and bug it records who requested it, who owns it, who built it, who deployed it, and who supports it. One command answers "whom do I call?" during an incident.
 
-## Onboarding an existing project
-```bash
-python3 plugins/groundwork/engine/groundwork.py init --dry-run     # see what it would do
-python3 plugins/groundwork/engine/groundwork.py init --retrofit    # scaffold + add missing sections to your existing docs
-python3 plugins/groundwork/engine/groundwork.py doctor             # where do we stand, and what next?
-```
-`init` never overwrites. It gathers evidence about the codebase (stack, scripts, tests, CI, existing docs/ADRs, contributors) into
-`.groundwork/discovery.json`; `/groundwork:bootstrap` then drafts the documents from facts and asks only what code cannot tell.
-`doctor` places the project on a ladder — *Not started → Scaffolded → Documented → Current → Guarded → Practicing* — with the next steps.
+**Bugs get fixed properly.**
+A bug is treated as a broken requirement. It has to be diagnosed and get a regression test before anyone touches the code.
 
-## Git hooks
-```bash
-python3 plugins/groundwork/engine/groundwork.py hooks install            # pre-commit: errors block
-python3 plugins/groundwork/engine/groundwork.py hooks install --strict --pre-push --vendor
-```
-Run in a workspace it installs into every repo under it. `--vendor` copies the small engine into `.groundwork/engine/` so a
-teammate without the plugin runs `python3 .groundwork/engine/groundwork.py hooks install` and gets the same check. Existing hooks are
-chained and restored on `hooks uninstall`; `--no-verify` bypasses once.
+**Docs that stay true.**
+GroundWork notices when the code or architecture moves on and flags the documents that are now out of date.
 
-## Documents that don't rot
-Foundation docs are written once, so they drift. Groundwork records a **baseline snapshot** when a doc is confirmed
-(`groundwork.py confirm`) and compares it later (`groundwork.py fresh`): changed manifests/infra/migrations, new top-level
-folders, new or removed repos, a repo's `ARCHITECTURE.md` edited by a teammate, new contracts or RFCs, or plain age.
-A repo session also sees when *workspace* docs went stale because of its work; the `refresh` skill updates only what changed,
-asks the user about what code can't tell (people, scope, the *why*), then confirms. `check --strict` in CI catches drift
-introduced by anyone, agent or not.
+**Answers you'll actually read.**
+The agent is told to answer first, in plain words, and keep it short, without dropping the caveats, risks or next steps you need.
 
-## What v0.1 does (Claude Code plugin `groundwork`)
+**Works with what you already have.**
+Point it at an existing project and it reads the code, drafts the documents from facts, and only asks what the code can't tell it. Adopt it gradually, one repo at a time.
 
-| Principle | How the plugin enforces it |
+## Who it's for
+
+| If you are... | You get... |
 | --- | --- |
-| Two levels: **workspace** above, **repo** below | `engine/groundwork_core.py` detects workspace / repo / standalone / unknown from the filesystem; every session starts with that fact injected, and a repo answers for its workspace's docs too |
-| PROJECT.md, ARCHITECTURE.md, CONSTITUTION.md, AGENTS.md, CONTRACTS/, DECISIONS/ | `bootstrap` skill + templates; code edits are **denied** while any is missing or still holds `[TODO]` |
-| Interview → RFC → review → spec → plan → tasks → evals → code | one skill per step; a PreToolUse hook denies code edits until RFC ✔ approved, spec ✔ approved, plan/tasks/evals complete |
-| Humans approve, agents cannot | `/groundwork:approve` is executed by a UserPromptSubmit hook (only typed prompts reach it); approval stores a hash of the document body, so any later edit makes it **stale**; agent writes to approval records are denied |
-| Never guess | unresolved `[NEEDS CLARIFICATION]` / `[TODO]` markers block approval and the gate |
-| RFC for cross-repo decisions | `classification: api` + `signoffs_required: N` (every lead signs) + `write-contract` into `CONTRACTS/` |
-| Handover pack | `handover` skill + template |
-| Testable by hand | spec template has a mandatory **Manual test** section; `implement` ends by telling you how to try it |
+| **A developer** | Clear specs before you code, and easy pickup of a colleague's half-finished work. |
+| **A tech lead** | Consistent structure across repos and agents, with decisions recorded and reasons attached. |
+| **A product owner** | An agent that asks before it builds, and requirements you can read and approve. |
+| **On-call / support** | One screen showing the owner, builder, deployer and support contact. |
+| **A new joiner** | A project brief and handover packs instead of code archaeology. |
 
-**The shell is gated too.** `cat > f <<EOF`, `sed -i`, `tee`, `cp`, `curl -o`, `patch`/`git apply` and inline scripts that write files go through the same gate as the Write tool. Other skills and plugins (`frontend-design`, …) are craft tools for the *implement* step: every prompt carries a triage reminder, and loading a non-Groundwork skill injects a notice — a "make it look modern" request is a change request (interview → RFC → spec), not a free-hand redesign.
+## Install and use
 
-Escape hatches, deliberately human-only: `/groundwork:bypass <reason>` (60 min, logged) and
-`.groundwork/config.json` `{"enforcement":"warn|off"}`.
+**You need:** [Claude Code](https://claude.com/claude-code), Python 3 and git.
 
-## Try it
-```bash
-python3 -m unittest discover -s plugins/groundwork/tests   # 151 tests, no model (~3 min)
-scripts/make-sandbox.sh && cd ~/groundwork-sandbox/c-shop
-claude --plugin-dir /home/terminator/projects/craftsmanship/plugins/groundwork
+**1. Install the plugin.** Inside Claude Code, run:
+
 ```
-Full scenarios with expected results: [`docs/manual-testing.md`](docs/manual-testing.md).
-
-## Tooling defaults
-Python projects use **`uv`** (`uv add`, `uv sync`, `uv run`), never `pip`: it is in the rules every session starts with, in the generated `AGENTS.md`,
-and in the bootstrap/implement skills. Onboarding detects pip/poetry/pipenv/conda and asks before migrating.
-
-## Fewer permission prompts (optional)
-Groundwork's own commands are read-mostly, so you may allow them once in `.claude/settings.json`
-(or user settings). Approving/bypassing is never runnable by the agent regardless of this list:
-```json
-{ "permissions": { "allow": [
-  "Bash(python3 */groundwork/engine/groundwork.py status*)",
-  "Bash(python3 */groundwork/engine/groundwork.py check*)",
-  "Bash(python3 */groundwork/engine/groundwork.py scaffold*)",
-  "Bash(python3 */groundwork/engine/groundwork.py new-*)"
-] } }
+/plugin marketplace add Hemanthkaruturi/GroundWork
+/plugin install groundwork@groundwork
 ```
-(Skills deliberately do not declare `allowed-tools`: that makes the skill call itself need approval.)
 
-## Layout
+**2. Set up your project.** Open Claude Code in your project (new or existing) and run:
+
 ```
-.claude-plugin/marketplace.json     install via /plugin marketplace add <this dir>
-plugins/groundwork/
-  hooks/hooks.json                  SessionStart, UserPromptSubmit, PreToolUse
-  engine/groundwork_core.py, groundwork.py          all rules; stdlib only, no Claude dependency
-  skills/                           workflow, bootstrap, interview, write-{rfc,spec,plan,tasks,evals,contract}, implement, handover
-  commands/                         approve, bypass, status
-  templates/                        every document the process produces
-  STANDARD.md                       the specification (rule ids GWnnn)
-  engine/groundwork_fresh.py        freshness baselines and drift detection
-  engine/groundwork_discover.py     evidence gathering for `init`
-  engine/groundwork_doctor.py       `doctor` — stage and next steps
-  engine/groundwork_people.py       ownership: roles, ledger, `who`
-  engine/groundwork_brevity.py      word budgets, reply limit (Stop hook)
-  engine/groundwork_board.py        work board: everything in flight, for resume
-  engine/groundwork_relations.py    feature dependency graph and impact
-  engine/groundwork_bugs.py         bug lifecycle and its gate
-  engine/groundwork_hooks.py        git pre-commit / pre-push installer
-  engine/groundwork_check.py        `groundwork check` — the conformance checker
-  tests/                            lifecycle + one test per rule
+/groundwork:bootstrap
 ```
-`engine/` is agent-neutral by design so other coding agents can get a thin adapter later.
 
-## Next iterations (suggested)
-1. Run it on a real project and tighten the skills' wording from what the agent actually does.
-3. Contract pinning (`contract.lock`) checks; RFC/ADR index kept up to date automatically.
-4. Adapters for other agents (AGENTS.md-based + git hooks / CI check).
+GroundWork explains where it is, interviews you with clickable choices, and writes your project documents without inventing facts.
 
-## License
+**3. Ask for what you want.** Describe a feature or a bug the way you normally would. The agent starts with questions, writes the RFC, and stops for your approval.
 
-[MIT](LICENSE)
+**4. Approve when you're happy.** Only you can do this, so the agent can't do it for you:
+
+```
+/groundwork:approve
+```
+
+That's it. Come back any time and ask it to resume.
+
+---
+
+<p align="center">Released under the <a href="LICENSE">MIT License</a>.</p>

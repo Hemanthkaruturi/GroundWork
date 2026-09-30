@@ -28,8 +28,8 @@ if [ ! -f "$GW" ]; then
   echo "groundwork: engine not found ($GW); skipping check. Vendor it: groundwork.py hooks install --vendor" >&2
   exit 0
 fi
-command -v python3 >/dev/null 2>&1 || {{ echo "groundwork: python3 not found; skipping check" >&2; exit 0; }}
-python3 "$GW" check --hook {strict}"$ROOT" || {{
+PY=$(command -v python3 || command -v python) || {{ echo "groundwork: python not found; skipping check" >&2; exit 0; }}
+"$PY" "$GW" check --hook {strict}"$ROOT" || {{
   echo >&2
   echo "groundwork: {verb} blocked. Fix the findings above, or bypass once with --no-verify." >&2
   exit 1

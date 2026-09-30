@@ -9,6 +9,16 @@ GroundWork is a plugin for Claude Code that makes a coding agent work from a sha
 - **Hooks** that run at session start, on each prompt, before file edits and shell commands, and at the end of a reply.
 - **A local command-line engine** (`engine/groundwork.py`) that checks projects against the written standard (`STANDARD.md`).
 
+## What the hooks do
+
+All hooks run `engine/groundwork.py` with one sub-command each (`session-context`, `prompt-reminder`, `stop-brevity`, `gate`, `skill-notice`, `gate-bash`).
+
+- **`gate`** (before Write, Edit, MultiEdit and NotebookEdit) and **`gate-bash`** (before Bash) can only **deny** a tool call, with a plain-language reason, when the project's approved documents don't yet allow code changes. They never return "allow", so they can't approve anything or widen permissions. If nothing needs blocking they print nothing and Claude Code's normal permission flow applies.
+- **`skill-notice`** (before the Skill tool) only adds a short reminder to Claude's context. It doesn't approve or deny.
+- **`session-context`** and **`prompt-reminder`** add context such as work in flight. They don't change permissions.
+- **`stop-brevity`** runs when Claude finishes a reply. Only in the optional strict brevity mode, if the reply is over the word limit, it asks Claude once to rewrite it shorter (the full original is saved under `.groundwork/replies/`). It doesn't touch permissions.
+- Enforcement can be turned down per project (`warn` or `off` in `.groundwork/config.json`).
+
 ## What it runs, reads and sends
 
 - It runs a local Python 3 script, `engine/groundwork.py`, using only the standard library. There are no dependencies to install.

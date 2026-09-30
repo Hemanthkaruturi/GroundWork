@@ -82,6 +82,8 @@ Point it at an existing project and it reads the code, drafts the documents from
 /plugin install groundwork@groundwork
 ```
 
+Run the first command and wait for "Successfully added marketplace" before the second. If you see `Marketplace "groundwork" not found`, the marketplace hasn't been added yet.
+
 **2. Set up your project.** Open Claude Code in your project (new or existing) and run:
 
 ```

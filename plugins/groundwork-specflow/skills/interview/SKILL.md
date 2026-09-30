@@ -23,8 +23,20 @@ Do **not** start designing, writing an RFC or touching code until the interview 
 - **New or changed behaviour** → continue below.
 
 ## Persist as you go (so a closed session loses nothing)
-After the **first** round of answers, create the RFC (`groundwork.py new-rfc <slug>`) and record every question and answer in its §3 table immediately after each round.
+After the **first** round of answers, create the RFC (`groundwork.py new-rfc <slug>`) and record every question and answer in its §3 table immediately after each round, each with its **effect** label (below).
 The RFC draft *is* the interview's memory: a new session resumes from it (the **resume** skill reads it).
+**While interviewing, the only file you change is the RFC draft.** Do not edit code, specs or the foundation documents (PROJECT, ARCHITECTURE, CONSTITUTION). If an answer means one of them must change, note it in the read-back as a doc to update, and do it after the RFC is approved.
+
+## Label every answer
+Give each row of §3 exactly one effect, so the reader sees what is settled and what is not:
+- **Confirmed**: settles or clarifies the direction.
+- **Tension**: conflicts with an earlier answer, a document, or the CONSTITUTION, or is a real trade-off.
+- **Open decision**: someone must still choose. Carry it to RFC §10 as `[NEEDS CLARIFICATION: …]`.
+- **Doc update**: a foundation document will need changing once this is approved. Say which.
+- **Out of scope**: useful, but not part of this change. Copy it to RFC §9.
+
+**Challenge, don't just collect.** When an answer clashes with something earlier or with the documents, say so plainly, name both sides, and ask which way to go (picker). A tension is either resolved by the user or stays visible in §10. Never smooth it over.
+If the user asks you a question instead of answering one, answer it in a sentence or two, log it in §3 as "(user question)" with its effect, then carry on.
 
 ## Method
 1. Read PROJECT.md, ARCHITECTURE.md, CONSTITUTION.md (workspace and repo) and skim related code/specs, so
@@ -32,8 +44,7 @@ The RFC draft *is* the interview's memory: a new session resumes from it (the **
 2. Restate the request in one sentence and ask the user to correct it.
 3. Ask in **rounds of 3–6 questions**, most consequential first, using `AskUserQuestion` (always — see above). Follow the answers: each round should be shaped by the last.
 4. Keep a running Q&A log (you will paste it into the RFC's §3).
-5. Stop only when you could hand the RFC to a stranger and they would build the right thing. Then read the
-   picture back to the user, in your own words, and get an explicit "yes, that's it".
+5. Stop only when you could hand the RFC to a stranger and they would build the right thing. Then do the **read-back**: in your own words, and in the RFC's "Read-back" block, list what is **Confirmed**, the remaining **Tensions**, the **Open decisions**, and the **Docs to update** after approval. Ask the user to confirm it (picker: Looks right / Change something) and get an explicit "yes, that's it".
 
 ## Ownership (always ask — it decides whom to contact later)
 With the picker (options from PROJECT.md's people table, plus "Someone else"): **who requested this** (and where the request came from: ticket, email, meeting — record it as `request_source` in the RFC), **who will own it** (default: the person you are talking to), and — if already known — **who will support it after release**. Record with `groundwork.py record requested|owner|support --ref <ref> --who "<name>"`; new RFCs/features already set the owner to the git identity. The responsible person is always a human.
@@ -56,6 +67,9 @@ Record the answer in RFC §7 (Impact) and it becomes the spec's front matter (`e
 - **Boundaries:** which repos/services it touches; who consumes it; contract changes; who must sign off.
 - **Constraints:** performance, security, privacy, compliance, budget, deadlines, tech the team has ruled in/out.
 - **Look and feel / UX (any UI change, including "make it look modern")** — this is a change request, not a free-hand design task. Ask (with the picker): which screens/flows are in scope; the feel wanted (offer 3–4 concrete directions with a one-line description each, and "show me references"); brand constraints (colours, fonts, logo); light/dark; density; accessibility target (e.g. WCAG AA contrast, keyboard use); responsive targets (phone/tablet/desktop); what must NOT change; how the user will judge "better" (before/after screenshots, a checklist). Their answers become testable requirements in the spec.
+- **Source of truth:** which system, document or dataset is authoritative for each piece of data, and who may change it.
+- **Lifecycle:** versioning, how it is changed or retired later, and the migration path for what exists today.
+- **Adoption:** how it rolls out, who has to change a habit, and how we will know it is being used.
 - **Existing behaviour** it changes or must not break; migration of existing data.
 - **Verification:** how a human would test it by hand; which real inputs to try.
 - **People:** who decides, who reviews, who to ask.

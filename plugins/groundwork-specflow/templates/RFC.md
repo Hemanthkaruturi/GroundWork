@@ -28,10 +28,18 @@ filled from the interview with the user; anything not yet answered is an unresol
 
 ## 3. Interview record
 <!-- Every question asked and the user's answer, verbatim in substance. This is the evidence
-that the picture is clear. Group by theme. -->
-| # | Question | Answer |
-| --- | --- | --- |
-| 1 | [TODO] | [TODO] |
+that the picture is clear. Group by theme. Effect is one of: Confirmed, Tension, Open decision,
+Doc update, Out of scope. -->
+| # | Question | Answer | Effect |
+| --- | --- | --- | --- |
+| 1 | [TODO] | [TODO] | [TODO] |
+
+### Read-back
+<!-- Written at the end of the interview and confirmed by the user. -->
+- **Confirmed:** [TODO]
+- **Tensions:** [TODO: or "None"]
+- **Open decisions:** [TODO: or "None"; each is also listed in §10]
+- **Docs to update after approval:** [TODO: or "None"]
 
 ## 4. Proposal
 [TODO: the approach, at the level of components and behaviour — not code]

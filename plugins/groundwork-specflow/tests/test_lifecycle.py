@@ -52,7 +52,7 @@ class Resume(CheckBase):
 
     def test_interview_progress_survives_in_the_rfc_draft(self):
         rfc = Path(ca(self.ws, "new-rfc", "login").stdout.strip())
-        rfc.write_text(rfc.read_text(encoding="utf-8").replace("| 1 | [TODO] | [TODO] |", "| 1 | Who logs in? | Buyers |\n| 2 | Which IdP? | Google |"), encoding="utf-8")
+        rfc.write_text(rfc.read_text(encoding="utf-8").replace("| 1 | [TODO] | [TODO] | [TODO] |", "| 1 | Who logs in? | Buyers | Confirmed |\n| 2 | Which IdP? | Google | Open decision |"), encoding="utf-8")
         w = by_ref(board(self.ws), "RFC-0002")
         self.assertIn("2 interview answer(s)", w["state"])
 

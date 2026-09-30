@@ -20,7 +20,7 @@ that the people it touches can sign it. It is the input to the spec.
 1. Confirm the interview is complete (the user said "yes, that's it"). If not, go back to **interview**.
 2. Create it (or open the draft the interview already created — never start a second one): `python3 "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py" new-rfc <short-slug> --title "<title>"`
    (creates `DECISIONS/RFC-000N-slug.md` at the workspace, or the repo if standalone).
-3. Fill every section from the interview. §3 is the Q&A log. Be concrete about behaviour; leave code out.
+3. Fill every section from the interview. §3 is the Q&A log with an effect label on every row, plus the read-back. Copy every **Open decision** to §10 and every **Out of scope** item to §9. Be concrete about behaviour; leave code out.
 4. **Classification.** If the change crosses a repo boundary, set `classification: api`, fill §8
    (use **write-contract**) and set `signoffs_required` to the number of leads it touches. Otherwise `internal`.
 4b. If it replaces an earlier decision set `supersedes: [RFC-000N]`; if it merely relates, `related_rfcs: [...]`. State in §7 which existing features it extends, amends or depends on.

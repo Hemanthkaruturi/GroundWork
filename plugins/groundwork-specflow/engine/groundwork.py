@@ -241,7 +241,7 @@ def cmd_gate_bash(_a) -> None:
     """
     full = hook_input()
     cmd = full.get("tool_input", {}).get("command", "")
-    if C.is_protected_command(cmd):
+    if C.is_protected_command(cmd, Path(full.get("cwd") or os.getcwd())):
         return deny("groundwork-specflow: approvals and bypasses are human acts. Ask the user to run "
                     "/groundwork-specflow:approve or /groundwork-specflow:bypass themselves.")
     ok, reason = C.gate_shell_command(cmd, Path(full.get("cwd") or os.getcwd()))

@@ -637,8 +637,92 @@ def is_protected_path(path: Path) -> bool:
     return bool(PROTECTED_PATH.search(path.as_posix()))
 
 
-def is_protected_command(cmd: str) -> bool:
-    return bool(PROTECTED_CMD.search(cmd))
+_PROTECTED_WORD = re.compile(r"approvals\.json|bypass\.json|groundwork_core|groundwork\.py|groundwork[/\\]engine")
+_SHELLS = {"sh", "bash", "zsh", "dash", "ksh", "fish"}
+_INTERPRETERS = re.compile(r"^(python[\d.]*|node|nodejs|ruby|perl|php|deno|bun|pwsh|powershell)$")
+_ASSIGN = re.compile(r"^([A-Za-z_]\w*)=(.*)$")
+_SCRIPT_READ_LIMIT = 200_000
+
+
+def _expand_vars(tok: str, env: dict[str, str]) -> str:
+    return re.sub(r"\$(?:\{(\w+)\}|(\w+))", lambda m: env.get(m.group(1) or m.group(2), m.group(0)), tok)
+
+
+def _glob_hits_protected(tok: str) -> bool:
+    """`.groundwork/appr*.json`, `.groundwork/?ypass.json`: a glob that could expand to a protected file."""
+    if not re.search(r"[*?\[]", tok) or ".groundwork" not in tok.replace("\\", "/"):
+        return False
+    leaf = tok.replace("\\", "/").rsplit("/", 1)[-1]
+    return any(fnmatch.fnmatch(n, leaf) for n in ("approvals.json", "bypass.json"))
+
+
+def _script_is_protected(word: str, cwd: Path | None) -> bool:
+    """A script the agent could have written that itself calls approve/bypass (`bash x.sh`, `python3 x.py`)."""
+    if cwd is None or not word or word.startswith(("-", "$")):
+        return False
+    p = Path(word).expanduser()
+    p = p if p.is_absolute() else cwd / p
+    try:
+        if p.is_file() and p.stat().st_size <= _SCRIPT_READ_LIMIT:
+            return bool(PROTECTED_CMD.search(p.read_text(encoding="utf-8", errors="ignore")))
+    except OSError:
+        pass
+    return False
+
+
+def is_protected_command(cmd: str, cwd: Path | None = None, _depth: int = 0) -> bool:
+    """Would this shell command touch approvals/bypass records or run the human-only engine commands?
+
+    Token-based, so quoting tricks (`gro""undwork.py`), variables set in the same command (`E=groundwork.py; python3 $E
+    approve`), `bash -c '...'`/`eval`, inline interpreter code, globs and scripts that call approve are all seen. Static
+    analysis cannot prove an arbitrary shell command safe (string building at runtime, encoded payloads), so when a
+    command pipes a decoder into a shell, or evals something we cannot read, it is refused as well.
+    """
+    if PROTECTED_CMD.search(cmd):
+        return True
+    if _depth > 3:                                    # nested bash -c / eval chains this deep: refuse
+        return True
+    stripped, bodies = _strip_heredocs(cmd)
+    if PROTECTED_CMD.search(bodies) or _PROTECTED_WORD.search(bodies) and re.search(r"\b(approve|bypass)\b", bodies):
+        return True
+    env: dict[str, str] = {}
+    for argv in _simple_commands(stripped):
+        words = []
+        for t in argv:
+            m = _ASSIGN.match(t) if not words else None
+            if m:
+                env[m.group(1)] = _expand_vars(m.group(2), env)
+            else:
+                words.append(_expand_vars(t, env))
+        if not words:
+            continue
+        joined = " ".join(words)
+        if PROTECTED_CMD.search(joined) or any(_glob_hits_protected(w) for w in words):
+            return True
+        name = Path(words[0]).name
+        base = [Path(w).name for w in words]
+        if any(b in ("groundwork.py", "groundwork_core.py") for b in base):
+            sub = base.index("groundwork.py") if "groundwork.py" in base else None
+            if sub is None or any(w in ("approve", "bypass") for w in words[sub + 1:]):
+                return True
+        if name == "eval" or (name in _SHELLS and "-c" in words):
+            payload = " ".join(words[1:]) if name == "eval" else words[words.index("-c") + 1:][0] if words.index("-c") + 1 < len(words) else ""
+            if is_protected_command(payload, cwd, _depth + 1):
+                return True
+        if name in _SHELLS | {"source", "."} and len(words) > 1 and _script_is_protected(words[1], cwd):
+            return True
+        if _INTERPRETERS.match(name):
+            if any(w in ("-c", "-e", "-r", "-E", "--eval", "--command") or w.startswith("-c") for w in words[1:]) and _PROTECTED_WORD.search(joined):
+                return True
+            script = next((w for w in words[1:] if not w.startswith("-")), "")
+            if _script_is_protected(script, cwd):
+                return True
+        elif words[0].startswith(("./", "/")) and _script_is_protected(words[0], cwd):
+            return True
+    # a decoder piped into a shell hides its payload from us
+    if re.search(r"\b(base64|xxd|openssl\s+enc|rev)\b[^|;&]*\|[^;&]*\b(sh|bash|zsh|dash|python3?|eval)\b", stripped):
+        return True
+    return False
 
 
 # --- scaffolding ----------------------------------------------------------------------

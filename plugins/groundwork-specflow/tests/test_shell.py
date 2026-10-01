@@ -45,6 +45,28 @@ class ShellGate(CheckBase):
                     "sed 's/a/b/' src/app.py", "python3 script.py", "find . -name '*.py' | wc -l"]:
             self.assertFalse(self.blocked(cmd)[0], cmd)
 
+    def test_human_only_commands_are_denied_however_they_are_spelled(self):
+        (self.api / "sneaky.sh").write_text("python3 groundwork.py approve RFC-0001\n")
+        (self.api / "fine.sh").write_text("echo hi\n")
+        for cmd in ['python3 "/x/engine/groundwork.py" approve RFC-0001', "python3 '/x/engine/groundwork.py' bypass x",
+                    'python3 /x/engine/gro""undwork.py approve RFC-0001', "python3 /x/engine/groundwork'.py' bypass x",
+                    'E=/x/engine/groundwork.py; python3 $E approve RFC-0001', 'E=/x/groundwork.py && python3 "${E}" bypass y',
+                    "bash -c 'python3 /x/groundwork.py approve RFC-0001'", 'eval "python3 /x/groundwork.py approve RFC-0001"',
+                    "python3 -c \"import subprocess; subprocess.run(['python3','/x/groundwork.py','approve','R'])\"",
+                    "python3 -c \"open('.groundwork/approvals.json','w').write('{}')\"",
+                    "echo {} > .groundwork/appr*.json", "cat .groundwork/?ypass.json",
+                    "python3 - <<'P'\nimport subprocess; subprocess.run(['python3','groundwork.py','approve','R'])\nP",
+                    "bash sneaky.sh", "sh ./sneaky.sh", "python3 groundwork_core.py",
+                    "echo cHl0aG9u | base64 -d | sh"]:
+            self.assertTrue(self.blocked(cmd)[0], cmd)
+            self.assertIn("human acts", self.blocked(cmd)[1], cmd)
+
+    def test_the_protected_command_check_leaves_ordinary_commands_alone(self):
+        (self.api / "fine.sh").write_text("echo hi\n")
+        for cmd in ["bash fine.sh", "bash -c 'echo hi'", "python3 -c 'print(1)'", "echo approve", 'eval "ls"',
+                    "base64 -d < a > b", "echo x > .groundwork/journal.md", "python3 -m unittest"]:
+            self.assertFalse(self.blocked(cmd)[0], cmd)
+
     def test_documents_and_ignored_paths_are_allowed(self):
         self.close_gate()
         for cmd in ["cat <<'EOF' > README.md\n<b>x</b> > y\nEOF", "echo x >> ARCHITECTURE.md", "echo x > docs/notes.md",

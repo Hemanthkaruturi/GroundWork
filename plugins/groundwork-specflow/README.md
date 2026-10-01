@@ -30,7 +30,7 @@ All hooks run the explicit path `${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py` wit
 
 ## Install
 
-**From Anthropic's plugin directory.** Open the directory on claude.ai (or in Cowork), search for **Groundwork Specflow** and add it. In Claude Code, sign in with the same claude.ai account (`/login`, Claude Code v2.1.273 or later). The plugin syncs the next time you start Claude Code, where it appears as `groundwork-specflow@synced`. Run `/reload-plugins` when prompted. Directory sync does not work with an API key or `ANTHROPIC_AUTH_TOKEN`.
+**From Anthropic's plugin directory.** Open [Customize > Plugins](https://claude.ai/customize/plugins) in claude.ai or the Claude desktop app, search **Discover** for **Groundwork Specflow** and select **Add**. (This is the Plugins page, not the Connectors directory, which won't list it.) In Claude Code, sign in with the same claude.ai account (`/login`, Claude Code v2.1.273 or later). The plugin syncs the next time you start Claude Code, where it appears as `groundwork-specflow@synced`. Run `/reload-plugins` when prompted. Directory sync does not work with an API key or `ANTHROPIC_AUTH_TOKEN`.
 
 **From this repository.** Use this if you don't sign in with a claude.ai account:
 

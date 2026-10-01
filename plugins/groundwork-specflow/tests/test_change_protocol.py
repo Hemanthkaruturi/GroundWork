@@ -75,3 +75,23 @@ class ChangeProtocol(CheckBase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HandoverCheck(CheckBase):
+    def finish_tasks(self):
+        p = self.fdir / "tasks.md"
+        p.write_text(re.sub(r"- \[[ ~]\]", "- [x]", p.read_text(encoding="utf-8")), encoding="utf-8")
+
+    def test_finished_work_without_a_handover_warns_and_a_filled_one_clears_it(self):
+        self.assertNotIn("GW038", check(self.ws)[1])                              # tasks not all done yet
+        self.finish_tasks()
+        self.assertIn("GW038", check(self.ws)[1])
+        (self.fdir / "handover.md").write_text("# Handover\n[TODO]\n", encoding="utf-8")
+        self.assertIn("GW038", check(self.ws)[1])                                 # unfinished
+        (self.fdir / "handover.md").write_text("# Handover\nDone.\n", encoding="utf-8")
+        self.assertNotIn("GW038", check(self.ws)[1])
+
+    def test_a_repo_root_handover_warns(self):
+        self.assertNotIn("GW039", check(self.ws)[1])
+        (self.api / "HANDOVER.md").write_text("# old\n", encoding="utf-8")
+        self.assertIn("GW039", check(self.ws)[1])

@@ -580,13 +580,12 @@ ERROR   GW071  .: dependency cycle: shop-api/001-product-search → shop-web/001
 The interview always asks which relationship new work has, so it is never left implicit. Two unfinished features that change the same base are flagged as a warning.
 
 ### 5.26 Handover: the system, not just the code
-When a feature is finished, or work is paused or passed on, the agent writes `HANDOVER.md` from what is true and verified. First it refreshes the foundation documents, so the handover matches reality *(illustration: the template's sections)*:
+When a feature is finished, or work is paused or passed on, the agent writes a handover from what is true and verified. Never a repo-root file: one root file fits only one piece of work. There are two places, each with one job. The spec's own `specs/001-product-search/handover.md` holds repo-local facts. A cross-repo (`api`) RFC also gets one workspace `DECISIONS/handovers/RFC-0001.md` for the why, rejected alternatives and deploy order. Each fact has one owner; the spec handover links to the RFC handover instead of repeating it. It is committed with the last task, and once deployed everywhere the durable facts fold into ARCHITECTURE.md, the contracts and the RFC, and the handover is closed or deleted. First the agent refreshes the foundation documents, so the handover matches reality *(illustration: the spec handover's sections)*:
 ```
 # Handover — Product search
-## Architecture and dependencies touched
+## What this repo changed
 ## State: done / in progress / deliberately deferred
-## Decisions taken and alternatives rejected
-## Contracts, with example requests and responses
+## Contracts used or provided
 ## Known limitations and edge cases
 ## How to run, test and deploy
 ## Ownership and support

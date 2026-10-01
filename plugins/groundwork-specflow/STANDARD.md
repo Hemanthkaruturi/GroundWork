@@ -38,11 +38,12 @@ then built in each repo against it. A change that needs another repo is never a 
 <workspace>/                      <repo>/  (also at standalone root)
   PROJECT.md                        ARCHITECTURE.md
   ARCHITECTURE.md                   AGENTS.md
-  CONSTITUTION.md                   specs/NNN-slug/{spec,plan,tasks,evals}.md  (+ log.md, append-only notes)
+  CONSTITUTION.md                   specs/NNN-slug/{spec,plan,tasks,evals,handover}.md  (+ log.md, append-only notes)
   AGENTS.md                         bugs/NNN-slug.md   (one record per defect)
-  CONTRACTS/                        HANDOVER.md        (when work is paused or finished)
+  CONTRACTS/
   DECISIONS/RFC-NNNN-slug.md        .groundwork/       (approvals.json, freshness.json, config.json)
   DECISIONS/README.md  (index)
+  DECISIONS/handovers/RFC-NNNN.md  (cross-repo handover)
   .groundwork/  (approvals.json, freshness.json, config.json)
 ```
 
@@ -83,7 +84,7 @@ An `api` RFC (one that crosses a repository boundary) MUST fill §8 and MUST req
 
 **Contracts** (`CONTRACTS/*.md`) — provider, consumers, semver version, every operation with shapes and a real example, failure semantics, compatibility rules. A shipped contract is never changed in a breaking way in place.
 
-**Handover** (`HANDOVER.md`) — architecture touched · done / in progress / deferred · decisions and rejected alternatives · contracts with examples · known limits · how to run, test, deploy · next three actions.
+**Handover** — two files, never a repo-root one. `specs/NNN-slug/handover.md` (repo-local: what changed · done / in progress / deferred · contracts used · known limits · how to run, test, deploy · next three actions). `DECISIONS/handovers/RFC-NNNN.md` in the workspace, for an `api` RFC only (why and rejected alternatives · repos and their spec handovers · deploy order across repos · contract state). Each fact has one owner; the spec handover links to the RFC handover. Committed with the last task; once deployed, durable facts fold into ARCHITECTURE.md / CONTRACTS / the RFC and the handover is closed or deleted.
 
 ## 5. The path (never skip forward)
 
@@ -280,6 +281,8 @@ sections; they never invalidate a conforming project.
 | GW074 | E | Implementation started while `depends_on`/`builds_against` are not ready |
 | GW036 | W | A finished plan/tasks/evals is not pinned to a spec version (`plan-sync`) |
 | GW037 | E | A finished plan/tasks/evals was written against an earlier version of the spec |
+| GW038 | W | Every task is done but the spec has no finished `handover.md` |
+| GW039 | W | A repo-root `HANDOVER.md` exists (move it into its spec folder) |
 | GW080 | W | An approved RFC or spec has no `requested_by` or no `owner` |
 | GW081 | W | A person named in a role is not listed in PROJECT.md's people table |
 | GW082 | W | An implemented feature has no `implemented_by` |

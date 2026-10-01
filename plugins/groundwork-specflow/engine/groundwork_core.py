@@ -550,7 +550,7 @@ def next_step(ctx: Ctx) -> tuple[str, str]:
             return st.key, f"[{slug}] {st.detail}. " + INSTRUCTIONS[st.key]
     done, total = task_counts(ctx, slug)
     if total and done == total:
-        return "handover", f"[{slug}] all {total} tasks done. Verify against evals.md, run the refresh skill, then write HANDOVER.md."
+        return "handover", f"[{slug}] all {total} tasks done. Verify against evals.md, run the refresh skill, then write specs/{slug}/handover.md (and the workspace DECISIONS/handovers/ file if the RFC is cross-repo)."
     return "implement", f"[{slug}] approved and planned. Work one task at a time ({done}/{total} done)."
 
 

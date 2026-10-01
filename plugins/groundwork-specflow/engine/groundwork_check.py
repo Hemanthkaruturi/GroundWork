@@ -207,13 +207,29 @@ def _ids(text: str, kind: str) -> list[str]:
     return re.findall(rf"\*\*({kind}-\d+)\*\*", text)
 
 
+def _handover(ctx: C.Ctx, r: Report, fdir: Path) -> None:
+    done, total = C.task_counts(ctx, fdir.name)
+    if not total or done < total:
+        return
+    h = fdir / "handover.md"
+    if not h.is_file():
+        r.warn("GW038", fdir, "all tasks are done but there is no handover.md", "write it with the handover skill")
+    elif C.doc_state(h, ctx).placeholders:
+        r.warn("GW038", h, "handover.md is unfinished", "fill every [TODO] or remove the section")
+
+
 def check_features(ctx: C.Ctx, r: Report) -> None:
+    root = ctx.repo / "HANDOVER.md"
+    if root.is_file():
+        r.warn("GW039", root, "a repo-root HANDOVER.md fits only one piece of work",
+               "move it to specs/NNN-slug/handover.md (cross-repo facts go in the workspace DECISIONS/handovers/)")
     for fdir in C.feature_dirs(ctx):
         if not re.fullmatch(r"\d{3}-[a-z0-9]+(-[a-z0-9]+)*", fdir.name):
             r.err("GW020", fdir, "feature directory must be NNN-slug (lowercase, hyphens)"); continue
         absent = [n for n in ("spec", "plan", "tasks", "evals") if not (fdir / f"{n}.md").is_file()]
         if absent:
             r.err("GW020", fdir, "missing: " + ", ".join(n + ".md" for n in absent)); continue
+        _handover(ctx, r, fdir)
         spec = C.doc_state(fdir / "spec.md", ctx)
         _feature(ctx, r, fdir, spec)
 

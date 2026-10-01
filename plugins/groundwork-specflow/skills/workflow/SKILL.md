@@ -14,7 +14,7 @@ Run `python3 "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py" status`. It tells you 
 | Level | What it is | Owns |
 | --- | --- | --- |
 | **workspace** | The folder *above* the repos, holding everything for one application | PROJECT.md, ARCHITECTURE.md, CONSTITUTION.md, AGENTS.md, CONTRACTS/, DECISIONS/ (RFCs + ADRs) |
-| **repo** | A git repo with application code, inside a workspace | ARCHITECTURE.md (internals), AGENTS.md, specs/, HANDOVER.md |
+| **repo** | A git repo with application code, inside a workspace | ARCHITECTURE.md (internals), AGENTS.md, specs/ (each with handover.md) |
 | **standalone** | A repo with no workspace above it | Both sets |
 | **unknown** | Neither | Ask the user: `git init`, or make it a workspace |
 
@@ -29,7 +29,7 @@ workspace (RFC → CONTRACTS/) before either repo builds it. Never make a quiet 
 5. **write-plan** → 6. **write-tasks** → 7. **write-evals** (before code).
 8. **implement** — one task at a time, checks green after each, update docs in the same change.
 9. **refresh** — whenever reality drifts from the foundation docs (`groundwork.py fresh`), and always before handover.
-10. **handover** — HANDOVER.md so the next engineer (or agent) can continue cold.
+10. **handover** — spec handover.md per repo, plus one workspace DECISIONS/handovers/ file per cross-repo RFC, so the next engineer (or agent) can continue cold.
 
 ## Resume, bugs, and relationships
 - **Resuming** any unfinished work (a closed session, another person, another agent): the **resume** skill reads `groundwork.py board` — everything in flight, its next action, last note, blockers.

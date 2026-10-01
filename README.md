@@ -75,7 +75,7 @@ Point it at an existing project and it reads the code, drafts the documents from
 
 **You need:** [Claude Code](https://claude.com/claude-code), Python 3.10+ (`python3` or `python` on PATH) and git.
 
-**1. Install the plugin.** GroundWork is listed in Anthropic's plugin directory. Open [Customize > Plugins](https://claude.ai/customize/plugins) in claude.ai or the Claude desktop app, search **Discover** for **Groundwork Specflow**, and select **Add**. (This is the Plugins page, not the Connectors directory, which won't list it.) Then, in Claude Code, sign in with the same claude.ai account (`/login`, Claude Code v2.1.273 or later). The plugin syncs in the background the next time you start Claude Code. When you see `Plugins changed. Run /reload-plugins to activate.`, run:
+**1. Install the plugin.** GroundWork is listed in Anthropic's plugin directory. Open [Customize](https://claude.ai/customize/plugins) in claude.ai or the Claude desktop app, go to the **Plugins** tab, choose **Discover**, search for **groundwork-specflow** (listed "from Anthropic Directory") and select **Add**. (This is the Plugins page, not the Connectors directory, which won't list it.) Then, in Claude Code, sign in with the same claude.ai account (`/login`, Claude Code v2.1.273 or later). The plugin syncs in the background the next time you start Claude Code. When you see `Plugins changed. Run /reload-plugins to activate.`, run:
 
 ```
 /reload-plugins

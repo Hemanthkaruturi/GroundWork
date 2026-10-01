@@ -30,6 +30,14 @@ All hooks run the explicit path `${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py` wit
 
 ## Install
 
+From the official Claude Code plugin directory:
+
+```
+/plugin install groundwork-specflow@claude-plugins-official
+```
+
+Or install straight from this repository:
+
 ```
 /plugin marketplace add Hemanthkaruturi/GroundWork
 /plugin install groundwork-specflow@groundwork-specflow
@@ -39,7 +47,7 @@ Then run `/groundwork-specflow:bootstrap` in your project.
 
 ## Update
 
-To get new versions automatically, run `/plugin`, open **Marketplaces**, select `groundwork-specflow`, and choose **Enable auto-update**. To update by hand, run `/plugin marketplace update groundwork-specflow` in Claude Code, then `claude plugin update groundwork-specflow@groundwork-specflow` in a terminal, and restart Claude Code.
+To get new versions automatically, run `/plugin`, open **Marketplaces**, select `claude-plugins-official`, and choose **Enable auto-update**. To update by hand, run `/plugin marketplace update claude-plugins-official` in Claude Code, then `claude plugin update groundwork-specflow@claude-plugins-official` in a terminal, and restart Claude Code. If you installed from this repository's marketplace, use `groundwork-specflow` instead of `claude-plugins-official`.
 
 ## Requirements
 

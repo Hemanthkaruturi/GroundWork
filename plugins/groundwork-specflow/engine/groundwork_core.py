@@ -630,7 +630,7 @@ def _why_blocked(ctx: Ctx) -> str | None:
 
 
 PROTECTED_PATH = re.compile(r"(^|/)\.groundwork/(approvals|bypass)\.json$")
-PROTECTED_CMD = re.compile(r"\.groundwork/(approvals|bypass)\.json|groundwork\.py\s+(approve|bypass)|groundwork_core\.py")
+PROTECTED_CMD = re.compile(r"\.groundwork/(approvals|bypass)\.json|groundwork\.py[\"']?\s+[\"']?(approve|bypass)|groundwork_core\.py")
 
 
 def is_protected_path(path: Path) -> bool:

@@ -152,6 +152,13 @@ class Lifecycle(Base):
         b = hook(self.api, "gate-bash", {"command": "echo '{}' > .groundwork/approvals.json"})
         self.assertEqual(b["permissionDecision"], "deny")
         self.assertIsNone(hook(self.api, "gate-bash", {"command": "pytest -q"}))
+        # quoted engine paths (how the skills invoke it) must be denied too
+        for cmd in ['python3 "/x/engine/groundwork.py" approve RFC-0001',
+                    "python3 '/x/engine/groundwork.py' bypass x",
+                    'python3 "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py" approve RFC-0001',
+                    'python3 "/x/engine/groundwork.py" "approve" RFC-0001']:
+            b = hook(self.api, "gate-bash", {"command": cmd})
+            self.assertEqual(b["permissionDecision"], "deny", cmd)
 
         # 4. human approves RFC; spec still not -> still blocked
         self.assertEqual(ca(self.ws, "approve", "RFC-0001", "--as", "lead").returncode, 0)

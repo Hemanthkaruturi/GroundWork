@@ -75,20 +75,22 @@ Point it at an existing project and it reads the code, drafts the documents from
 
 **You need:** [Claude Code](https://claude.com/claude-code), Python 3.10+ (`python3` or `python` on PATH) and git.
 
-**1. Install the plugin.** GroundWork is in the official Claude Code plugin directory. Inside Claude Code, run:
+**1. Install the plugin.** GroundWork is listed in Anthropic's plugin directory. Open the directory on claude.ai (or in Cowork), search for **Groundwork Specflow**, and add it. Then, in Claude Code, sign in with the same claude.ai account (`/login`, Claude Code v2.1.273 or later). The plugin syncs in the background the next time you start Claude Code. When you see `Plugins changed. Run /reload-plugins to activate.`, run:
 
 ```
-/plugin install groundwork-specflow@claude-plugins-official
+/reload-plugins
 ```
 
-You can also run `/plugin`, open **Discover**, search for "GroundWork Specflow" and install it from there. New listings and updates can take up to an hour to appear in the directory.
+It shows up in `/plugin` as `groundwork-specflow@synced`. Directory sync needs a claude.ai sign-in, so it doesn't work if you use an API key or `ANTHROPIC_AUTH_TOKEN` instead.
 
-Prefer to install straight from this repository? Add it as a marketplace first, and wait for "Successfully added marketplace" before the second command:
+Prefer to install from the command line, or don't use a claude.ai account? Install straight from this repository. Run the first command and wait for "Successfully added marketplace" before the second:
 
 ```
 /plugin marketplace add Hemanthkaruturi/GroundWork
 /plugin install groundwork-specflow@groundwork-specflow
 ```
+
+Use one route or the other, not both. If both are present, Claude Code loads the copy from the marketplace and ignores the synced one.
 
 **2. Set up your project.** Open Claude Code in your project (new or existing) and run:
 
@@ -108,21 +110,22 @@ GroundWork explains where it is, interviews you with clickable choices, and writ
 
 That's it. Come back any time and ask it to resume.
 
-**5. Keep it up to date.** New versions are released from time to time. The easiest way to receive them is to turn on automatic updates once: in Claude Code, run `/plugin`, open **Marketplaces**, select `claude-plugins-official`, and choose **Enable auto-update**. Updates then install in the background when you start a session.
+**5. Keep it up to date.** New versions are released from time to time.
 
-To update by hand instead, run this in Claude Code:
+- **Installed from the directory:** nothing to do. New versions sync each time you start Claude Code, and you run `/reload-plugins` when it says `Plugins changed`.
+- **Installed from this repository:** turn on automatic updates once: run `/plugin`, open **Marketplaces**, select `groundwork-specflow`, and choose **Enable auto-update**. Updates then install in the background when you start a session. To update by hand, run this in Claude Code:
 
 ```
-/plugin marketplace update claude-plugins-official
+/plugin marketplace update groundwork-specflow
 ```
 
 Then run this in a terminal:
 
 ```
-claude plugin update groundwork-specflow@claude-plugins-official
+claude plugin update groundwork-specflow@groundwork-specflow
 ```
 
-Restart Claude Code (or run `/reload-plugins`) to start using the new version. If it says you already have the latest version, there is nothing new to install yet. If you installed from this repository's marketplace instead, use `groundwork-specflow` in place of `claude-plugins-official` in the commands above (and `groundwork-specflow@groundwork-specflow` for the plugin).
+Restart Claude Code (or run `/reload-plugins`) to start using the new version. If it says you already have the latest version, there is nothing new to install yet.
 
 **Installed the plugin before it was renamed?** It used to be called `groundwork`. If updating fails with `Plugin "groundwork" not found`, run this once in Claude Code, then restart:
 

@@ -30,24 +30,22 @@ All hooks run the explicit path `${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py` wit
 
 ## Install
 
-From the official Claude Code plugin directory:
+**From Anthropic's plugin directory.** Open the directory on claude.ai (or in Cowork), search for **Groundwork Specflow** and add it. In Claude Code, sign in with the same claude.ai account (`/login`, Claude Code v2.1.273 or later). The plugin syncs the next time you start Claude Code, where it appears as `groundwork-specflow@synced`. Run `/reload-plugins` when prompted. Directory sync does not work with an API key or `ANTHROPIC_AUTH_TOKEN`.
 
-```
-/plugin install groundwork-specflow@claude-plugins-official
-```
-
-Or install straight from this repository:
+**From this repository.** Use this if you don't sign in with a claude.ai account:
 
 ```
 /plugin marketplace add Hemanthkaruturi/GroundWork
 /plugin install groundwork-specflow@groundwork-specflow
 ```
 
+Use one route or the other. If both are present, Claude Code loads the marketplace copy and ignores the synced one.
+
 Then run `/groundwork-specflow:bootstrap` in your project.
 
 ## Update
 
-To get new versions automatically, run `/plugin`, open **Marketplaces**, select `claude-plugins-official`, and choose **Enable auto-update**. To update by hand, run `/plugin marketplace update claude-plugins-official` in Claude Code, then `claude plugin update groundwork-specflow@claude-plugins-official` in a terminal, and restart Claude Code. If you installed from this repository's marketplace, use `groundwork-specflow` instead of `claude-plugins-official`.
+Directory installs update themselves: new versions sync each time you start Claude Code, then run `/reload-plugins`. For a repository install, run `/plugin`, open **Marketplaces**, select `groundwork-specflow`, and choose **Enable auto-update**. To update by hand, run `/plugin marketplace update groundwork-specflow` in Claude Code, then `claude plugin update groundwork-specflow@groundwork-specflow` in a terminal, and restart Claude Code.
 
 ## Requirements
 

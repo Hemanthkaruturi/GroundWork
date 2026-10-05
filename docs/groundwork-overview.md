@@ -738,6 +738,8 @@ Approval stays human: the user types `/groundwork-specflow:approve`, and Devin's
 
 **Differences to know about.** Devin cloud sessions don't run plugin hooks. There, the skills guide the agent, but nothing blocks a code edit. Devin also runs plugin hooks "best effort": a hook that fails is skipped rather than stopping the session. The git hook and CI check (5.28) close that gap, because they check every commit whichever agent made it.
 
+**Without Devin's plugin system.** Some companies turn Devin plugins off, and then no plugin install loads. For that case, Devin can install GroundWork into the project itself (§11). `setup/install.sh` puts the engine in `.devin/groundwork/`, each skill and command in `.devin/skills/`, and the hooks in `.devin/hooks.v1.json`. These are Devin's project skills and hooks, not a plugin. The gate, approvals and documents work the same, and commands have no prefix: `/approve`, `/bypass`, `/status`. The script checks its own install by running the session-start hook the way Devin will. Committing `.devin/` gives the whole team GroundWork. That this works while plugins are turned off hasn't been confirmed yet.
+
 ## 6. How it helps
 
 | If you are… | You get… |
@@ -790,7 +792,7 @@ The step-by-step version is in `docs/manual-testing.md`.
 
 **6 hooks:** session start (awareness and in-flight work), every prompt (triage and style reminder), before edits and before shell commands (the gate, which can only deny and never approves anything), when another skill loads, and at reply end (optional length limit). The same hook file serves Claude Code and Devin. Its matchers name both agents' tools.
 
-**Commands you type:** `/groundwork-specflow:approve`, `/groundwork-specflow:bypass` (emergencies, logged), `/groundwork-specflow:status`. They are the same in Claude Code and Devin. In Devin, only the user can run them.
+**Commands you type:** `/groundwork-specflow:approve`, `/groundwork-specflow:bypass` (emergencies, logged), `/groundwork-specflow:status`. They are the same in Claude Code and Devin. In Devin, only the user can run them. In a Devin project installed without the plugin system (5.29), they have no prefix: `/approve`, `/bypass`, `/status`.
 
 **A command-line engine** (`groundwork.py`), pure Python with no dependencies and no Claude needed:
 
@@ -834,7 +836,7 @@ The step-by-step version is in `docs/manual-testing.md`.
 
 **Does it send our code or data anywhere?** No. It makes no network requests and has no telemetry. It reads your local git name and email to record who did what, and keeps that in your own project files.
 
-**Does it work with Devin?** Yes, in the Devin CLI and Desktop app, with the same gate and documents. Devin cloud sessions get the skills but no hook enforcement, so add the git hook or the CI check there (5.28, 5.29).
+**Does it work with Devin?** Yes, in the Devin CLI and Desktop app, with the same gate and documents. Devin cloud sessions get the skills but no hook enforcement, so add the git hook or the CI check there (5.28, 5.29). If your company has turned Devin plugins off, let Devin install GroundWork into the project instead (§11).
 
 **Why files, not a database?** Files live with the code, review in pull requests, and any person or agent can read them.
 
@@ -853,13 +855,25 @@ Then open Claude Code in your project and run `/groundwork-specflow:bootstrap`. 
 
 **Installed it before it was renamed?** It used to be called `groundwork`. If updating fails with `Plugin "groundwork" not found`, run `/plugin install groundwork-specflow@groundwork` once.
 
-**Using Devin?** Install from the same repository, then start a new session and run `/hooks` to check the groundwork hooks are loaded:
+**Using Devin?** Let Devin install it. Open Devin in your project and paste this prompt:
+
+```
+Install GroundWork into this project. From this project's root, run this as one command, exactly as written:
+
+( GW_TMP=$(mktemp -d) && git clone -q https://github.com/Hemanthkaruturi/GroundWork.git "$GW_TMP/GroundWork" && bash "$GW_TMP/GroundWork/setup/install.sh"; rc=$?; rm -rf "$GW_TMP"; exit $rc )
+
+Do every step yourself; don't ask me to run anything. If it fails, show me its error and stop there. Don't try to install GroundWork another way. If it succeeds, tell me only that GroundWork is installed and to start a new Devin session in this project.
+```
+
+This installs GroundWork into the project's `.devin/` folder, without Devin's plugin system (5.29). Then start a new session. GroundWork loads at session start and leads from there, beginning with the project documents if they don't exist yet. Commit `.devin/` to share it with your team. To update, paste the same prompt again.
+
+Or install it as a plugin, for you in every project, then start a new session:
 
 ```
 devin plugins install Hemanthkaruturi/GroundWork#plugins/groundwork-specflow
 ```
 
-That installs it for you, in every project. To install it for one project instead, so everyone who opens the repository in Devin gets it, add it to `.devin/config.json` at the repository root:
+To install the plugin for one project instead, add it to `.devin/config.json` at the repository root. Devin installs it when the project is opened. This form, with the `#plugins/groundwork-specflow` path inside `requiredPlugins`, hasn't been tested in Devin yet.
 
 ```json
 {
@@ -867,9 +881,7 @@ That installs it for you, in every project. To install it for one project instea
 }
 ```
 
-Devin installs it when the project is opened. This form, with the `#plugins/groundwork-specflow` path inside `requiredPlugins`, hasn't been tested in Devin yet.
-
-Then run `/groundwork-specflow:bootstrap` as above. To update: `devin plugins update groundwork-specflow`.
+As a plugin, commands start with `/groundwork-specflow:`. To update: `devin plugins update groundwork-specflow`. Use one install or the other, not both.
 
 **Existing project?** See where it stands without changing anything: `python3 <plugin>/engine/groundwork.py doctor` and `init --dry-run`.
 

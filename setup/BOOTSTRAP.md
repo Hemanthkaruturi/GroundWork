@@ -12,7 +12,7 @@ The bootstrap installs GroundWork into one project's `.devin/` folder as Devin p
    ( GW_TMP=$(mktemp -d) && git clone -q https://github.com/Hemanthkaruturi/GroundWork.git "$GW_TMP/GroundWork" && bash "$GW_TMP/GroundWork/setup/install.sh"; rc=$?; rm -rf "$GW_TMP"; exit $rc )
    ```
    It clones GroundWork into a temporary folder outside the project, runs the install script, and deletes the folder again. If it fails, report its error to the user and stop. Don't work around the error by copying files yourself.
-3. Show the user what the script printed, and tell them to start a new Devin session, run `/hooks` to check the groundwork hooks are listed, then run `/bootstrap`.
+3. Do every step yourself and don't ask the user to run anything. The script checks the install by running GroundWork's session-start hook. When it succeeds, tell the user only that GroundWork is installed and to start a new Devin session in this project. GroundWork loads at session start and leads from there.
 
 Don't commit anything. The user decides when to commit the `.devin/` folder.
 

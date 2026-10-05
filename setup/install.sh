@@ -115,9 +115,17 @@ commit=${GW_SHA}
 installed=$(date +%Y-%m-%d)
 EOF
 
+# Check the install the way Devin will use it: run the session-start hook exactly as hooks.v1.json says.
+CHECK=$(cd "$TARGET" && "$PY" -c 'import json; print(json.load(open(".devin/hooks.v1.json"))["SessionStart"][-1]["hooks"][0]["command"])')
+if ! OUT=$(cd "$TARGET" && echo '{"hook_event_name":"SessionStart"}' | DEVIN_PROJECT_DIR="$TARGET" sh -c "$CHECK" 2>&1) \
+   || ! printf '%s' "$OUT" | grep -q "groundwork is active"; then
+    echo "error: GroundWork was copied into .devin/, but its session-start hook did not run correctly:" >&2
+    printf '%s\n' "$OUT" | head -20 >&2
+    exit 1
+fi
+
 echo ""
-echo "GroundWork ${GW_VERSION} is installed in .devin/. Commit the .devin/ folder so your team gets it too."
-echo ""
-echo "Next steps:"
-echo "1. Start a new Devin session in this project and run /hooks. The groundwork hooks should be listed."
-echo "2. Run /bootstrap to set up the project documents. Approve documents with /approve."
+echo "GroundWork ${GW_VERSION} is installed in .devin/ and checked: its session-start hook runs."
+echo "It loads when a Devin session starts, so it takes effect from the next session in this project."
+echo "In that session, GroundWork leads the way. If the project documents don't exist yet, it starts by writing them with you."
+echo "To share GroundWork with your team, commit the .devin/ folder."

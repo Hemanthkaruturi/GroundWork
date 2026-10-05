@@ -134,26 +134,20 @@ GroundWork also runs in [Devin](https://devin.ai) (Devin CLI and Devin Desktop),
 **Let Devin install it.** Open Devin in your project and paste this prompt:
 
 ```
-Install GroundWork into this project. From this project's root, run this as one command, exactly as written, and show me its full output:
+Install GroundWork into this project. From this project's root, run this as one command, exactly as written:
 
 ( GW_TMP=$(mktemp -d) && git clone -q https://github.com/Hemanthkaruturi/GroundWork.git "$GW_TMP/GroundWork" && bash "$GW_TMP/GroundWork/setup/install.sh"; rc=$?; rm -rf "$GW_TMP"; exit $rc )
 
-If it fails, stop there and don't try to install GroundWork another way. Otherwise tell me to start a new Devin session.
+Do every step yourself; don't ask me to run anything. If it fails, show me its error and stop there. Don't try to install GroundWork another way. If it succeeds, tell me only that GroundWork is installed and to start a new Devin session in this project.
 ```
 
 Devin runs [setup/install.sh](setup/install.sh), which puts GroundWork in your project's `.devin/` folder as Devin project skills and hooks rather than as a plugin. Commit that folder, and everyone who opens the project in Devin gets GroundWork. Commands have no prefix in this install: `/bootstrap`, `/approve`, `/bypass` and `/status`.
 
-**To update an install made this way**, including one from the earlier bootstrap (before 0.1.7), paste the same prompt into Devin again. The script replaces its own files and keeps everything else, including your project documents and any hooks of your own. An earlier bootstrap install is converted to the new layout. Then check it:
+The install script checks its own work: it runs GroundWork's session-start hook the way Devin will, and fails with the error if that doesn't work. GroundWork loads when a Devin session starts, so start a new session after installing. GroundWork then leads the way: if the project documents don't exist yet, it starts by writing them with you.
 
-1. Open `.devin/groundwork-version`. It shows the `version` and `commit` now installed. An install from before 0.1.7 has no `version` line.
-2. Check that `.devin/skills/groundwork-specflow/` is gone. The earlier bootstrap put a copy of the plugin there. Each skill now has its own folder, such as `.devin/skills/approve/`.
-3. Check that `.devin/config.json` no longer lists `.devin/skills/groundwork-specflow` under `requiredPlugins`.
-4. Start a new Devin session, run `/hooks`, and look for the groundwork hooks (SessionStart, UserPromptSubmit, Stop, PreToolUse and PostToolUse running `.devin/groundwork/engine/groundwork.py`).
-5. Run `/status`. It should report where the project stands.
+**To update**, paste the same prompt into Devin again, then start a new session. This also updates an install from the earlier bootstrap (before 0.1.7) and converts it to the new layout. Your project documents and any hooks of your own are kept. `.devin/groundwork-version` shows which version is installed.
 
-Commit the changes in `.devin/` so your team gets the update too.
-
-Because this doesn't use Devin's plugin system, it's meant to work when your company has turned Devin plugins off. That hasn't been confirmed on such a setup yet. If `/hooks` lists no groundwork hooks there, please open an issue.
+Because this doesn't use Devin's plugin system, it's meant to work when your company has turned Devin plugins off. That hasn't been confirmed on such a setup yet. If a new session there shows no sign of GroundWork, please open an issue.
 
 **Or install it as a plugin**, for you in every project:
 
@@ -171,7 +165,7 @@ To install the plugin for one project instead, add it to `.devin/config.json` at
 
 As a plugin, commands start with `/groundwork-specflow:`. To update, run `devin plugins update groundwork-specflow`. Use one install or the other, not both.
 
-Either way, start a new session and run `/hooks` to check that the groundwork hooks are loaded. Then use it as described above: run bootstrap, then approve when you're happy.
+Either way, start a new session after installing. GroundWork loads then and leads the way, as described above. You approve documents when you're happy with them.
 
 What's different on Devin:
 

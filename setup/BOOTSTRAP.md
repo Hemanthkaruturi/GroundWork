@@ -26,6 +26,8 @@ Don't commit anything. The user decides when to commit the `.devin/` folder.
 | `.devin/hooks.v1.json` | The GroundWork hooks. Hooks already in the file are kept. |
 | `.devin/groundwork-version` | The GroundWork version and commit that was installed. |
 
+The hooks find the engine in the project folder or the nearest folder above it. If it's missing, they warn and let the prompt through rather than block it. The script refuses to install into the home folder, whose `.devin/` holds Devin's settings for every project. `install.py --uninstall` removes GroundWork from the current folder's `.devin/` and keeps everything else.
+
 It also cleans up the earlier bootstrap layout: a plugin copy in `.devin/skills/groundwork-specflow/`, its `requiredPlugins` entry in `.devin/config.json`, and `.devin/groundwork-README.md`.
 
 Commands have no prefix in this install: `/bootstrap`, `/approve`, `/bypass` and `/status`. Approving and bypassing stay human acts: the hooks only accept them when the user types them.

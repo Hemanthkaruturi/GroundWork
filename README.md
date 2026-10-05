@@ -150,7 +150,20 @@ The install script checks its own work: it runs GroundWork's session-start hook 
 
 **To update**, paste the same prompt into Devin again, then start a new session. This also updates an install from the earlier bootstrap (before 0.1.7) and converts it to the new layout. Your project documents and any hooks of your own are kept. `.devin/groundwork-version` shows which version is installed.
 
-The install works the same on Linux, macOS, Windows and WSL, and needs Python 3.10+ and git. On Windows, GroundWork's hooks run in cmd, Git Bash and PowerShell 7, but not in Windows PowerShell 5.1, and Devin doesn't document which shell it uses for hooks there. The installer checks the hooks in cmd.
+The install works the same on Linux, macOS, Windows and WSL, and needs Python 3.10+ and git. On Windows, GroundWork's hooks run in Git Bash, cmd and PowerShell 7, but not in Windows PowerShell 5.1. Devin doesn't document which shell it uses for hooks there; in the Windows setup we've seen, it used Git Bash. The installer checks the hooks in cmd. Install from your project's folder, not your home folder: the installer refuses a home folder, because the `.devin/` there holds Devin's settings for every project.
+
+**Every prompt says "Prompt blocked" with `can't open file ... .devin/groundwork/engine/groundwork.py`?** An install from before this fix is in a different folder from the one Devin is running in, such as a parent folder or your home folder. Its hooks can't find the engine, and that blocks every prompt, including the install prompt. Since Devin can't help while it's blocked, fix it once from a terminal (PowerShell, Terminal or Git Bash):
+
+1. Find the folder with GroundWork's hooks: the nearest folder at or above your project, or your home folder, that has a `.devin/hooks.v1.json` mentioning `groundwork`.
+2. In that folder, run:
+   ```
+   git clone -q --depth 1 https://github.com/Hemanthkaruturi/GroundWork.git .groundwork-install
+   python3 .groundwork-install/setup/install.py --uninstall
+   ```
+   On Windows, use `py -3` instead of `python3` if needed. This removes GroundWork from that folder's `.devin/` and keeps everything else.
+3. Open Devin in your project's folder and paste the install prompt again.
+
+Installs made since this fix don't block prompts when the engine is missing. They warn and let the prompt through.
 
 Because this doesn't use Devin's plugin system, it's meant to work when your company has turned Devin plugins off. That hasn't been confirmed on such a setup yet. If a new session there shows no sign of GroundWork, please open an issue.
 

@@ -11,7 +11,7 @@ It installs into the project's .devin/ folder:
     .devin/hooks.v1.json        the GroundWork hooks (other hooks in the file are kept)
     .devin/groundwork-version   which GroundWork version and commit was installed
 A clone in .groundwork-install/ is deleted afterwards, whether or not the install worked.
-Running it again updates an existing install.
+Running it again updates an existing install. With --uninstall, it removes GroundWork from the folder's .devin/.
 """
 import datetime
 import json
@@ -57,14 +57,26 @@ def rmtree(path: Path) -> None:
         shutil.rmtree(path, onerror=make_writable)
 
 
-def hook_command(cmd: str) -> str:
-    """The plugin's hook command, pointed at the project copy of the engine.
+# What every hook runs. Python finds the engine itself: in DEVIN_PROJECT_DIR (or the working directory) or the
+# nearest folder above it with .devin/groundwork, since Devin may run hooks from a subfolder. If there is no engine,
+# it warns and exits 0, so a broken install can't block every prompt, including the one that reinstalls it.
+# Single quotes only, and no $, %, ` or !, so the same text works in bash, sh, cmd and PowerShell.
+LAUNCHER = ("import os,sys,runpy;from pathlib import Path as P;"
+            "d=P(os.environ.get('DEVIN_PROJECT_DIR') or os.getcwd()).resolve();"
+            "e=next((x/'.devin/groundwork/engine/groundwork.py' for x in (d,*d.parents) "
+            "if (x/'.devin/groundwork/engine/groundwork.py').is_file()),None);"
+            "e or sys.exit(print('groundwork: engine not found in .devin/groundwork, so its hooks are off. "
+            "Paste the GroundWork install prompt again to fix it.',file=sys.stderr));"
+            "sys.path.insert(0,str(e.parent));sys.argv=[str(e),'{sub}'];runpy.run_path(str(e),run_name='__main__')")
 
-    The path is relative to the project root, where Devin runs project hooks, so the command needs no shell
-    variables and reads the same in sh, cmd and PowerShell. The fallbacks cover machines that only have
-    `python` (many Windows installs) or only the `py` launcher."""
+
+def hook_command(cmd: str) -> str:
+    """The plugin's hook command, rewritten to run the project copy of the engine through LAUNCHER.
+
+    The fallbacks cover machines with only `python` (many Windows installs) or only the `py` launcher."""
     sub = cmd.split("groundwork.py\" ", 1)[1].split()[0]       # session-context, gate, ...
-    return f"python3 {ENGINE} {sub} || python {ENGINE} {sub} || py -3 {ENGINE} {sub}"
+    code = LAUNCHER.replace("{sub}", sub)
+    return " || ".join(f'{py} -c "{code}"' for py in ("python3", "python", "py -3"))
 
 
 def install() -> str:
@@ -144,6 +156,30 @@ def install() -> str:
     return version
 
 
+def uninstall() -> None:
+    """Remove what install() added to this folder's .devin/, keeping everything else."""
+    devin = TARGET / ".devin"
+    removed = 0
+    for path in [devin / "groundwork", *(m.parent for m in devin.glob(f"skills/*/{MARKER}"))]:
+        if path.exists():
+            rmtree(path)
+            removed += 1
+    hooks_file = devin / "hooks.v1.json"
+    if hooks_file.exists():
+        config = json.loads(read(hooks_file))
+        for event in list(config):
+            config[event] = [g for g in config[event] if not any(ENGINE in h.get("command", "") for h in g.get("hooks", []))]
+            if not config[event]:
+                del config[event]
+        if config:
+            write(hooks_file, json.dumps(config, indent=2) + "\n")
+        else:
+            hooks_file.unlink()
+        removed += 1
+    (devin / "groundwork-version").unlink(missing_ok=True)
+    print(f"GroundWork removed from {devin}." if removed else f"GroundWork is not installed in {devin}.")
+
+
 def check() -> None:
     """Run the session-start hook exactly as hooks.v1.json says, in this platform's shell, the way Devin will."""
     config = json.loads(read(TARGET / ".devin" / "hooks.v1.json"))
@@ -163,6 +199,12 @@ def main() -> None:
         fail("run this from your project's root, not from inside the GroundWork clone.")
     temporary = SRC_ROOT == TARGET / CLONE_DIR
     try:
+        if "--uninstall" in sys.argv[1:]:
+            uninstall()
+            return
+        if TARGET == Path.home().resolve():
+            fail(f"this is your home folder ({TARGET}), not a project. Its .devin/ folder holds Devin's settings "
+                 "for every project. Open Devin in your project's folder and run the install there.")
         version = install()
         check()
     finally:

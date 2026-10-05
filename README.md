@@ -92,21 +92,6 @@ Prefer to install from the command line, or don't use a claude.ai account? Insta
 
 Use one route or the other, not both. If both are present, Claude Code loads the copy from the marketplace and ignores the synced one.
 
-**Alternative: Bootstrap installation (no marketplace required).** If your organization has disabled plugin marketplace access, you can install GroundWork directly into your project using the bootstrap method. This copies the plugin files to `.devin/skills/` so it works with Devin without requiring marketplace installation:
-
-```bash
-git clone https://github.com/Hemanthkaruturi/GroundWork.git .tmp-groundwork
-.tmp-groundwork/setup/install.sh
-```
-
-Or for a one-line installation:
-
-```bash
-git clone https://github.com/Hemanthkaruturi/GroundWork.git .tmp-groundwork && .tmp-groundwork/setup/install.sh
-```
-
-This installs GroundWork to `.devin/skills/groundwork-specflow/` and configures your project to load it automatically. See [setup/BOOTSTRAP.md](setup/BOOTSTRAP.md) for detailed instructions.
-
 **2. Set up your project.** Open Claude Code in your project (new or existing) and run:
 
 ```
@@ -142,21 +127,27 @@ claude plugin update groundwork-specflow@groundwork-specflow
 
 Restart Claude Code (or run `/reload-plugins`) to start using the new version. If it says you already have the latest version, there is nothing new to install yet.
 
-- **Installed via bootstrap:** To update, re-run the bootstrap installation commands. The version tracking in `.devin/groundwork-version` will be updated automatically:
-
-```bash
-git clone https://github.com/Hemanthkaruturi/GroundWork.git .tmp-groundwork && .tmp-groundwork/setup/install.sh
-```
-
 ### Using Devin instead
 
-GroundWork also runs in [Devin](https://devin.ai) (Devin CLI and Devin Desktop), from this same repository. You need Python 3.10+ and git, as above. Install it with:
+GroundWork also runs in [Devin](https://devin.ai) (Devin CLI and Devin Desktop), from this same repository. You need Python 3.10+ and git, as above.
+
+**Let Devin install it.** Open Devin in your project and paste this prompt:
+
+```
+Install GroundWork into this project. Clone https://github.com/Hemanthkaruturi/GroundWork.git into a new temporary folder outside this project, then run `bash <that folder>/setup/install.sh` from this project's root. If the script fails, show me its error and stop. Otherwise delete the temporary folder, show me what the script printed, and tell me to start a new Devin session.
+```
+
+Devin runs [setup/install.sh](setup/install.sh), which puts GroundWork in your project's `.devin/` folder as Devin project skills and hooks rather than as a plugin. Commit that folder, and everyone who opens the project in Devin gets GroundWork. Commands have no prefix in this install: `/bootstrap`, `/approve`, `/bypass` and `/status`. To update, paste the same prompt again.
+
+Because this doesn't use Devin's plugin system, it's meant to work when your company has turned Devin plugins off. That hasn't been confirmed on such a setup yet. If `/hooks` lists no groundwork hooks there, please open an issue.
+
+**Or install it as a plugin**, for you in every project:
 
 ```
 devin plugins install Hemanthkaruturi/GroundWork#plugins/groundwork-specflow
 ```
 
-This installs it for you, in every project. To install it for one project instead, so everyone who opens the repository in Devin gets it, add it to `.devin/config.json` at the repository root:
+To install the plugin for one project instead, add it to `.devin/config.json` at the repository root. Devin installs it when the project is opened. This form, with the `#plugins/groundwork-specflow` path inside `requiredPlugins`, hasn't been tested in Devin yet.
 
 ```json
 {
@@ -164,27 +155,16 @@ This installs it for you, in every project. To install it for one project instea
 }
 ```
 
-Devin installs it when the project is opened. This form, with the `#plugins/groundwork-specflow` path inside `requiredPlugins`, hasn't been tested in Devin yet.
+As a plugin, commands start with `/groundwork-specflow:`. To update, run `devin plugins update groundwork-specflow`. Use one install or the other, not both.
 
-**Alternative: Bootstrap installation for Devin (no plugin system required).** If your organization has disabled the plugin system or you want to avoid it entirely, use the bootstrap method instead:
-
-```bash
-git clone https://github.com/Hemanthkaruturi/GroundWork.git .tmp-groundwork
-.tmp-groundwork/setup/install.sh
-```
-
-This copies the plugin directly to `.devin/skills/groundwork-specflow/` and configures your project to load it. No plugin system access is required. The bootstrap installation automatically adds the plugin to `.devin/config.json` so it loads when the project is opened.
-
-Devin installs it when the project is opened.
-
-Start a new session and run `/hooks` to check that the groundwork hooks are loaded. Then use it as described above: `/groundwork-specflow:bootstrap`, then `/groundwork-specflow:approve` when you're happy. To update, run `devin plugins update groundwork-specflow`.
+Either way, start a new session and run `/hooks` to check that the groundwork hooks are loaded. Then use it as described above: run bootstrap, then approve when you're happy.
 
 What's different on Devin:
 
 - **Questions come as numbered options in the reply** rather than clickable choices, because Devin has no picker tool.
 - **Rules are enforced only in the Devin CLI and Devin Desktop.** Devin doesn't run plugin hooks in cloud sessions, so there GroundWork's skills guide the agent but nothing blocks a code edit.
 - **Devin may skip a hook that fails.** It runs plugin hooks "best effort": if one fails to load or run, the session carries on without it. Add the git hook from `bootstrap` (or `groundwork.py hooks install`) so commits are checked either way.
-- **Your company may have turned plugins off.** If Devin says CLI plugins are disabled by your organization, no install method works (`--local` and `.devin/config.json` included) until a Devin enterprise admin turns on **Devin CLI plugins** in Enterprise settings. Until then, the git hook (`groundwork.py hooks install`) still checks commits.
+- **Your company may have turned plugins off.** If Devin says CLI plugins are disabled by your organization, the plugin install won't load, whether for you, with `--local` or through `.devin/config.json`. Use the prompt above instead.
 
 **Installed the plugin before it was renamed?** It used to be called `groundwork`. If updating fails with `Plugin "groundwork" not found`, run this once in Claude Code, then restart:
 

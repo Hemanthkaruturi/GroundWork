@@ -98,6 +98,12 @@ ASK_RULE_DEVIN = ("8. ASK IN ROUNDS: up to 4 questions per round, each with a sh
                   "next round. Never scatter questions through a longer reply.")
 
 
+# setup/install.sh puts the engine in <project>/.devin/groundwork and the skills in .devin/skills, with no plugin.
+BOOTSTRAPPED = PLUGIN_ROOT.parent.name == ".devin"
+BOOTSTRAP_NOTE = ("- GroundWork is installed in this project's .devin/ folder, not as a plugin, so its commands have no prefix: "
+                  "/approve, /bypass, /status, /bootstrap. Where a message says /groundwork-specflow:<name>, tell the user /<name>.")
+
+
 def adapt_rules(rules: str, host: str) -> str:
     """The session rules, worded for the harness that will read them."""
     if host != "devin":
@@ -105,7 +111,10 @@ def adapt_rules(rules: str, host: str) -> str:
     engine = (PLUGIN_ROOT / "engine" / "groundwork.py").as_posix()
     rules = rules.replace(ASK_RULE_CLAUDE, ASK_RULE_DEVIN).replace("--via claude-code", "--via devin")
     rules = rules.replace("${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py", engine)
-    return rules + "\n" + DEVIN_NOTE.format(root=PLUGIN_ROOT.as_posix(), engine=engine)
+    note = DEVIN_NOTE.format(root=PLUGIN_ROOT.as_posix(), engine=engine)
+    if BOOTSTRAPPED:
+        rules, note = rules.replace("/groundwork-specflow:", "/"), note.replace("/groundwork-specflow:", "/") + "\n" + BOOTSTRAP_NOTE
+    return rules + "\n" + note
 
 
 def describe_input(full: dict) -> str:

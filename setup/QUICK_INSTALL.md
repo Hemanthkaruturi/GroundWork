@@ -1,41 +1,11 @@
-# Quick Install: GroundWork
+# Quick install: GroundWork for Devin, without plugins
 
-> **Last updated:** 2026-10-05
-> **Initiated by:** terminator
-> **Model:** claude-sonnet
-
----
-
-## One-line installation
-
-To install GroundWork without using the plugin marketplace, run this command in your project:
-
-```bash
-git clone https://github.com/Hemanthkaruturi/GroundWork.git .tmp-groundwork && .tmp-groundwork/setup/install.sh
-```
-
-This will:
-1. Clone the GroundWork repository to a temporary directory
-2. Copy the plugin to `.devin/skills/groundwork-specflow/`
-3. Configure `.devin/config.json` to auto-load the plugin
-4. Record version information for future updates
-5. Clean up the temporary directory
-
-## After installation
-
-Once installed, bootstrap your project:
-
-```bash
-python3 .devin/skills/groundwork-specflow/engine/groundwork.py bootstrap
-```
-
-Or in Devin:
+Open Devin in your project and paste this prompt:
 
 ```
-/hooks
-/groundwork-specflow:bootstrap
+Install GroundWork into this project. Clone https://github.com/Hemanthkaruturi/GroundWork.git into a new temporary folder outside this project, then run `bash <that folder>/setup/install.sh` from this project's root. If the script fails, show me its error and stop. Otherwise delete the temporary folder, show me what the script printed, and tell me to start a new Devin session.
 ```
 
-## Manual installation
+Then start a new Devin session, run `/hooks` to check the groundwork hooks are listed, and run `/bootstrap`. Commit the `.devin/` folder so your team gets GroundWork too. To update, paste the same prompt again.
 
-If you prefer to follow the steps manually, see [BOOTSTRAP.md](BOOTSTRAP.md) for detailed instructions.
+The steps the agent follows, and what the script changes, are in [BOOTSTRAP.md](BOOTSTRAP.md).

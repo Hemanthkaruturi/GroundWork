@@ -8,6 +8,7 @@ Humans:     groundwork.py status | approve <doc> | bypass <reason>
 People:     groundwork.py who <feature|RFC|bug> | who --person NAME | who --all | record <event> --ref R ...
 Resume:     groundwork.py board [--all] [--json] | note <text> | deps <feature|RFC> | new-bug <slug> | activate-bug <slug>
 Agents:     groundwork.py scaffold | new-rfc <slug> | new-feature <slug> --rfc N | activate <slug>
+Code:       groundwork.py codemap [--check] | layout [--json] | layout init --profile P [--root R] [--create] | layout keep | layout map role=path [--legacy P]
 """
 from __future__ import annotations
 
@@ -27,12 +28,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import groundwork_board as W  # noqa: E402
 import groundwork_brevity as V  # noqa: E402
 import groundwork_bugs as B  # noqa: E402
+import groundwork_codemap as M  # noqa: E402
 import groundwork_check as K  # noqa: E402
 import groundwork_core as C  # noqa: E402
 import groundwork_discover as D  # noqa: E402
 import groundwork_doctor as X  # noqa: E402
 import groundwork_fresh as F  # noqa: E402
 import groundwork_hooks as H  # noqa: E402
+import groundwork_layout as L  # noqa: E402
 import groundwork_host as G  # noqa: E402
 import groundwork_people as P  # noqa: E402
 import groundwork_relations as R  # noqa: E402
@@ -68,6 +71,7 @@ groundwork is active. These rules are enforced by hooks, not suggestions:
 15. OWNERSHIP: every RFC, feature and bug has a human requester, owner, implementer(s), deployer and support contact — recorded in front matter and the ledger. Ask who requested new work (interview), record `implemented` when you finish (`groundwork.py record implemented --ref <feature> --via claude-code`), and use `groundwork.py who <ref>` to find whom to contact about any feature (including those yours depends on or affects). Responsible persons are HUMANS (the git identity), never the agent.
 16. UPSTREAM CHANGES: a plan/tasks/code never edits the spec silently. Found a spec problem? State the evidence, ask which reading is right (picker), amend the spec with a dated `## Changes` line (what and why), have the human re-approve, re-verify downstream, run `groundwork.py plan-sync`. Unresolved doubts are [NEEDS CLARIFICATION] markers, never chat footnotes.
 17. Always tell the user how to test what you built by hand, and write it into the spec's manual-test section.
+18. CODE LAYOUT: each repo records ONE decision (code-layout skill). STANDARD: code goes in fixed role folders: core (business logic, no I/O), connectors/<system> (the ONLY code that talks to LLMs, databases, HTTP APIs, queues, email), entrypoints (thin http/cli/workers), config (the only env/secret reads), and a wiring file that plugs connectors into core; core never imports connectors; no utils/helpers/common folders. KEEP: the user chose to keep the repo's own structure, so put new code where similar code already lives, copy its patterns, and never create layout folders or move existing code. An existing repo with no decision yet: ASK the user (migrate or keep) before writing code; never migrate without being asked. EVERY repo has CODEMAP.md (where each kind of code lives): read it before searching the code; after adding, moving or removing a folder run `groundwork.py codemap` and describe new folders in its Holds column.
 Use `python3 ${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py status` (or `board`) any time you are unsure where you are."""
 RULES = RULES.replace("BREVITY_TEXT", BREVITY)
 
@@ -111,6 +115,21 @@ def describe(ctx: C.Ctx) -> str:
     slug = C.active_slug(ctx)
     if slug:
         lines.append(f"Active feature: specs/{slug}")
+    if ctx.level in ("repo", "standalone"):
+        cm, why = M.state(ctx.repo)
+        lines.append({"current": "CODE MAP: CODEMAP.md lists where each kind of code lives - read it before searching the code.",
+                      "unfinished": f"CODE MAP: CODEMAP.md - read it before searching the code; {why}: fill its Holds column.",
+                      "outdated": "CODE MAP: CODEMAP.md no longer matches the code - run `groundwork.py codemap`, then fill any new Holds cells.",
+                      "missing": "CODE MAP MISSING: run `groundwork.py codemap` to generate CODEMAP.md, then fill its Holds column."}[cm])
+        lay = L.load(ctx.repo, ctx.config)
+        if lay is not None:
+            lines.append(L.summary(lay))
+        elif L.has_code(ctx.repo):
+            lines.append("CODE LAYOUT NOT DECIDED: this repo has code but no layout decision. Before writing code, use the "
+                         "code-layout skill to ask the user: migrate to the standard layout, or keep the current structure.")
+        else:
+            lines.append("CODE LAYOUT NOT DECIDED: new repo - set up the standard layout with the code-layout skill "
+                         "(groundwork.py layout init --profile <service|cli|web|library> --create).")
     if ctx.level != "unknown":
         lines.append("You are working on behalf of: " + P.whoami(ctx) + " — record their name, never the agent's, as the responsible person.")
     flight = W.collect(ctx) if ctx.level != "unknown" else []
@@ -319,6 +338,10 @@ def scaffold_at(ctx: C.Ctx, dry: bool = False) -> list[str]:
                     _write(base / d / "README.md", C.render("DECISIONS-index.md", name=base.name))
                 else:
                     (base / d / ".gitkeep").touch()
+    if ctx.level in ("repo", "standalone") and not M.path(base).is_file():   # every repo has a code map
+        made.append(M.FILE)
+        if not dry:
+            M.write(base)
     if not dry:
         gi = base / ".groundwork" / ".gitignore"
         if not gi.exists():
@@ -398,6 +421,8 @@ def cmd_init(a) -> None:
         if t.level != "workspace":
             if not a.dry_run:
                 _write(base / ".groundwork" / "discovery.json", json.dumps(d, indent=2) + "\n")
+                M.write(base)                                  # refresh: scaffold only creates a missing one
+                print(f"[{base.name}] code map → {M.FILE}: {M.state(base)[0]} (describe each folder in its Holds column)")
             print(f"[{base.name}] evidence gathered{'' if a.dry_run else ' → .groundwork/discovery.json'}:")
             print(D.summarize(d))
         if t.level == "repo" and t.workspace:
@@ -411,6 +436,79 @@ def cmd_init(a) -> None:
     if not a.dry_run:
         print()
         print(X.render(X.diagnose(cwd)))
+
+
+def cmd_layout(a) -> None:
+    ctx = C.detect(Path.cwd())
+    if ctx.level not in ("repo", "standalone"):
+        raise SystemExit("The code layout is recorded per repo. Run this inside a repository"
+                         + (" (the workspace holds no code)." if ctx.level == "workspace" else "."))
+    repo, current = ctx.repo, L.load(ctx.repo)
+    raw = ctx.config.get("layout") if isinstance(ctx.config.get("layout"), dict) else None
+    decided = {"decided_by": C.signer(), "decided": time.strftime("%Y-%m-%d")}
+    if a.action == "show":
+        print(L.as_json(current) if a.json else L.render(repo))
+        return
+    if a.action in ("init", "keep") and current is not None and not a.force:
+        raise SystemExit(f"This repo already recorded its layout decision (mode: {current.mode}). "
+                         "Change it only if the user asked to: add --force.")
+    if a.action == "keep":
+        L.write(repo, {"mode": "keep", **decided})
+        print("Recorded: this repo keeps its own structure. New code follows the existing patterns; nothing is moved.")
+        print(f"Code map updated: {M.write(repo).name} — describe each folder in its Holds column.")
+        return
+    if a.action == "init":
+        if not a.profile:
+            raise SystemExit("--profile is required: " + ", ".join(f"{k} ({v['about']})" for k, v in L.PROFILES.items()))
+        layout = {"mode": "standard", "profile": a.profile, "root": a.root or L.guess_root(repo), **decided}
+        lay = L.load(repo, {"layout": layout})
+        if lay.problems:
+            raise SystemExit("; ".join(lay.problems))
+        L.write(repo, layout)
+        made = L.create_folders(repo, lay) if a.create else []
+        print(f"Recorded: standard layout, {a.profile} profile, root {layout['root']}."
+              + (f" Created: {', '.join(made)}." if made else "")
+              + ("" if a.create else " Folders are not created (add --create); map existing ones with: groundwork.py layout map role=path."))
+        print("\n" + L.render(repo))
+        print(f"\nCode map updated: {M.write(repo).name}")
+        return
+    # map: add role=path mappings, legacy and wiring paths to a standard layout
+    if current is None or current.mode != "standard":
+        raise SystemExit("`layout map` needs a standard layout: run `groundwork.py layout init --profile ...` first.")
+    layout = dict(raw)
+    folders = {k: L._paths(v) for k, v in (layout.get("folders") or {}).items()}
+    for item in a.assign:
+        role, sep, path = item.partition("=")
+        if not sep or not path:
+            raise SystemExit(f"expected role=path, got {item!r}")
+        folders.setdefault(role, [])
+        if L._rel(path) not in folders[role]:
+            folders[role].append(L._rel(path))
+    if folders:
+        layout["folders"] = folders
+    for key, extra in (("legacy", a.legacy), ("wiring", a.wiring)):
+        if extra:
+            layout[key] = sorted(set(L._paths(layout.get(key))) | {L._rel(x) for x in extra})
+    lay = L.load(repo, {"layout": layout})
+    if lay.problems:
+        raise SystemExit("; ".join(lay.problems))
+    L.write(repo, layout)
+    print(L.render(repo))
+    print(f"\nCode map updated: {M.write(repo).name}")
+
+
+def cmd_codemap(a) -> None:
+    ctx = C.detect(Path.cwd())
+    if ctx.level not in ("repo", "standalone"):
+        raise SystemExit("The code map is per repo. Run this inside a repository"
+                         + (" (the workspace holds no code)." if ctx.level == "workspace" else "."))
+    if a.check:
+        st, why = M.state(ctx.repo)
+        print(f"{M.FILE}: {st}" + (f" ({why})" if why else ""))
+        raise SystemExit(0 if st == "current" else 1)
+    p = M.write(ctx.repo)
+    st, why = M.state(ctx.repo)
+    print(f"Wrote {p.name}." + (f" {why}: describe them in the Holds column." if st == "unfinished" else ""))
 
 
 def cmd_doctor(a) -> None:
@@ -645,6 +743,15 @@ def main() -> None:
     p.add_argument("--as", dest="as_", choices=["repo", "workspace"], help="for a directory that is neither yet")
     p.add_argument("--retrofit", action="store_true", help="append missing required sections to existing foundation docs")
     p.add_argument("--dry-run", action="store_true"); p.set_defaults(fn=cmd_init)
+    p = sub.add_parser("codemap", help="write CODEMAP.md: where each kind of code lives (kept: Holds column, Notes)")
+    p.add_argument("--check", action="store_true", help="exit 1 unless the map is current and finished"); p.set_defaults(fn=cmd_codemap)
+    p = sub.add_parser("layout", help="the repo's code layout: show, init (standard), keep (own structure), map")
+    p.add_argument("action", nargs="?", default="show", choices=["show", "init", "keep", "map"])
+    p.add_argument("assign", nargs="*", help="map: role=path, e.g. connectors=src/app/clients")
+    p.add_argument("--profile", choices=sorted(L.PROFILES)); p.add_argument("--root")
+    p.add_argument("--create", action="store_true"); p.add_argument("--force", action="store_true")
+    p.add_argument("--legacy", action="append", default=[]); p.add_argument("--wiring", action="append", default=[])
+    p.add_argument("--json", action="store_true"); p.set_defaults(fn=cmd_layout)
     p = sub.add_parser("doctor", help="how far is this project from the standard?")
     p.add_argument("path", nargs="?"); p.add_argument("--json", action="store_true"); p.set_defaults(fn=cmd_doctor)
     p = sub.add_parser("fresh"); p.add_argument("path", nargs="?"); p.add_argument("--json", action="store_true")

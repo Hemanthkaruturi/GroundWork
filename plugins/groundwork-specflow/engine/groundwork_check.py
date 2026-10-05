@@ -16,8 +16,10 @@ from pathlib import Path
 
 import groundwork_brevity as V
 import groundwork_bugs as B
+import groundwork_codemap as M
 import groundwork_core as C
 import groundwork_fresh as F
+import groundwork_layout as L
 import groundwork_people as PP
 import groundwork_relations as R
 
@@ -467,6 +469,22 @@ def check_brevity(ctx: C.Ctx, r: Report) -> None:
                    "use shorter sentences and everyday words")
 
 
+def check_layout(ctx: C.Ctx, r: Report) -> None:
+    """GW100–GW107: code sits in the folders the repo's layout decision names (§5f). Nothing when undecided or `keep`."""
+    for f in L.assess(ctx.repo, ctx.config):
+        (r.err if f.rule == "GW100" else r.warn)(f.rule, ctx.repo / f.path, f.message, f.hint)
+    st, why = M.state(ctx.repo)
+    p = M.path(ctx.repo)
+    if st == "missing":
+        r.warn("GW108", p, "no code map: nobody can tell where each kind of code lives without searching",
+               "run: groundwork.py codemap, then fill its Holds column")
+    elif st == "unfinished":
+        r.warn("GW108", p, f"code map is unfinished: {why}", "fill the Holds column for those folders")
+    elif st == "outdated":
+        r.warn("GW109", p, "code map no longer matches the code (folders, roles, outside calls or settings changed)",
+               "run: groundwork.py codemap (descriptions are kept), then describe any new folders")
+
+
 def check_approval_records(ctx: C.Ctx, r: Report) -> None:
     for root in {ctx.repo, ctx.workspace} - {None}:
         for rel in C.load_approvals(root):
@@ -500,6 +518,7 @@ def check_ctx(ctx: C.Ctx, r: Report, seen: set[Path]) -> None:
             check_rfcs(ctx, r)
         check_features(ctx, r)
         check_bugs(ctx, r)
+        check_layout(ctx, r)
         if not (ctx.workspace and ctx.workspace.resolve() in seen):     # a workspace check already did the whole graph
             check_relations(ctx, r, False)
 

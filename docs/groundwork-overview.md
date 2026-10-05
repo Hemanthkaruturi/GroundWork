@@ -10,10 +10,10 @@ GroundWork is a plugin for Claude Code and Devin. It makes the agent follow a sh
 
 | | |
 | --- | --- |
-| 16 skills | one for each step of the path, plus resume, refresh, bugs, ownership and plain writing |
+| 17 skills | one for each step of the path, plus resume, refresh, bugs, ownership, code layout and plain writing |
 | 6 hooks | the gate before edits and shell commands, session awareness, reminders, reply length |
-| 46 numbered rules | checked with no AI and no network, on a laptop, in a git hook and in CI |
-| 170 automated tests | the whole lifecycle, and every rule has a test that breaks exactly that rule |
+| 56 numbered rules | checked with no AI and no network, on a laptop, in a git hook and in CI |
+| 184 automated tests | the whole lifecycle, and every rule has a test that breaks exactly that rule |
 | 2 coding agents | Claude Code, and Devin (CLI and Desktop), from the same plugin |
 | 3 platforms | Linux, macOS and Windows, tested on Python 3.10 and 3.12 |
 | 0 network calls | it runs on your machine, collects nothing and sends nothing |
@@ -99,7 +99,7 @@ Fix *where* things live, *what* each document contains, and *who* approves. Leav
 ### Structure everyone shares
 - **Two levels, plus standalone.** A *workspace* holds the product-level truth (project brief, architecture, rules, contracts, decisions). Each *repo* holds its own code, specs and internals. A single repo with no workspace above it is *standalone* and carries both sets of documents. The agent always knows which level it is on, and a directory that is neither is *unknown*: nothing may be built there.
 - **Standard documents:** `PROJECT`, `ARCHITECTURE`, `CONSTITUTION` (the non-negotiable rules), `AGENTS`, RFCs, contracts, specs, plans, tasks, evals, bug records, handovers.
-- **A written standard** (`STANDARD.md`) with 46 numbered rules. `groundwork check` verifies them with no AI and no network, so it runs the same on a laptop, in a git hook and in CI.
+- **A written standard** (`STANDARD.md`) with 56 numbered rules. `groundwork check` verifies them with no AI and no network, so it runs the same on a laptop, in a git hook and in CI.
 
 ### Humans stay in control
 - **Approval is human-only.** Recorded against the exact document text, with who and when. An RFC can require several sign-offs, and a cross-repo one always needs at least two.
@@ -769,7 +769,7 @@ The step-by-step version is in `docs/manual-testing.md`.
 
 ## 8. What's inside
 
-**16 skills**
+**17 skills**
 
 | Skill | What it does |
 | --- | --- |
@@ -788,6 +788,7 @@ The step-by-step version is in `docs/manual-testing.md`.
 | `refresh` | Brings stale foundation documents back in line with reality |
 | `fix-bug` | Runs the bug lifecycle: diagnose, classify, cite, test first, fix |
 | `ownership` | Records and looks up who requested, owns, built, deployed and supports |
+| `code-layout` | Records each repo's choice (standard code folders, or keep its own structure), says where each kind of code goes, and keeps `CODEMAP.md` current |
 | `plain-writing` | Keeps replies and documents short, plain and decision-first |
 
 **6 hooks:** session start (awareness and in-flight work), every prompt (triage and style reminder), before edits and before shell commands (the gate, which can only deny and never approves anything), when another skill loads, and at reply end (optional length limit). The same hook file serves Claude Code and Devin. Its matchers name both agents' tools.
@@ -799,15 +800,17 @@ The step-by-step version is in `docs/manual-testing.md`.
 | Command | Purpose |
 | --- | --- |
 | `init`, `doctor` | onboard a project; show its stage and next steps |
-| `check`, `check --strict`, `check --json` | verify the 46 rules |
+| `check`, `check --strict`, `check --json` | verify the 56 rules |
 | `status`, `board`, `note`, `activate` | where things stand, what is in flight, where work stopped |
 | `new-rfc`, `new-feature`, `new-bug`, `activate-bug`, `plan-sync` | create documents; switch the active bug; pin the plan to the approved spec |
 | `approve`, `bypass` | human sign-off and the emergency bypass |
 | `deps`, `who`, `record` | relations, responsibility, and recording who did what |
 | `fresh`, `confirm` | detect stale documents; record a verified baseline |
 | `hooks install`, `hooks status`, `hooks uninstall` | manage the git hook, with `--vendor`, `--pre-push`, `--strict` |
+| `layout`, `layout init`, `layout keep`, `layout map` | show or record the repo's code layout: standard folders, or keep the existing structure |
+| `codemap`, `codemap --check` | write `CODEMAP.md` (where each kind of code lives) from the code; check it is current |
 
-**Quality:** 170 automated tests cover the whole lifecycle, on Linux, macOS and Windows, on Python 3.10 and 3.12. Every numbered rule has a test that breaks exactly that rule.
+**Quality:** 184 automated tests cover the whole lifecycle, on Linux, macOS and Windows, on Python 3.10 and 3.12. Every numbered rule has a test that breaks exactly that rule.
 
 **Privacy:** it runs locally, makes no network requests, has no telemetry, and reads no credentials. See `PRIVACY.md`.
 

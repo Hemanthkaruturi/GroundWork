@@ -11,6 +11,7 @@ Documents rot silently. This is how they are kept true — by anyone: you, a tea
 Every question to the user goes through the `AskUserQuestion` tool (load it with `ToolSearch select:AskUserQuestion` if needed) — selectable options, up to 4 per round, your recommendation first. Never put questions in reply text.
 
 ## Steps
+0. In a repo, run `python3 "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py" codemap --check`. If `CODEMAP.md` is outdated, run `groundwork.py codemap` (your Holds descriptions and Notes are kept) and describe any new folder.
 1. Run `python3 "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py" fresh`. It lists each document as FRESH, STALE, UNCONFIRMED or EDITED, with the reasons
    (e.g. "signals changed: package.json", "repos added: billing", "repo_arch changed: api", "not reviewed for 120 days").
    In a repo it also shows the workspace's documents, because work in this repo can make them stale.

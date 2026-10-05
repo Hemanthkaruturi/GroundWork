@@ -22,6 +22,7 @@ rollback, constitution check.
 
 - Cite `FR-n`/`NFR-n` next to every decision. A decision with no requirement behind it is scope creep.
 - Follow the patterns already in the repo; say where you deliberately depart and why.
+- **Code layout** (`groundwork.py layout`, **code-layout** skill): in §2 name each file's role folder. Standard layout: business logic in `core/`, every outside call in `connectors/<system>/` behind an interface core defines, thin `entrypoints/`, env reads only in `config/`. Repo that keeps its own structure: name the existing folder that already holds that kind of code, and never plan new layout folders or moves. Moving existing code is planned only when the user asked for a migration.
 - Anything you cannot decide alone: `[NEEDS CLARIFICATION: …]` and ask.
 - If the plan reveals the spec is wrong or incomplete, fix the spec (it will need re-approval) — never diverge silently.
 

@@ -11,6 +11,8 @@ Instructions for coding agents. Humans: read PROJECT.md first.
 
 ## Tooling defaults
 - Python repos use `uv` (`uv add`, `uv sync`, `uv run`) — never `pip`. Each repo commits its own `uv.lock`.
+- Each repo records its code layout (`groundwork.py layout`, run inside it): the GroundWork standard folders, or "keep" —
+  its own structure, where new code follows the existing patterns. Follow what the repo recorded.
 
 ## Working across repos
 - This is the **workspace**: it owns boundaries. Each repo owns its craft.

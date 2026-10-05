@@ -159,6 +159,28 @@ def diagnose_ctx(ctx: C.Ctx, ws_children: bool = True) -> Diagnosis:
     elif owned:
         add("People", "ok", "every feature has an owner")
 
+    # code layout (repo-level decision: standard folders, or keep the existing structure)
+    if ctx.level in ("repo", "standalone"):
+        import groundwork_codemap as M  # noqa: PLC0415
+        import groundwork_layout as L  # noqa: PLC0415
+        st, why = M.state(ctx.repo)
+        add("Code map", "ok" if st == "current" else "warn", f"CODEMAP.md {st}", why,
+            "" if st == "current" else "groundwork.py codemap, then fill its Holds column")
+        lay = L.load(ctx.repo, ctx.config)
+        if lay is None:
+            add("Code layout", "warn", "no layout decision recorded",
+                "existing code: migrate to the standard layout or keep it as it is?" if L.has_code(ctx.repo) else "new code: set up the standard layout",
+                "code-layout skill (groundwork.py layout)")
+        elif lay.mode == "keep":
+            add("Code layout", "ok", "keeps its own structure (by choice); new code follows the existing patterns")
+        else:
+            found = L.assess(ctx.repo, ctx.config)
+            if found:
+                add("Code layout", "warn", f"{lay.profile} layout: {len(found)} finding(s)", "; ".join(sorted({f.rule for f in found})),
+                    "groundwork.py check (code-layout skill)")
+            else:
+                add("Code layout", "ok", f"{lay.profile} layout followed" + (f"; not yet migrated: {', '.join(lay.legacy)}" if lay.legacy else ""))
+
     # guardrails
     if ctx.level in ("repo", "standalone") or (ctx.level == "workspace" and (base / ".git").exists()):
         try:

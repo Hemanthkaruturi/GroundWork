@@ -52,6 +52,9 @@ For every feature and bug it records who requested it, who owns it, who built it
 **Bugs get fixed properly.**
 A bug is treated as a broken requirement. It has to be diagnosed and get a regression test before anyone touches the code.
 
+**Every repo looks the same inside.**
+Business logic, connections to outside systems (LLMs, databases, APIs) and settings each have one fixed folder, so people and agents know where to look. An existing repo is never restructured unless you choose to migrate it. If you keep its structure, new code follows the patterns already there. Either way, every repo gets a `CODEMAP.md`, generated from the code. It shows which folder holds what, where outside systems are called and where settings are read.
+
 **Docs that stay true.**
 GroundWork notices when the code or architecture moves on and flags the documents that are now out of date.
 

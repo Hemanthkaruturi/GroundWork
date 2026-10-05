@@ -139,12 +139,19 @@ def discover(repo: Path) -> dict:
                       "specs_dir": bool(specs.is_dir() and any(specs.iterdir())),
                       "agent_instructions": [f for f in ("CLAUDE.md", ".cursorrules", "AGENTS.md")
                                              if (repo / f).exists()]},
+        "layout": _layout(repo),
         # Do not read remote URLs: HTTPS remotes can embed passwords or tokens.
         "git": {"commits": int(_git(repo, "rev-list", "--count", "HEAD") or 0),
                 "first_commit": _git(repo, "log", "--reverse", "--format=%as", "-1") or None,
                 "last_commit": _git(repo, "log", "-1", "--format=%as") or None,
                 "top_authors": authors},
     }
+
+
+def _layout(repo: Path) -> dict:
+    import groundwork_layout as L  # noqa: PLC0415
+    lay = L.load(repo)
+    return {"decided": lay.mode if lay else None, **L.suggest(repo)}
 
 
 def summarize(d: dict) -> str:
@@ -167,6 +174,12 @@ def summarize(d: dict) -> str:
         lines.append("  adoptable:    existing specs/ directory (check numbering & sections against the standard)")
     if a["agent_instructions"]:
         lines.append(f"  adoptable:    existing agent instructions: {', '.join(a['agent_instructions'])}")
+    lay = d.get("layout") or {}
+    if lay.get("decided"):
+        lines.append(f"  code layout:  decided ({lay['decided']})")
+    elif lay.get("has_code"):
+        lines.append(f"  code layout:  not decided; looks like a {lay['profile_guess']} rooted at {lay['root_guess']} "
+                     "(ask: migrate to the standard layout, or keep the current structure)")
     g = d["git"]
     if g["commits"]:
         who = ", ".join(f"{x['name']} ({x['commits']})" for x in g["top_authors"][:3])

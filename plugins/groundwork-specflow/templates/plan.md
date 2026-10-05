@@ -13,6 +13,8 @@ created: {{date}}
 [TODO]
 
 ## 2. Affected modules and files
+<!-- Name each file's role folder from `groundwork.py layout` (core / connectors/<system> / entrypoints / config / wiring),
+     or, when the repo keeps its own structure, the existing folder that already holds that kind of code. -->
 [TODO]
 
 ## 3. Data model and migrations

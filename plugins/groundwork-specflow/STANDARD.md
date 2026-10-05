@@ -1,6 +1,6 @@
 # The Groundwork Standard
 
-**Version 0.5.0** · the specification that `groundwork check` enforces and the templates implement.
+**Version 0.6.0** · the specification that `groundwork check` enforces and the templates implement.
 
 Everything a team or an agent needs to know to work "the Groundwork way" is here. If two
 projects follow the same version of this document, a person or an agent moving between them
@@ -37,7 +37,7 @@ then built in each repo against it. A change that needs another repo is never a 
 ```
 <workspace>/                      <repo>/  (also at standalone root)
   PROJECT.md                        ARCHITECTURE.md
-  ARCHITECTURE.md                   AGENTS.md
+  ARCHITECTURE.md                   AGENTS.md, CODEMAP.md (generated, §5g)
   CONSTITUTION.md                   specs/NNN-slug/{spec,plan,tasks,evals,handover}.md  (+ log.md, append-only notes)
   AGENTS.md                         bugs/NNN-slug.md   (one record per defect)
   CONTRACTS/
@@ -109,7 +109,7 @@ Later the current snapshot is compared with the baseline; each difference is a r
 
 | Document | Derived from (snapshot) |
 | --- | --- |
-| repo `ARCHITECTURE.md` | manifests, Dockerfiles/compose, CI, infra (`*.tf`, `k8s/`, `helm/`), migrations, API schemas; top-level folders (standalone: approved RFCs) |
+| repo `ARCHITECTURE.md` | manifests, Dockerfiles/compose, CI, infra (`*.tf`, `k8s/`, `helm/`), migrations, API schemas; top-level folders; the code layout decision (standalone: approved RFCs) |
 | repo `AGENTS.md` | manifests, `Makefile`/task runners, CI — the things that define commands |
 | workspace `ARCHITECTURE.md` | the set of repos, each repo's `ARCHITECTURE.md`, `CONTRACTS/*`, approved RFCs |
 | workspace `PROJECT.md`, `AGENTS.md` | the set of repos |
@@ -195,6 +195,37 @@ For every RFC, feature and bug the project MUST be able to say **whom to contact
 - Names in roles SHOULD appear in the people table (GW081); approved RFCs/specs SHOULD have a requester and owner (GW080); implemented features SHOULD record an implementer (GW082) and a support contact (GW083). Changing a role does not affect an approval (approvals cover the document body).
 - A change that affects a feature owned by someone else MUST prompt the agent to tell the user who that is.
 
+## 5f. Code layout
+
+Documents have fixed places; so can code. Each repo (and standalone) records **one decision** in `.groundwork/config.json` → `"layout"`, made by a human:
+
+| `mode` | Meaning |
+| --- | --- |
+| `standard` | Code lives in the role folders of a **profile** (below), under a recorded `root` (`src/<app>`, `src`, `internal`, `.`). |
+| `keep` | The repo keeps its own structure. New code goes where code of the same kind already lives and copies its patterns; agents MUST NOT create layout folders or move existing code. No layout rule applies. |
+
+An existing codebase is never migrated without being asked: on first onboarding the agent asks *migrate or keep*. A new repo starts `standard`. A workspace holds no code; each repo decides for itself.
+
+**Roles.** `core` — business rules and use cases; no network, database, SDK or environment access; it defines the interfaces it needs. `connectors` — the only code that talks to outside systems (LLMs, databases, HTTP APIs, queues, email, cloud SDKs), one sub-folder per system named by role (`llm/`, `database/`), the vendor inside. `entrypoints` — HTTP routes, CLI commands, workers; parse, call core, reply. `config` — the only code that reads environment variables and secrets. `prompts` — prompt texts. `pages`/`components` — screens and UI pieces (web). **Wiring** files (`app.*`, `main.*`, `index.*`, `__init__.*` … directly in `root`, `cmd/`, and any listed in `wiring`) build connectors from config and hand them to core; they may import anything.
+
+| Profile | Required | May import (a role may always import itself) |
+| --- | --- | --- |
+| `service`, `cli` | core, entrypoints | core → prompts · connectors → core, config, prompts · entrypoints → core, config |
+| `web` | pages, components, core | pages → components, core, config · components → core · core → connectors, config, prompts · connectors → config |
+| `library` | core | connectors → core, prompts · core → prompts; environment reads are not allowed anywhere |
+
+**Adopting it in an existing repo** (`mode: standard` on old code): `folders` maps existing folders to a role (they count as that role, alongside the standard folder where new code goes); `legacy` lists folders not yet migrated, which are exempt. Moving code is ordinary planned work (RFC/spec, tasks), never a side effect.
+
+The checks are static (imports in Python, JavaScript/TypeScript and Go; environment reads; folder names) and need no model. Tests (`tests/`, `test_*.py`, `*.test.ts`, `*_test.go` …) are exempt. `groundwork.py layout` prints the map; `layout init|keep|map` records the decision. The session start tells the agent the map, or that the repo keeps its own structure.
+
+## 5g. Code map
+
+Every repo and standalone has **`CODEMAP.md`**, whatever its layout decision: it tells people and agents where each kind of code lives, so nobody searches the whole codebase.
+
+- `groundwork.py codemap` generates it from the code: each code folder (to four levels), its role (standard layout) and file count; the outside systems called and from where; where environment variables are read; entry and wiring files; test folders. `init` and `scaffold` create it; `layout init|keep|map` refresh it.
+- Humans and agents write only the **Holds** column (one line per folder: what it holds) and the **Notes** section. Both survive regeneration.
+- A fingerprint of the facts is embedded. When folders, roles, outside calls or settings locations change, the map is out of date (GW109); adding a file to a known folder does not age it. Regenerate, then describe any new folder (GW108 until done).
+
 ## 6. Identifiers and traceability
 
 - Requirements are numbered in the spec: `**FR-n**`, `**NFR-n**`, acceptance criteria `**AC-n**`, stories `**US-n**`. IDs are unique within a spec and never reused.
@@ -226,7 +257,7 @@ For every RFC, feature and bug the project MUST be able to say **whom to contact
 | Approval semantics (§7); freshness semantics (§5a) | Who the humans are |
 | Rule ids and meanings (§9) | — |
 
-Optional `freshness_days`, `brevity` (`guide` | `enforce` | `off`), `max_reply_words`. `"standard": "<version>"` SHOULD be recorded in `.groundwork/config.json` (GW004 warns if not; `scaffold` writes it). Implementations refuse a
+`layout` (§5f) is a team decision recorded once per repo; only the human changes it. Optional `freshness_days`, `brevity` (`guide` | `enforce` | `off`), `max_reply_words`. `"standard": "<version>"` SHOULD be recorded in `.groundwork/config.json` (GW004 warns if not; `scaffold` writes it). Implementations refuse a
 project whose **major** version differs from their own. Minor versions add checks or optional
 sections; they never invalidate a conforming project.
 
@@ -290,6 +321,16 @@ sections; they never invalidate a conforming project.
 | GW090 | W | A finished document exceeds its word budget (§5a″) |
 | GW091 | W | A finished document's sentences average more than 26 words |
 | GW040 | W | An approval record points at a file that no longer exists |
+| GW100 | E | The `layout` entry is malformed: unknown mode or profile, a role the profile lacks, or a path outside the repo (§5f) |
+| GW101 | W | A folder the profile requires does not exist |
+| GW102 | W | A role imports a role the profile does not allow (e.g. core → connectors) |
+| GW103 | W | A library or call that reaches an outside system (SDK, HTTP, database, `fetch`) is used outside connectors |
+| GW104 | W | Code sits in no role folder (not mapped, not wiring, not legacy) |
+| GW105 | W | Environment variables are read outside config (anywhere, in a library) |
+| GW106 | W | A folder or file is named `utils`, `helpers`, `common`, `misc`, `shared` or similar |
+| GW107 | W | Connector code sits directly in `connectors/` instead of `connectors/<system>/` |
+| GW108 | W | A repo has no `CODEMAP.md`, or a folder in it is not described (§5g) |
+| GW109 | W | `CODEMAP.md` no longer matches the code |
 
 Unfinished documents are reported once (GW002/GW025) and otherwise skipped: a scaffold cannot
 yet be judged on shape. A finished document is held to the standard in full.
@@ -324,7 +365,7 @@ Errors block; warnings block only with `--strict`. `enforcement: warn|off` in `.
 `check` needs only Python 3.10+ (tested on 3.12) and the project — no model, no network, no Claude Code — so it
 is the same on a laptop, in a git hook and in CI, for humans and for any agent.
 
-A project **conforms to Groundwork 0.5** when `check --strict` reports no findings.
+A project **conforms to Groundwork 0.6** when `check --strict` reports no findings.
 
 ## 11. Changing the standard
 

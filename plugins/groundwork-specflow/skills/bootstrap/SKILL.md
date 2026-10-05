@@ -47,13 +47,22 @@ have special meaning (glossary). If the user says "you decide", propose a draft 
 Draft 3–7 principles and the guardrails ("never…") *from what the user has told you*; propose, don't impose.
 Each rule must be something a reviewer could check in a diff.
 
+## Code layout (once per repo)
+Use the **code-layout** skill. `discovery.json` → `layout` shows whether the repo already has code, a guessed profile and root.
+- **Existing code:** ask (`AskUserQuestion`) whether to migrate the code to the GroundWork standard layout or keep the current structure:
+  **Keep current structure (Recommended)** — nothing moves; new code follows existing patterns · **Migrate to standard** — standard folders; existing code moves as planned work.
+  Keep → `groundwork.py layout keep`, and describe the existing folders in ARCHITECTURE.md → *Code map*. Migrate → `groundwork.py layout init --profile <p> --root <dir>`, then `layout map` / `--legacy`. **Never move existing code during bootstrap.**
+- **New repo:** ask the profile (service · cli · web · library), then `groundwork.py layout init --profile <p> --create`.
+- **Workspace:** decide per repo (run it inside each repo).
+- **Code map, always:** `init` writes `CODEMAP.md` from the code. Fill its **Holds** column (one line per folder, from what the code shows) and add notes. Run `groundwork.py codemap` again after the layout decision.
+
 ## AGENTS.md
 **Python projects use `uv`, never pip.** Write the commands as `uv sync`, `uv run pytest` etc. (verify each by running it). If `discovery.json` shows
 `python.other_managers` (pip requirements, poetry, pipenv), do **not** migrate silently: ask (`AskUserQuestion`: Migrate to uv (Recommended) / Keep current for now)
 and record the answer in AGENTS.md.
 
 Exact commands to set up, run, test and lint — verify each by running it. Conventions an agent gets wrong
-without being told.
+without being told. Keep its *Where code lives* section pointing at `CODEMAP.md`.
 
 ## Finish
 When every document is finished and the user has read PROJECT.md and ARCHITECTURE.md, run `python3 "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py" confirm` — it records the baseline that later detects drift.

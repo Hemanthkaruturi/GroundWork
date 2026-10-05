@@ -13,6 +13,13 @@ Instructions for coding agents in this repository.
 
 [TODO: setup, run, test, lint/typecheck — exact commands, and which one must pass before "done"]
 
+## Where code lives
+**Read `CODEMAP.md` before searching the code.** It lists every code folder and what it holds, where outside systems (LLMs,
+databases, APIs) are called, where settings are read, and the entry files and tests. After adding, moving or removing a
+folder, run `groundwork.py codemap` and describe any new folder in its Holds column.
+`groundwork.py layout` shows the layout decision: the GroundWork standard folders, or "keep" — the repo's own structure,
+where new code goes next to code of the same kind and copies its patterns.
+
 ## Conventions
 [TODO: language/style rules, folder layout, error handling, anything an agent gets wrong without being told]
 

@@ -114,8 +114,11 @@ def snapshot(ctx: C.Ctx, doc: str) -> dict:
         return {}
     repo = ctx.repo
     if key == "ARCHITECTURE.MD":
+        lay = C.read_config(repo).get("layout")
         return {"signals": signals(repo, MANIFESTS | INFRA_NAMES, INFRA_GLOBS), "toplevel": toplevel(repo),
-                **({"rfcs": approved_rfcs(ctx)} if ctx.level == "standalone" else {})}
+                **({"rfcs": approved_rfcs(ctx)} if ctx.level == "standalone" else {}),
+                **({"layout": {k: json.dumps(v, sort_keys=True) for k, v in lay.items() if k not in ("decided", "decided_by")}}
+                   if isinstance(lay, dict) else {})}
     if key == "AGENTS.MD":
         return {"signals": signals(repo, COMMAND_NAMES, COMMAND_GLOBS)}
     return {}

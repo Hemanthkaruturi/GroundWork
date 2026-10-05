@@ -217,6 +217,7 @@ class CodeMap(Base):
         t = self.text()
         self.assertIn("**Layout:** standard (service profile, root lib)", t)
         self.assertIn("| `lib/billing` | no role |", t)
+        self.assertIn("- `tests` (1 files)", t)                             # outside the code root, still mapped
 
     def test_missing_map_is_reported(self):
         self.assertIn("GW108", self.ids())

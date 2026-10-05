@@ -62,10 +62,7 @@ def facts(repo: Path) -> dict:
     """Everything the map states, computed from the code. No model, no network."""
     lay = L.load(repo)
     standard = lay is not None and lay.mode == "standard" and not lay.problems
-    scan = lay if standard else L.Layout("keep")
-    files = L.code_files(repo, scan)
-    if standard:                                    # legacy folders are skipped by the checker; the map still lists them
-        files += [f for x in lay.legacy for f in L.code_files(repo, L.Layout("keep", root=x))]
+    files = L.code_files(repo, L.Layout("keep"))    # the whole repo: tests, scripts and legacy folders belong on the map too
     folders: dict[str, dict] = defaultdict(lambda: {"files": 0, "roles": set()})
     systems: dict[tuple[str, str], set[str]] = defaultdict(set)
     env, wiring, tests = set(), [], defaultdict(int)

@@ -42,6 +42,8 @@ Every feature, in one line, with where to see it.
 | **Handover** | A standard pack so the next person or agent continues without guessing | 5.26 |
 | **Ownership and accountability** | Who requested, owns, built, deployed and supports every item, and whom to call | 5.11 |
 | **Documents that stay true** | Freshness tracking flags stale documents, including the workspace ones | 5.12 |
+| **Code layout** | One decision per repo: the standard folders (business logic, connectors to outside systems, entry points, settings), or keep the existing structure. Never migrated without asking | 5.30 |
+| **Code map** | `CODEMAP.md` in every repo, generated from the code: which folder holds what, where outside systems are called, where settings are read | 5.31 |
 | **Onboarding existing projects** | `init` gathers evidence, `doctor` shows how far the project is from the standard | 5.14, 5.18 |
 | **Enforcement dial and emergency bypass** | Block, warn or off, and a logged 60-minute bypass for real emergencies | 5.27 |
 | **Git hook and CI** | The same check on every commit and every pull request | 5.2, 5.13, 5.28 |
@@ -100,6 +102,12 @@ Fix *where* things live, *what* each document contains, and *who* approves. Leav
 - **Two levels, plus standalone.** A *workspace* holds the product-level truth (project brief, architecture, rules, contracts, decisions). Each *repo* holds its own code, specs and internals. A single repo with no workspace above it is *standalone* and carries both sets of documents. The agent always knows which level it is on, and a directory that is neither is *unknown*: nothing may be built there.
 - **Standard documents:** `PROJECT`, `ARCHITECTURE`, `CONSTITUTION` (the non-negotiable rules), `AGENTS`, RFCs, contracts, specs, plans, tasks, evals, bug records, handovers.
 - **A written standard** (`STANDARD.md`) with 56 numbered rules. `groundwork check` verifies them with no AI and no network, so it runs the same on a laptop, in a git hook and in CI.
+
+### Every repo looks the same inside
+- **A standard code layout.** Business logic lives in `core/`. Code that talks to an outside system (an LLM, a database, an HTTP API, a queue, email) lives in `connectors/`, one folder per system. Routes, commands and workers live in `entrypoints/`, and settings are read only in `config/`. A small wiring file plugs connectors into core. There are profiles for services, command-line tools, web front ends and libraries.
+- **Your structure is respected.** An existing repo is asked once: migrate to the standard layout, or keep its current structure. If it keeps it, nothing moves and new code follows the patterns already there. Moving code only ever happens as planned, approved work.
+- **A code map in every repo.** `CODEMAP.md` is generated from the code, whatever the layout decision. People and agents read it to find code instead of searching the whole codebase.
+- **Checked with no AI.** `groundwork check` warns when code breaks the layout, or when the map no longer matches the code.
 
 ### Humans stay in control
 - **Approval is human-only.** Recorded against the exact document text, with who and when. An RFC can require several sign-offs, and a cross-repo one always needs at least two.
@@ -170,6 +178,7 @@ One sample product is used throughout. **ShopFront** is a workspace called `shop
 | Keeping it true | 5.12 freshness · 5.13 and 5.28 git hook and CI |
 | Style and defaults | 5.15 short replies · 5.16 other skills · 5.17 `uv` |
 | Agents | 5.29 running in Devin |
+| Code | 5.30 code layout · 5.31 code map |
 
 ### 5.1 The agent always knows where it is
 `groundwork init` in the empty workspace, then `groundwork doctor` *(real output)*:
@@ -740,15 +749,83 @@ Approval stays human: the user types `/groundwork-specflow:approve`, and Devin's
 
 **Without Devin's plugin system.** Some companies turn Devin plugins off, and then no plugin install loads. For that case, Devin can install GroundWork into the project itself (§11). `setup/install.py` puts the engine in `.devin/groundwork/`, each skill and command in `.devin/skills/`, and the hooks in `.devin/hooks.v1.json`. These are Devin's project skills and hooks, not a plugin. The gate, approvals and documents work the same, and commands have no prefix: `/approve`, `/bypass`, `/status`. The script checks its own install by running the session-start hook the way Devin will. It runs on Linux, macOS, Windows and WSL. Committing `.devin/` gives the whole team GroundWork. That this works while plugins are turned off hasn't been confirmed yet.
 
+### 5.30 Code layout: one decision per repo, never a surprise migration
+`shop-api` already has code. Before any code is written, `groundwork.py layout` shows that no decision exists yet, and offers both choices *(real output)*:
+```
+No code layout decision recorded for this repo.
+It already has code: ask the user whether to migrate it to the standard layout or keep its structure.
+  keep:     groundwork.py layout keep
+  migrate:  groundwork.py layout init --profile service --root src/shop_api  (then map existing folders; moving code is planned work)
+Existing folders and the role they look like (a guess, not a decision):
+  src/shop_api/clients             connectors
+  src/shop_api/routes              entrypoints
+  src/shop_api/services            core
+```
+The agent asks with the picker *(illustration)*:
+> **Should shop-api's code move to the GroundWork standard layout, or keep its current structure?**
+> **Keep current structure (Recommended)**: nothing moves; new code follows the existing patterns · **Migrate to standard**: new code uses the standard folders; existing code moves gradually as planned work.
+
+**Ravi chooses to migrate.** The standard folders are created, and the existing ones are mapped to their roles, so nothing has to move on day one. Old code nobody wants to touch yet can be marked "not yet migrated", and the checks leave it alone. The check now shows exactly what breaks the layout *(real output)*:
+```
+warning GW102  src/shop_api/services/search.py: line 1: core/ imports connectors/ (shop_api.clients.search_engine), which the service profile forbids
+         → core/ may import: prompts. Define an interface in core and let the wiring file plug the connector in
+warning GW103  src/shop_api/services/orders.py: line 2: core/ uses psycopg, which talks to an outside system
+         → move that call into src/shop_api/connectors/<system>/ behind an interface core defines
+warning GW105  src/shop_api/services/orders.py: line 3: core/ reads environment variables
+         → read settings once in config/ and pass them in
+warning GW107  src/shop_api/clients/search_engine.py: connector code sits directly in the connectors folder
+         → give each external system its own folder: src/shop_api/clients/<system>/ (e.g. llm/, database/)
+```
+These are warnings: they fail only under `check --strict`, so the team switches that on in CI when the migration is done. Fixing them is ordinary work that goes through the normal path.
+
+**Meena keeps `shop-web` as it is.** `groundwork.py layout keep` records the choice. No layout check runs there, and every session tells the agent so *(real output)*:
+```
+CODE LAYOUT: this repo KEEPS ITS OWN STRUCTURE (the user chose not to migrate). Put new code where the existing code
+of the same kind lives and copy its patterns and naming. Do not create GroundWork layout folders (core/, connectors/,
+entrypoints/ …) and do not move or restructure existing code unless the user asks for a migration (then: code-layout skill).
+```
+A new repo skips the question: `groundwork.py layout init --profile service --create` creates the folders, each with a one-line README saying what belongs there.
+
+| Role | Holds | May use |
+| --- | --- | --- |
+| `core/` | business rules and use cases; no network, database, SDK or env vars | prompts (and the interfaces it defines itself) |
+| `connectors/<system>/` | the only code that talks to outside systems: `llm/`, `database/`, `email/` … with the vendor inside | core, config |
+| `entrypoints/` | HTTP routes, CLI commands, workers: parse, call core, reply | core, config |
+| `config/` | the only place that reads env vars and secrets | nothing else |
+| wiring (`app.py`, `main.*`) | builds connectors from config and hands them to core | everything |
+
+Web front ends add `pages/` and `components/`, and components never fetch data themselves. Libraries never read env vars at all. Folders called `utils`, `helpers`, `common` or `misc` are flagged, because the name says nothing about what they hold.
+
+### 5.31 The code map: where everything is, in every repo
+Whatever the layout decision, `groundwork init` writes `CODEMAP.md` from the code. Part of `shop-api`'s map *(real output)*:
+```
+| Folder | Role | Code files | Holds |
+| --- | --- | --- | --- |
+| `src/shop_api` | wiring | 2 | [TODO: what this folder holds] |
+| `src/shop_api/clients` | connectors | 1 | [TODO: what this folder holds] |
+| `src/shop_api/routes` | entrypoints | 1 | [TODO: what this folder holds] |
+| `src/shop_api/services` | core | 2 | [TODO: what this folder holds] |
+
+## Outside systems (where they are called)
+| database | psycopg | `src/shop_api/services/orders.py` |
+| http | httpx | `src/shop_api/clients/search_engine.py` |
+
+## Settings (where environment variables are read)
+- `src/shop_api/services/orders.py`
+```
+The facts come from the code; people and agents write only the **Holds** column (one line per folder) and a Notes section. Both are kept when the map is regenerated. Every session tells the agent to read the map before searching the code, so it goes straight to the right folder.
+
+The map knows when it is wrong. Adding a file to a known folder changes nothing. A new folder, a moved one, or a new outside system makes `check` report the map as out of date. `groundwork.py codemap` regenerates it and keeps every description, and only the new folder needs describing.
+
 ## 6. How it helps
 
 | If you are… | You get… |
 | --- | --- |
 | **A developer** | Clear specs before you code. Fewer rework loops. Know who to call. Pick up a colleague's half-done work. A contract when your change touches another repo. |
-| **A tech lead** | Consistent structure across repos and agents. Decisions recorded with reasons. Team rules written in a constitution and checked in every change. A check that runs in CI. |
+| **A tech lead** | Consistent structure across repos and agents, down to where the code lives. Decisions recorded with reasons. Team rules written in a constitution and checked in every change. A check that runs in CI. |
 | **A product owner** | The agent must ask before it builds. Written requirements you can approve. Traceability from request to release. |
 | **Support / on-call** | One command to find the owner, implementer, deployer and support contact. |
-| **A new joiner** | Read the project brief and architecture. Handover packs. No archaeology. |
+| **A new joiner** | Read the project brief, the architecture and the code map. Handover packs. No archaeology. |
 | **A team of several repos** | Contracts and sign-offs for changes that cross repos. Dependencies that block the right work at the right time. |
 | **Everyone** | Short, plain answers that don't hide the caveat. |
 
@@ -821,6 +898,7 @@ The step-by-step version is in `docs/manual-testing.md`.
 - Some checks are judgment calls by the agent (is this a bug or a change request? did the short reply keep every caveat? does this change follow the constitution?). The tool checks that the constitution check was done, not that the reasoning is right. Rules written as a command that fails when broken are enforced for real. The saved originals make mistakes recoverable.
 - Contracts are documents: the tool does not yet verify that a repo still honours the contract version it pinned.
 - It works with **Claude Code** and **Devin** (CLI and Desktop; Devin cloud sessions get the skills but no hook enforcement). The engine is agent-neutral, so other agents can get a thin adapter.
+- The code layout checks read imports as text, for Python, JavaScript/TypeScript and Go only. They can miss an unusual import or flag the odd false one, which is why they are warnings. Code in other languages is not checked and does not appear in the code map.
 - It adds steps. That is the point, but tiny fixes need the human-run bypass.
 
 ## 10. Questions you may get
@@ -840,6 +918,8 @@ The step-by-step version is in `docs/manual-testing.md`.
 **Does it send our code or data anywhere?** No. It makes no network requests and has no telemetry. It reads your local git name and email to record who did what, and keeps that in your own project files.
 
 **Does it work with Devin?** Yes, in the Devin CLI and Desktop app, with the same gate and documents. Devin cloud sessions get the skills but no hook enforcement, so add the git hook or the CI check there (5.28, 5.29). If your company has turned Devin plugins off, let Devin install GroundWork into the project instead (§11).
+
+**Will it restructure our existing code?** No. On first onboarding it asks: migrate to the standard layout, or keep the current structure. With *keep*, nothing moves and new code follows your patterns. With *migrate*, code moves only as planned, approved work. Either way, every repo gets a code map.
 
 **Why files, not a database?** Files live with the code, review in pull requests, and any person or agent can read them.
 

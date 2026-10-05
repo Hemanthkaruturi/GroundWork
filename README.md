@@ -134,7 +134,11 @@ GroundWork also runs in [Devin](https://devin.ai) (Devin CLI and Devin Desktop),
 **Let Devin install it.** Open Devin in your project and paste this prompt:
 
 ```
-Install GroundWork into this project. Clone https://github.com/Hemanthkaruturi/GroundWork.git into a new temporary folder outside this project, then run `bash <that folder>/setup/install.sh` from this project's root. If the script fails, show me its error and stop. Otherwise delete the temporary folder, show me what the script printed, and tell me to start a new Devin session.
+Install GroundWork into this project. From this project's root, run this as one command, exactly as written, and show me its full output:
+
+( GW_TMP=$(mktemp -d) && git clone -q https://github.com/Hemanthkaruturi/GroundWork.git "$GW_TMP/GroundWork" && bash "$GW_TMP/GroundWork/setup/install.sh"; rc=$?; rm -rf "$GW_TMP"; exit $rc )
+
+If it fails, stop there and don't try to install GroundWork another way. Otherwise tell me to start a new Devin session.
 ```
 
 Devin runs [setup/install.sh](setup/install.sh), which puts GroundWork in your project's `.devin/` folder as Devin project skills and hooks rather than as a plugin. Commit that folder, and everyone who opens the project in Devin gets GroundWork. Commands have no prefix in this install: `/bootstrap`, `/approve`, `/bypass` and `/status`.

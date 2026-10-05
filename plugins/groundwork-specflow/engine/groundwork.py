@@ -1,6 +1,6 @@
 """groundwork — command line and hook entry point for the groundwork plugin.
 
-Hooks:      groundwork.py session-context | prompt-reminder | gate | gate-bash     (JSON on stdin)
+Hooks:      groundwork.py session-context | prompt-reminder | gate | gate-bash     (JSON on stdin; Claude Code or Devin)
 Onboarding:  groundwork.py init [--as repo|workspace] [--retrofit] [--dry-run] | doctor [--json]
 Anyone/CI:  groundwork.py check [--strict] [--json] | fresh [--json] | hooks install|uninstall|status
 Agents:     groundwork.py confirm [doc ...]   (after updating docs to match reality)
@@ -33,6 +33,7 @@ import groundwork_discover as D  # noqa: E402
 import groundwork_doctor as X  # noqa: E402
 import groundwork_fresh as F  # noqa: E402
 import groundwork_hooks as H  # noqa: E402
+import groundwork_host as G  # noqa: E402
 import groundwork_people as P  # noqa: E402
 import groundwork_relations as R  # noqa: E402
 
@@ -130,9 +131,8 @@ def describe(ctx: C.Ctx) -> str:
 
 def cmd_session_context(_a) -> None:
     inp = hook_input()
-    ctx = C.detect(inp.get("cwd") or Path.cwd())
-    out({"hookSpecificOutput": {"hookEventName": "SessionStart",
-                                "additionalContext": RULES + "\n\n" + describe(ctx)}})
+    ctx = C.detect(G.cwd(inp))
+    out(G.context(inp, "SessionStart", G.adapt_rules(RULES, G.name(inp)) + "\n\n" + describe(ctx)))
 
 
 HUMAN_CMD = re.compile(r"^\s*/(?:groundwork-specflow:)?(approve|bypass)\b\s*(.*)$", re.S)
@@ -165,36 +165,36 @@ def cmd_prompt_reminder(_a) -> None:
     inp = hook_input()
     m = HUMAN_CMD.match(inp.get("prompt", ""))
     if m:
-        res = run_human_action(m.group(1), m.group(2), inp.get("cwd") or os.getcwd())
-        out({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext":
-             f"[groundwork {m.group(1)}] The user's command was already executed by the hook. "
-             f"Result: {res}\nReport this result to the user in one or two lines. Run nothing yourself."}})
+        res = run_human_action(m.group(1), m.group(2), G.cwd(inp))
+        out(G.context(inp, "UserPromptSubmit",
+                      f"[groundwork {m.group(1)}] The user's command was already executed by the hook. "
+                      f"Result: {res}\nReport this result to the user in one or two lines. Run nothing yourself."))
         return
-    ctx = C.detect(inp.get("cwd") or Path.cwd())
+    ctx = C.detect(G.cwd(inp))
     phase, ins = C.next_step(ctx)
     stale = F.stale_lines(ctx) if ctx.level != "unknown" else []
     note = (" Foundation docs may be stale (" + "; ".join(stale)[:300] + ") — before finishing, run the refresh skill.") if stale else ""
-    out({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
-                                "additionalContext": f"[groundwork] level={ctx.level} phase={phase}. {ins}{note} {TRIAGE} {BREVITY}"}})
+    out(G.context(inp, "UserPromptSubmit", f"[groundwork] level={ctx.level} phase={phase}. {ins}{note} {TRIAGE} {BREVITY}"))
 
 
-def deny(reason: str) -> None:
-    out({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
-                                "permissionDecisionReason": reason}})
+def deny(full: dict, reason: str) -> None:
+    out(G.deny(full, reason))
 
 
 def cmd_gate(_a) -> None:
     full = hook_input()
-    inp = full.get("tool_input", {})
-    raw = inp.get("file_path") or inp.get("notebook_path")
-    if not raw:
+    paths, understood = G.edit_targets(full)
+    if not understood:
+        if full.get("tool_name") in G.DEVIN_EDIT_TOOLS:     # fail closed: an unread target must not slip past the gate
+            deny(full, f"groundwork-specflow: could not tell which file {G.describe_input(full)} would write, so the edit "
+                       "is held. Use the write or edit tool with a file path, or ask the user for /groundwork-specflow:bypass.")
         return
-    path = Path(raw)
-    if C.is_protected_path(path):
-        return deny("groundwork-specflow: approval records are written only by the user's /groundwork-specflow:approve command.")
-    ok, reason = C.gate_code_edit(path, full.get("cwd"))
-    if not ok:
-        deny(reason)
+    for path in paths:
+        if C.is_protected_path(path):
+            return deny(full, "groundwork-specflow: approval records are written only by the user's /groundwork-specflow:approve command.")
+        ok, reason = C.gate_code_edit(path, G.session_cwd(full))
+        if not ok:
+            return deny(full, reason)
 
 
 def cmd_stop_brevity(_a) -> None:
@@ -202,7 +202,7 @@ def cmd_stop_brevity(_a) -> None:
     full = hook_input()
     if full.get("stop_hook_active"):
         return
-    ctx = C.detect(full.get("cwd") or Path.cwd())
+    ctx = C.detect(G.cwd(full))
     mode = os.environ.get("GROUNDWORK_BREVITY") or ctx.config.get("brevity", "guide")
     if mode != "enforce":
         return
@@ -219,18 +219,18 @@ def cmd_stop_brevity(_a) -> None:
 def cmd_skill_notice(_a) -> None:
     """When any non-groundwork skill loads, remind the agent it is a craft tool inside the process."""
     full = hook_input()
-    name = str(full.get("tool_input", {}).get("skill", ""))
+    name = G.skill_name(full)
     if not name or name.startswith("groundwork-specflow:"):
         return
-    ctx = C.detect(full.get("cwd") or Path.cwd())
+    ctx = C.detect(G.cwd(full))
     if ctx.level == "unknown":
         return
     phase, ins = C.next_step(ctx)
-    out({"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext":
+    out(G.context(full, "PreToolUse",
          f"[groundwork] You are loading '{name}', which is not a groundwork skill: treat it as a craft tool for the IMPLEMENT step only. "
          f"Current phase: {phase}. Unless the phase is 'implement' (approved RFC/spec, finished plan, tasks and evals), do NOT start building with it: "
          f"triage the request first (defect -> fix-bug; new/changed behaviour or look -> interview -> RFC -> spec; continuing -> resume). "
-         f"Design choices it suggests belong in the spec as testable requirements before any file is written. Writing files by shell is gated like the Write tool."}})
+         f"Design choices it suggests belong in the spec as testable requirements before any file is written. Writing files by shell is gated like the Write tool."))
 
 
 def cmd_gate_bash(_a) -> None:
@@ -241,12 +241,13 @@ def cmd_gate_bash(_a) -> None:
     """
     full = hook_input()
     cmd = full.get("tool_input", {}).get("command", "")
-    if C.is_protected_command(cmd, Path(full.get("cwd") or os.getcwd())):
-        return deny("groundwork-specflow: approvals and bypasses are human acts. Ask the user to run "
+    cwd = Path(G.cwd(full))
+    if C.is_protected_command(cmd, cwd):
+        return deny(full, "groundwork-specflow: approvals and bypasses are human acts. Ask the user to run "
                     "/groundwork-specflow:approve or /groundwork-specflow:bypass themselves.")
-    ok, reason = C.gate_shell_command(cmd, Path(full.get("cwd") or os.getcwd()))
+    ok, reason = C.gate_shell_command(cmd, cwd)
     if not ok:
-        deny(reason)
+        deny(full, reason)
 
 
 def cmd_status(a) -> None:

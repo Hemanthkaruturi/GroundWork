@@ -12,6 +12,8 @@ CA = Path(__file__).resolve().parents[1] / "engine" / "groundwork.py"
 ENV = {**os.environ, "HOME": "/nonexistent-home", "USERPROFILE": "/nonexistent-home", "GIT_CONFIG_GLOBAL": os.devnull,
        "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com"}
 ENV.pop("GROUNDWORK_ENFORCEMENT", None)
+for _k in ("GROUNDWORK_HOST", "DEVIN_PROJECT_DIR", "DEVIN_PLUGIN_ROOT", "CLAUDE_PROJECT_DIR"):   # tests pick the harness themselves
+    ENV.pop(_k, None)
 
 
 def ca(cwd, *args, stdin=None):

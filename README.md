@@ -127,6 +127,22 @@ claude plugin update groundwork-specflow@groundwork-specflow
 
 Restart Claude Code (or run `/reload-plugins`) to start using the new version. If it says you already have the latest version, there is nothing new to install yet.
 
+### Using Devin instead
+
+GroundWork also runs in [Devin](https://devin.ai) (Devin CLI and Devin Desktop), from this same repository. You need Python 3.10+ and git, as above. Install it with:
+
+```
+devin plugins install Hemanthkaruturi/GroundWork#plugins/groundwork-specflow
+```
+
+Start a new session and run `/hooks` to check that the groundwork hooks are loaded. Then use it as described above: `/groundwork-specflow:bootstrap`, then `/groundwork-specflow:approve` when you're happy. To update, run `devin plugins update groundwork-specflow`.
+
+What's different on Devin:
+
+- **Questions come as numbered options in the reply** rather than clickable choices, because Devin has no picker tool.
+- **Rules are enforced only in the Devin CLI and Devin Desktop.** Devin doesn't run plugin hooks in cloud sessions, so there GroundWork's skills guide the agent but nothing blocks a code edit.
+- **Devin may skip a hook that fails.** It runs plugin hooks "best effort": if one fails to load or run, the session carries on without it. Add the git hook from `bootstrap` (or `groundwork.py hooks install`) so commits are checked either way.
+
 **Installed the plugin before it was renamed?** It used to be called `groundwork`. If updating fails with `Plugin "groundwork" not found`, run this once in Claude Code, then restart:
 
 ```

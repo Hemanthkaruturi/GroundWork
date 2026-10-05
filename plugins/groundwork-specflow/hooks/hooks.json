@@ -2,7 +2,6 @@
   "hooks": {
     "SessionStart": [
       {
-        "matcher": "startup|resume|clear|compact",
         "hooks": [
           {
             "type": "command",
@@ -33,7 +32,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+        "matcher": "^(Write|Edit|MultiEdit|NotebookEdit|write|edit|apply_patch|notebook_edit)$",
         "hooks": [
           {
             "type": "command",
@@ -51,11 +50,22 @@
         ]
       },
       {
-        "matcher": "Bash",
+        "matcher": "^(Bash|exec)$",
         "hooks": [
           {
             "type": "command",
             "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py\" gate-bash || python \"${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py\" gate-bash"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "^skill$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py\" skill-notice || python \"${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py\" skill-notice"
           }
         ]
       }

@@ -1,6 +1,6 @@
 # GroundWork
 
-GroundWork is a plugin for Claude Code that makes a coding agent work from a shared, written plan instead of improvising. Before any code is written, the agent interviews you, drafts a short decision document (an RFC), and waits for your approval. Only then does it write a spec, plan, tasks and evals, build in small steps, and hand over cleanly. Hooks block code edits until the earlier steps are approved, and only a human can approve.
+GroundWork is a plugin for Claude Code (and Devin) that makes a coding agent work from a shared, written plan instead of improvising. Before any code is written, the agent interviews you, drafts a short decision document (an RFC), and waits for your approval. Only then does it write a spec, plan, tasks and evals, build in small steps, and hand over cleanly. Hooks block code edits until the earlier steps are approved, and only a human can approve.
 
 ## What it adds to Claude Code
 
@@ -17,6 +17,7 @@ All hooks run the explicit path `${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py` wit
 - **`skill-notice`** (before the Skill tool) only adds a short reminder to Claude's context. It doesn't approve or deny.
 - **`session-context`** and **`prompt-reminder`** add context such as work in flight. They don't change permissions.
 - **`stop-brevity`** runs when Claude finishes a reply. Only in the optional strict brevity mode, if the reply is over the word limit, it asks Claude once to rewrite it shorter (the full original is saved under `.groundwork/replies/`). It doesn't touch permissions.
+- Devin (CLI and Desktop) loads this same `hooks/hooks.json`. The matchers also name Devin's tools: `write`, `edit`, `apply_patch` and `notebook_edit` go to `gate`, and `exec` goes to `gate-bash`. In Devin, `skill-notice` runs after the `skill` tool. The engine sees which tool is calling (Devin sets `DEVIN_PROJECT_DIR`) and answers in that tool's format. On Devin, a denial is `{"decision": "block"}`, and an edit whose target file can't be worked out is held rather than let through. Devin cloud sessions don't run plugin hooks.
 - Enforcement can be turned down per project (`warn` or `off` in `.groundwork/config.json`).
 
 ## What it runs, reads and sends

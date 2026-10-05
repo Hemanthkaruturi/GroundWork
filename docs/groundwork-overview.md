@@ -718,7 +718,7 @@ The step-by-step version is in `docs/manual-testing.md`.
 - Approval proves "a human typed this", not who they are.
 - Some checks are judgment calls by the agent (is this a bug or a change request? did the short reply keep every caveat? does this change follow the constitution?). The tool checks that the constitution check was done, not that the reasoning is right. Rules written as a command that fails when broken are enforced for real. The saved originals make mistakes recoverable.
 - Contracts are documents: the tool does not yet verify that a repo still honours the contract version it pinned.
-- Today it works with **Claude Code**. The engine is agent-neutral, so other agents can get a thin adapter.
+- It works with **Claude Code** and **Devin** (CLI and Desktop; Devin cloud sessions get the skills but no hook enforcement). The engine is agent-neutral, so other agents can get a thin adapter.
 - It adds steps. That is the point, but tiny fixes need the human-run bypass.
 
 ## 10. Questions you may get

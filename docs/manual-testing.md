@@ -109,6 +109,15 @@ Claude re-verifies the plan and runs `groundwork.py plan-sync`. Any leftover dou
 offering a file for more. For a hard limit add `"brevity": "enforce", "max_reply_words": 100` to `.groundwork/config.json` (keep your other keys) and repeat — an over-long reply is sent back once to be rewritten.
 In enforce mode, open the file named in the last line (`Full detail: …`): it must hold the complete original, and the short version must still mention every failure, caveat, unverified item and changed file from it — if a caveat is missing from the short reply, that is a bug worth reporting. Ask it to write a big spec, then `groundwork.py check`: `GW090` (too long) or `GW091` (long sentences) warnings appear if it rambled. Its picker questions should be one sentence with short options and a recommendation first.
 
+## 3b. Devin (CLI or Desktop)
+
+1. `devin plugins install --local ./plugins/groundwork-specflow`. This links the folder, so edits apply on the next session.
+2. Start `devin` in the sandbox and run `/hooks`. You should see SessionStart, UserPromptSubmit, Stop, PreToolUse (gate, skill-notice, gate-bash) and PostToolUse (skill-notice) from groundwork-specflow.
+3. Ask "what level is this?". The answer should match `groundwork.py status`, and the context starts with the rules plus a `HOST: Devin` note.
+4. Ask for a code change before anything is approved. The `write`/`edit`/`apply_patch` call and an `exec` like `echo x > app.py` must both be blocked with a groundwork reason.
+5. Type `/groundwork-specflow:approve RFC-0001`. You should get a result line. If you get "no result" instead, the prompt hook didn't see the command, so note it and approve from a terminal with `groundwork.py approve`.
+6. If a gate doesn't fire, set `GROUNDWORK_HOOK_LOG=/tmp/gw-hooks.jsonl` before starting `devin`, retry, and check the `tool_name`/`tool_input` it logged.
+
 ## 4. Poke at the engine without Claude
 ```bash
 E=plugins/groundwork-specflow/engine/groundwork.py
@@ -120,4 +129,4 @@ echo '{"cwd":"'$PWD'","tool_input":{"file_path":"'$PWD'/shop-api/x.py"}}' | pyth
 ## Known limits (be honest about them)
 - The gate covers the Write/Edit tools **and shell commands that write files** (`cat > f <<EOF`, `>`/`>>`, `tee`, `sed -i`, `cp`/`mv`, `dd of=`, `curl -o`, inline `python -c`/`node -e` scripts that call write APIs, `patch`/`git apply`). Analysis is static: a script *file* that writes files when run (`python build.py`) is opaque and is not blocked, and deleting files is not gated. It is a guardrail against drift, not a security boundary.
 - Approval identity is `git config user.email`; there is no authentication. It proves "a human typed this", not who.
-- Claude Code only for now (hooks + skills). Other agents need an adapter over `engine/`, which has no Claude dependency.
+- Claude Code and Devin (CLI/Desktop) are supported (`engine/groundwork_host.py` adapts the hook formats). Devin runs plugin hooks best effort and not at all in cloud sessions, and its `apply_patch`/`skill` input field names come from its docs and haven't been checked against a live session. Other agents need their own adapter over `engine/`.

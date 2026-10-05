@@ -12,6 +12,11 @@
     "spec-driven",
     "rfc",
     "standards",
-    "guardrails"
+    "guardrails",
+    "devin"
+  ],
+  "skills": [
+    "skills",
+    "devin/commands"
   ]
 }

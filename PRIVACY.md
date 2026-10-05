@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**GroundWork (`groundwork-specflow`)** is a Claude Code plugin. This page says what it does with data. Last updated: 2026-09-30.
+**GroundWork (`groundwork-specflow`)** is a Claude Code plugin that also runs in Devin. This page says what it does with data. Last updated: 2026-09-30.
 
 ## Short version
 
@@ -23,7 +23,7 @@ These files live in your repository. You decide whether to commit or share them,
 
 ## What it sends
 
-Nothing. The plugin makes no network requests, runs no MCP servers or connectors, and reads no credentials or tokens. Claude Code itself, and your use of Claude, are covered by [Anthropic's privacy policy](https://www.anthropic.com/legal/privacy).
+Nothing. The plugin makes no network requests, runs no MCP servers or connectors, and reads no credentials or tokens. Claude Code itself, and your use of Claude, are covered by [Anthropic's privacy policy](https://www.anthropic.com/legal/privacy). If you use it in Devin, Devin itself is covered by Cognition's privacy policy.
 
 ## Retention and children
 

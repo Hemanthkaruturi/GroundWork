@@ -137,7 +137,17 @@ GroundWork also runs in [Devin](https://devin.ai) (Devin CLI and Devin Desktop),
 Install GroundWork into this project. Clone https://github.com/Hemanthkaruturi/GroundWork.git into a new temporary folder outside this project, then run `bash <that folder>/setup/install.sh` from this project's root. If the script fails, show me its error and stop. Otherwise delete the temporary folder, show me what the script printed, and tell me to start a new Devin session.
 ```
 
-Devin runs [setup/install.sh](setup/install.sh), which puts GroundWork in your project's `.devin/` folder as Devin project skills and hooks rather than as a plugin. Commit that folder, and everyone who opens the project in Devin gets GroundWork. Commands have no prefix in this install: `/bootstrap`, `/approve`, `/bypass` and `/status`. To update, paste the same prompt again.
+Devin runs [setup/install.sh](setup/install.sh), which puts GroundWork in your project's `.devin/` folder as Devin project skills and hooks rather than as a plugin. Commit that folder, and everyone who opens the project in Devin gets GroundWork. Commands have no prefix in this install: `/bootstrap`, `/approve`, `/bypass` and `/status`.
+
+**To update an install made this way**, including one from the earlier bootstrap (before 0.1.7), paste the same prompt into Devin again. The script replaces its own files and keeps everything else, including your project documents and any hooks of your own. An earlier bootstrap install is converted to the new layout. Then check it:
+
+1. Open `.devin/groundwork-version`. It shows the `version` and `commit` now installed. An install from before 0.1.7 has no `version` line.
+2. Check that `.devin/skills/groundwork-specflow/` is gone. The earlier bootstrap put a copy of the plugin there. Each skill now has its own folder, such as `.devin/skills/approve/`.
+3. Check that `.devin/config.json` no longer lists `.devin/skills/groundwork-specflow` under `requiredPlugins`.
+4. Start a new Devin session, run `/hooks`, and look for the groundwork hooks (SessionStart, UserPromptSubmit, Stop, PreToolUse and PostToolUse running `.devin/groundwork/engine/groundwork.py`).
+5. Run `/status`. It should report where the project stands.
+
+Commit the changes in `.devin/` so your team gets the update too.
 
 Because this doesn't use Devin's plugin system, it's meant to work when your company has turned Devin plugins off. That hasn't been confirmed on such a setup yet. If `/hooks` lists no groundwork hooks there, please open an issue.
 

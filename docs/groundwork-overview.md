@@ -865,10 +865,10 @@ python3 .groundwork-install/setup/install.py
 
 If `python3` isn't found or opens the Microsoft Store message (common on Windows), run the second command with `py -3` instead, or `python`. If a .groundwork-install folder is already there from an earlier attempt, delete it first. The installer deletes it when it finishes.
 
-Do every step yourself; don't ask me to run anything. If a command fails, show me its error and stop there. Don't try to install GroundWork another way. If it succeeds, tell me only that GroundWork is installed and to start a new Devin session in this project.
+Do every step yourself; don't ask me to run anything. If a command fails, show me its error and stop there. Don't try to install GroundWork another way. If it succeeds, tell me that GroundWork is installed, and that to start using it I should open a new Devin session in this project and type /bootstrap there. That sets GroundWork up for this project (it runs groundwork init and writes the project documents with me).
 ```
 
-This installs GroundWork into the project's `.devin/` folder, without Devin's plugin system (5.29). Then start a new session. GroundWork loads at session start and leads from there, beginning with the project documents if they don't exist yet. Commit `.devin/` to share it with your team. To update, paste the same prompt again.
+This installs GroundWork into the project's `.devin/` folder, without Devin's plugin system (5.29). Then open a new Devin session in the project and type `/bootstrap`. It runs `groundwork init` and writes the project documents with you. Commit `.devin/` to share it with your team. To update, paste the same prompt again.
 
 Or install it as a plugin, for you in every project, then start a new session:
 

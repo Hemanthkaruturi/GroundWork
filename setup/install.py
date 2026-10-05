@@ -213,8 +213,8 @@ def main() -> None:
     print()
     print(f"GroundWork {version} is installed in .devin/ and checked: its session-start hook runs.")
     print("It loads when a Devin session starts, so it takes effect from the next session in this project.")
-    print("In that session, GroundWork leads the way. If the project documents don't exist yet, "
-          "it starts by writing them with you.")
+    print("Next: open a new Devin session in this project and type /bootstrap. That sets GroundWork up for the")
+    print("project: it runs groundwork init and writes the project documents with you.")
     print("To share GroundWork with your team, commit the .devin/ folder.")
 
 

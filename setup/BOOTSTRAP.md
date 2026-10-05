@@ -13,7 +13,7 @@ The bootstrap installs GroundWork into one project's `.devin/` folder as Devin p
    python3 .groundwork-install/setup/install.py
    ```
    On Windows, `python3` is often missing or opens a Microsoft Store message. Then run the second command with `py -3`, or `python`. If `.groundwork-install` already exists from an earlier attempt, delete it first. The installer deletes it when it finishes, whether or not the install worked. If a command fails, report its error to the user and stop. Don't work around the error by copying files yourself.
-3. Do every step yourself and don't ask the user to run anything. The script checks the install by running GroundWork's session-start hook. When it succeeds, tell the user only that GroundWork is installed and to start a new Devin session in this project. GroundWork loads at session start and leads from there.
+3. Do every step yourself and don't ask the user to run anything. The script checks the install by running GroundWork's session-start hook. When it succeeds, tell the user that GroundWork is installed, and that to start using it they open a new Devin session in this project and type `/bootstrap`. GroundWork loads at session start, and `/bootstrap` runs `groundwork init` and writes the project documents with them.
 
 Don't commit anything. The user decides when to commit the `.devin/` folder.
 

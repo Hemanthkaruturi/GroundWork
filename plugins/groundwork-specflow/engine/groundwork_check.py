@@ -21,7 +21,9 @@ import groundwork_core as C
 import groundwork_fresh as F
 import groundwork_layout as L
 import groundwork_people as PP
+import groundwork_quality as Q
 import groundwork_relations as R
+import groundwork_secrets as S
 
 # --- the shape of every governed document (STANDARD.md §4) ----------------------------
 
@@ -485,6 +487,18 @@ def check_layout(ctx: C.Ctx, r: Report) -> None:
                "run: groundwork.py codemap (descriptions are kept), then describe any new folders")
 
 
+def check_secrets(ctx: C.Ctx, r: Report) -> None:
+    """GW110–GW114: secrets come from the environment, `.env` stays out of git, no keys in files (§5h)."""
+    for f in S.assess(ctx.repo, ctx.config):
+        (r.err if f.rule == "GW111" else r.warn)(f.rule, ctx.repo / f.path, f.message, f.hint)
+
+
+def check_quality(ctx: C.Ctx, r: Report) -> None:
+    """GW120–GW123: a recorded toolchain with configs and commands, and files of a readable size (§5i)."""
+    for f in Q.assess(ctx.repo, ctx.config):
+        (r.err if f.rule == "GW120" else r.warn)(f.rule, ctx.repo / f.path, f.message, f.hint)
+
+
 def check_approval_records(ctx: C.Ctx, r: Report) -> None:
     for root in {ctx.repo, ctx.workspace} - {None}:
         for rel in C.load_approvals(root):
@@ -519,6 +533,8 @@ def check_ctx(ctx: C.Ctx, r: Report, seen: set[Path]) -> None:
         check_features(ctx, r)
         check_bugs(ctx, r)
         check_layout(ctx, r)
+        check_secrets(ctx, r)
+        check_quality(ctx, r)
         if not (ctx.workspace and ctx.workspace.resolve() in seen):     # a workspace check already did the whole graph
             check_relations(ctx, r, False)
 

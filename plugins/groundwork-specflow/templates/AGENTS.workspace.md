@@ -14,6 +14,11 @@ Instructions for coding agents. Humans: read PROJECT.md first.
 - Each repo records its code layout (`groundwork.py layout`, run inside it): the GroundWork standard folders, or "keep" —
   its own structure, where new code follows the existing patterns. Follow what the repo recorded.
 
+## Code quality
+Each repo records its toolchain (`groundwork.py quality`). Run `groundwork.py verify` after every change and fix what fails;
+never weaken a rule, add an ignore or skip a test to make it pass. `quality init` or `quality keep` fills this section with
+the repo's commands and the coding rules every agent follows.
+
 ## Working across repos
 - This is the **workspace**: it owns boundaries. Each repo owns its craft.
 - Stay in the repo you were asked about. A change that needs another repo is a conversation,

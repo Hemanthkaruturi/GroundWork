@@ -54,6 +54,8 @@ Use the **code-layout** skill. `discovery.json` → `layout` shows whether the r
   Keep → `groundwork.py layout keep`, and describe the existing folders in ARCHITECTURE.md → *Code map*. Migrate → `groundwork.py layout init --profile <p> --root <dir>`, then `layout map` / `--legacy`. **Never move existing code during bootstrap.**
 - **New repo:** ask the profile (service · cli · web · library), then `groundwork.py layout init --profile <p> --create`.
 - **Workspace:** decide per repo (run it inside each repo).
+- **Code quality toolchain (once per repo):** use the **code-quality** skill. Existing code: ask whether to adopt GroundWork's standard tools or keep the repo's own (**Keep own tools (Recommended)** — nothing reformatted; `groundwork.py quality keep` records its commands · **Adopt standard** — `quality init --create`; the formatter will rewrite files, so do it as its own change). New repo: `groundwork.py quality init --create`, then install the tools it names. Either way AGENTS.md gets a *Code quality* section.
+- **Credentials:** `init` makes `.env` git-ignored. If `check` reports a committed `.env` or a key written into a file, tell the user plainly that it must be removed **and rotated**. Don't fix it silently.
 - **Code map, always:** `init` writes `CODEMAP.md` from the code. Fill its **Holds** column (one line per folder, from what the code shows) and add notes. Run `groundwork.py codemap` again after the layout decision.
 
 ## AGENTS.md

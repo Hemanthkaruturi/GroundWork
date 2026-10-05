@@ -110,8 +110,8 @@ SERVER_SIDE = {"net/http", "net/http/*"}          # clients and servers alike: c
 
 ENV_READ = {
     "py": re.compile(r"\bos\.environ\b|\bos\.getenv\s*\(|\bload_dotenv\s*\(|\bdotenv_values\s*\(|^\s*from\s+os\s+import\s+[^\n]*\b(environ|getenv)\b", re.M),
-    "js": re.compile(r"\bprocess\.env\b|\bimport\.meta\.env\b|\bDeno\.env\b|\bBun\.env\b"),
-    "go": re.compile(r"\bos\.(Getenv|LookupEnv|Environ)\s*\("),
+    "js": re.compile(r"""\bprocess\.env\b|\bimport\.meta\.env\b|\bDeno\.env\b|\bBun\.env\b|\bdotenv\.config\s*\(|['"]dotenv/config['"]"""),
+    "go": re.compile(r"\bos\.(Getenv|LookupEnv|Environ)\s*\(|\bgodotenv\.(Load|Overload|Read)\s*\("),
 }
 JS_FETCH = re.compile(r"(?<![\w.$])(fetch|XMLHttpRequest|WebSocket|EventSource)\s*\(|new\s+(XMLHttpRequest|WebSocket|EventSource)\b")
 

@@ -1,0 +1,16 @@
+# GroundWork standard Go lint and format rules (STANDARD.md §5i).
+version: "2"
+linters:
+  default: standard
+  enable:
+    - errorlint
+    - gosec
+    - revive
+    - bodyclose
+    - noctx
+    - misspell
+    - gocritic
+formatters:
+  enable:
+    - gofmt
+    - goimports

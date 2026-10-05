@@ -166,6 +166,24 @@ def diagnose_ctx(ctx: C.Ctx, ws_children: bool = True) -> Diagnosis:
         st, why = M.state(ctx.repo)
         add("Code map", "ok" if st == "current" else "warn", f"CODEMAP.md {st}", why,
             "" if st == "current" else "groundwork.py codemap, then fill its Holds column")
+        import groundwork_secrets as S  # noqa: PLC0415
+        sec = S.assess(ctx.repo, ctx.config)
+        if any(f.rule == "GW111" for f in sec):
+            add("Credentials", "fail", ".env committed to git", "treat its secrets as leaked",
+                "git rm --cached .env, then rotate every credential it held")
+        elif sec:
+            add("Credentials", "warn", f"{len(sec)} finding(s)", "; ".join(sorted({f.rule for f in sec})), "groundwork.py check")
+        else:
+            add("Credentials", "ok", ".env git-ignored; no keys found in files")
+        import groundwork_quality as Q  # noqa: PLC0415
+        q = Q.load(ctx.repo, ctx.config)
+        if q is None:
+            add("Code quality", "warn", "no toolchain decision recorded", "adopt the standard tools or keep the repo's own?",
+                "code-quality skill (groundwork.py quality)")
+        else:
+            qf = Q.assess(ctx.repo, ctx.config)
+            add("Code quality", "warn" if qf else "ok", f"{q.mode} toolchain" + (f": {len(qf)} finding(s)" if qf else ""),
+                "; ".join(sorted({f.rule for f in qf})), "groundwork.py check; groundwork.py verify" if qf else "")
         lay = L.load(ctx.repo, ctx.config)
         if lay is None:
             add("Code layout", "warn", "no layout decision recorded",

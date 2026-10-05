@@ -10,10 +10,10 @@ GroundWork is a plugin for Claude Code and Devin. It makes the agent follow a sh
 
 | | |
 | --- | --- |
-| 17 skills | one for each step of the path, plus resume, refresh, bugs, ownership, code layout and plain writing |
+| 18 skills | one for each step of the path, plus resume, refresh, bugs, ownership, code layout, code quality and plain writing |
 | 6 hooks | the gate before edits and shell commands, session awareness, reminders, reply length |
-| 56 numbered rules | checked with no AI and no network, on a laptop, in a git hook and in CI |
-| 184 automated tests | the whole lifecycle, and every rule has a test that breaks exactly that rule |
+| 65 numbered rules | checked with no AI and no network, on a laptop, in a git hook and in CI |
+| 200 automated tests | the whole lifecycle, and every rule has a test that breaks exactly that rule |
 | 2 coding agents | Claude Code, and Devin (CLI and Desktop), from the same plugin |
 | 3 platforms | Linux, macOS and Windows, tested on Python 3.10 and 3.12 |
 | 0 network calls | it runs on your machine, collects nothing and sends nothing |
@@ -44,6 +44,8 @@ Every feature, in one line, with where to see it.
 | **Documents that stay true** | Freshness tracking flags stale documents, including the workspace ones | 5.12 |
 | **Code layout** | One decision per repo: the standard folders (business logic, connectors to outside systems, entry points, settings), or keep the existing structure. Never migrated without asking | 5.30 |
 | **Code map** | `CODEMAP.md` in every repo, generated from the code: which folder holds what, where outside systems are called, where settings are read | 5.31 |
+| **Credentials** | Secrets come only from environment variables (locally `.env`, git-ignored); a committed `.env` or a pasted key is caught | 5.32 |
+| **Code quality** | One recorded toolchain per repo (formatter, linter, types, tests), run by `verify`, plus ten coding rules every agent reads in AGENTS.md | 5.33 |
 | **Onboarding existing projects** | `init` gathers evidence, `doctor` shows how far the project is from the standard | 5.14, 5.18 |
 | **Enforcement dial and emergency bypass** | Block, warn or off, and a logged 60-minute bypass for real emergencies | 5.27 |
 | **Git hook and CI** | The same check on every commit and every pull request | 5.2, 5.13, 5.28 |
@@ -101,13 +103,15 @@ Fix *where* things live, *what* each document contains, and *who* approves. Leav
 ### Structure everyone shares
 - **Two levels, plus standalone.** A *workspace* holds the product-level truth (project brief, architecture, rules, contracts, decisions). Each *repo* holds its own code, specs and internals. A single repo with no workspace above it is *standalone* and carries both sets of documents. The agent always knows which level it is on, and a directory that is neither is *unknown*: nothing may be built there.
 - **Standard documents:** `PROJECT`, `ARCHITECTURE`, `CONSTITUTION` (the non-negotiable rules), `AGENTS`, RFCs, contracts, specs, plans, tasks, evals, bug records, handovers.
-- **A written standard** (`STANDARD.md`) with 56 numbered rules. `groundwork check` verifies them with no AI and no network, so it runs the same on a laptop, in a git hook and in CI.
+- **A written standard** (`STANDARD.md`) with 65 numbered rules. `groundwork check` verifies them with no AI and no network, so it runs the same on a laptop, in a git hook and in CI.
 
 ### Every repo looks the same inside
 - **A standard code layout.** Business logic lives in `core/`. Code that talks to an outside system (an LLM, a database, an HTTP API, a queue, email) lives in `connectors/`, one folder per system. Routes, commands and workers live in `entrypoints/`, and settings are read only in `config/`. A small wiring file plugs connectors into core. There are profiles for services, command-line tools, web front ends and libraries.
 - **Your structure is respected.** An existing repo is asked once: migrate to the standard layout, or keep its current structure. If it keeps it, nothing moves and new code follows the patterns already there. Moving code only ever happens as planned, approved work.
 - **A code map in every repo.** `CODEMAP.md` is generated from the code, whatever the layout decision. People and agents read it to find code instead of searching the whole codebase.
 - **Checked with no AI.** `groundwork check` warns when code breaks the layout, or when the map no longer matches the code.
+- **The same quality bar for every agent.** Each repo records one toolchain, either GroundWork's standard one or its own tools, and `groundwork.py verify` runs it after every task. Ten coding rules target the mistakes agents make most: duplication, over-engineering, swallowed errors, unchecked input, invented packages. They live in AGENTS.md, which other agents read too.
+- **Secrets stay out of git.** Code reads credentials only from environment variables, which locally come from a git-ignored `.env`. A committed `.env` is an error. A key pasted into code is caught, and the check never shows its value.
 
 ### Humans stay in control
 - **Approval is human-only.** Recorded against the exact document text, with who and when. An RFC can require several sign-offs, and a cross-repo one always needs at least two.
@@ -178,7 +182,7 @@ One sample product is used throughout. **ShopFront** is a workspace called `shop
 | Keeping it true | 5.12 freshness · 5.13 and 5.28 git hook and CI |
 | Style and defaults | 5.15 short replies · 5.16 other skills · 5.17 `uv` |
 | Agents | 5.29 running in Devin |
-| Code | 5.30 code layout · 5.31 code map |
+| Code | 5.30 code layout · 5.31 code map · 5.32 credentials · 5.33 code quality |
 
 ### 5.1 The agent always knows where it is
 `groundwork init` in the empty workspace, then `groundwork doctor` *(real output)*:
@@ -749,7 +753,7 @@ CODE MAP: CODEMAP.md - read it before searching the code; 1 folder(s) not descri
 CODE LAYOUT NOT DECIDED: this repo has code but no layout decision. Before writing code, use the code-layout skill
 to ask the user: migrate to the standard layout, or keep the current structure.
 ```
-Devin asks the migrate-or-keep question as a numbered round, and the answer is recorded like any other.
+Devin asks the migrate-or-keep question as a numbered round, and the answer is recorded like any other. Credentials and code quality (5.32, 5.33) need nothing Devin-specific either. Devin gets the same session rules, runs the same `verify`, and reads the same *Code quality* section in AGENTS.md. The plugins-off install copies the shipped tool configs along with the engine.
 
 Approval stays human: the user types `/groundwork-specflow:approve`, and Devin's agent is refused if it tries to run approve itself. Work is recorded `--via devin`, so `who` shows which agent built what.
 
@@ -825,16 +829,80 @@ The facts come from the code; people and agents write only the **Holds** column 
 
 The map knows when it is wrong. Adding a file to a known folder changes nothing. A new folder, a moved one, or a new outside system makes `check` report the map as out of date. `groundwork.py codemap` regenerates it and keeps every description, and only the new folder needs describing.
 
+### 5.32 Credentials: from the environment, never in git
+Every repo gets the same rule: code reads secrets only from environment variables. Locally they come from `.env`, and in production the platform sets them, so the code is the same in both. `groundwork init` makes sure `.env` can't be committed, and says so *(real output)*:
+```
+[sec] standalone: created PROJECT.md, ARCHITECTURE.md, CONSTITUTION.md, AGENTS.md, DECISIONS/, CODEMAP.md, .gitignore entry for .env
+```
+```
+# Local secrets (GroundWork): never commit them; list the names in .env.example
+.env
+.env.*
+!.env.example
+```
+On the standard layout, `.env` is loaded once, in `config/` (Python `load_dotenv()`, Node `--env-file`, Go `godotenv`). `layout init --create` writes a `.env.example` listing every name the code already reads, with no values *(real output)*:
+```
+# Every environment variable this app reads, with NO real values. Commit this file.
+# Copy it to .env (git-ignored) and fill in real values locally; in production the platform sets them.
+DATABASE_URL=
+SEARCH_API_KEY=
+```
+Then three things go wrong in `shop-api`: someone force-adds `.env`, pastes an API key into a connector, and adds a setting without listing it. The check catches all three, and never prints a secret *(real output)*:
+```
+ERROR   GW111  .env: a .env file is committed to git: every secret in it must be treated as leaked
+         → git rm --cached .env, make sure .gitignore ignores it, then rotate every credential it held
+warning GW113  src/shop_api/connectors/llm.py: line 2: looks like an Anthropic API key written into the file
+         → move it to .env (git-ignored), read it from the environment in config/, and rotate the key: anything committed must be treated as leaked
+warning GW112  .env.example: variables the code reads are not listed: SMTP_PASSWORD
+         → add each name with an empty or placeholder value; never a real secret
+```
+A committed `.env` is an error, because it is a leak and not a matter of style. The rest are warnings. A web front end that reads a secret-looking variable is also flagged, because whatever a browser app reads is shipped to every visitor. A repo that keeps its own structure keeps its own way of loading settings: only the three safety rules apply there (`.env` ignored, never committed, no keys in files).
+
+### 5.33 Code quality: one toolchain per repo, checked after every task
+Instructions alone don't hold: agents forget long rule files, and research on AI-written code finds the same faults again and again. Those are copy-pasted blocks instead of reuse, layers nobody needed, errors caught and ignored, input never checked, and packages that don't exist. So GroundWork relies on tools the repo commits, and on one command any agent runs.
+
+`shop-web` already has a Makefile. `groundwork.py quality` reads it and asks before changing anything *(real output)*:
+```
+No code quality decision recorded for this repo.
+It already has code: ask the user whether to adopt the standard toolchain or keep the repo's own tools.
+  keep:   groundwork.py quality keep      (records the commands below; changes no file)
+  adopt:  groundwork.py quality init --create   (adds configs; the formatter will rewrite files)
+Commands the repo's files show (evidence, not a decision):
+  lint    make lint
+  test    make test
+```
+Meena keeps the team's own tools, so no file is reformatted. A new repo instead gets GroundWork's standard toolchain: ruff, mypy and pytest for Python; prettier, eslint and tsc for TypeScript; golangci-lint and go test for Go. Its configs ship with the plugin. Either way, after every task the agent runs `groundwork.py verify`, and a task can't be marked done while it fails *(real output)*:
+```
+PASS  lint    make lint  (0.0s)
+FAIL  test    make test  (0.0s)
+        FAILED tests/test_search.py::test_empty_query - KeyError: q
+        1 failed, 41 passed in 0.82s
+
+verify: 1 passed, 1 failed — fix them; never weaken a rule to pass.
+```
+The agent may not make it green by switching a rule off, adding an ignore comment or skipping a test. CI runs the same command.
+
+`quality init` and `quality keep` also write a *Code quality* section into AGENTS.md: the commands, plus ten coding rules aimed at those known faults. AGENTS.md is read by most coding agents, with or without the plugin, so everyone works to the same bar *(illustration, first rules)*:
+```
+1. Reuse before writing: look in CODEMAP.md and search for an existing function first. Never copy-paste a block.
+2. Make the smallest change that meets the spec. No speculative abstractions, options or layers.
+3. Never swallow errors (no empty catch, no blind `except Exception`). Handle them at the entry point.
+4. Validate input where it enters (routes, commands, consumers). Parameterised SQL only; no shell built from input.
+5. Add a dependency only with the package manager, after checking it exists and is maintained; prefer what is already used.
+```
+On the standard toolchain, files over 400 lines are flagged, because long files hide duplication and mix jobs.
+
 ## 6. How it helps
 
 | If you are… | You get… |
 | --- | --- |
-| **A developer** | Clear specs before you code. Fewer rework loops. Know who to call. Pick up a colleague's half-done work. A contract when your change touches another repo. |
-| **A tech lead** | Consistent structure across repos and agents, down to where the code lives. Decisions recorded with reasons. Team rules written in a constitution and checked in every change. A check that runs in CI. |
+| **A developer** | Clear specs before you code. Fewer rework loops. Know who to call. Pick up a colleague's half-done work. A contract when your change touches another repo. One `verify` command that says whether your change is done. |
+| **A tech lead** | Consistent structure across repos and agents, down to where the code lives. Decisions recorded with reasons. Team rules written in a constitution and checked in every change. The same formatter, linter, type checker and tests in every repo, whichever agent wrote the code. A check that runs in CI. |
 | **A product owner** | The agent must ask before it builds. Written requirements you can approve. Traceability from request to release. |
 | **Support / on-call** | One command to find the owner, implementer, deployer and support contact. |
 | **A new joiner** | Read the project brief, the architecture and the code map. Handover packs. No archaeology. |
 | **A team of several repos** | Contracts and sign-offs for changes that cross repos. Dependencies that block the right work at the right time. |
+| **Security** | Secrets only in environment variables, `.env` kept out of git, and keys pasted into code caught before they ship. |
 | **Everyone** | Short, plain answers that don't hide the caveat. |
 
 ## 7. A 5-minute demo
@@ -849,12 +917,14 @@ The map knows when it is wrong. Adding a file to a known folder changes nothing.
 8. **Close the session, open a new one.** It shows what's in flight and resumes.
 9. **Ask "who owns this?"** One screen with names and contacts.
 10. **`groundwork doctor`.** The project's stage and next steps.
+11. **Paste a key into code.** Run `groundwork check`: it names the file and line, never the key, and tells you to rotate it.
+12. **Break a test, then `groundwork.py verify`.** The failing step and its output are shown, and the agent can't mark the task done until it passes.
 
 The step-by-step version is in `docs/manual-testing.md`.
 
 ## 8. What's inside
 
-**17 skills**
+**18 skills**
 
 | Skill | What it does |
 | --- | --- |
@@ -874,6 +944,7 @@ The step-by-step version is in `docs/manual-testing.md`.
 | `fix-bug` | Runs the bug lifecycle: diagnose, classify, cite, test first, fix |
 | `ownership` | Records and looks up who requested, owns, built, deployed and supports |
 | `code-layout` | Records each repo's choice (standard code folders, or keep its own structure), says where each kind of code goes, and keeps `CODEMAP.md` current |
+| `code-quality` | Records the repo's toolchain (standard or its own), runs `verify` after every task, and carries the ten coding rules |
 | `plain-writing` | Keeps replies and documents short, plain and decision-first |
 
 **6 hooks:** session start (awareness and in-flight work), every prompt (triage and style reminder), before edits and before shell commands (the gate, which can only deny and never approves anything), when another skill loads, and at reply end (optional length limit). The same hook file serves Claude Code and Devin. Its matchers name both agents' tools.
@@ -885,7 +956,7 @@ The step-by-step version is in `docs/manual-testing.md`.
 | Command | Purpose |
 | --- | --- |
 | `init`, `doctor` | onboard a project; show its stage and next steps |
-| `check`, `check --strict`, `check --json` | verify the 56 rules |
+| `check`, `check --strict`, `check --json` | verify the 65 rules |
 | `status`, `board`, `note`, `activate` | where things stand, what is in flight, where work stopped |
 | `new-rfc`, `new-feature`, `new-bug`, `activate-bug`, `plan-sync` | create documents; switch the active bug; pin the plan to the approved spec |
 | `approve`, `bypass` | human sign-off and the emergency bypass |
@@ -893,11 +964,12 @@ The step-by-step version is in `docs/manual-testing.md`.
 | `fresh`, `confirm` | detect stale documents; record a verified baseline |
 | `hooks install`, `hooks status`, `hooks uninstall` | manage the git hook, with `--vendor`, `--pre-push`, `--strict` |
 | `layout`, `layout init`, `layout keep`, `layout map` | show or record the repo's code layout: standard folders, or keep the existing structure |
+| `quality`, `quality init`, `quality keep`, `quality set`, `verify` | record the repo's code quality toolchain; run format, lint, types and tests |
 | `codemap`, `codemap --check` | write `CODEMAP.md` (where each kind of code lives) from the code; check it is current |
 
-**Quality:** 184 automated tests cover the whole lifecycle, on Linux, macOS and Windows, on Python 3.10 and 3.12. Every numbered rule has a test that breaks exactly that rule.
+**Quality:** 200 automated tests cover the whole lifecycle, on Linux, macOS and Windows, on Python 3.10 and 3.12. Every numbered rule has a test that breaks exactly that rule.
 
-**Privacy:** it runs locally, makes no network requests, has no telemetry, and reads no credentials. See `PRIVACY.md`.
+**Privacy:** it runs locally, makes no network requests, has no telemetry, and never uses, stores or sends credentials. The key check reports only where a key is, never the key itself, and never opens `.env`. See `PRIVACY.md`.
 
 ## 9. Honest limits
 
@@ -906,6 +978,8 @@ The step-by-step version is in `docs/manual-testing.md`.
 - Some checks are judgment calls by the agent (is this a bug or a change request? did the short reply keep every caveat? does this change follow the constitution?). The tool checks that the constitution check was done, not that the reasoning is right. Rules written as a command that fails when broken are enforced for real. The saved originals make mistakes recoverable.
 - Contracts are documents: the tool does not yet verify that a repo still honours the contract version it pinned.
 - It works with **Claude Code** and **Devin** (CLI and Desktop; Devin cloud sessions get the skills but no hook enforcement). The engine is agent-neutral, so other agents can get a thin adapter.
+- The coding rules are instructions, and agents can still slip. The linters, type checkers and tests run by `verify` are what actually hold the line, so a repo is only as strict as the tools it records. `verify` runs those tools, so they must be installed where it runs.
+- The key check looks for well-known key formats (Anthropic, OpenAI, AWS, GitHub, Slack, Google, Stripe, private keys). It doesn't find passwords or keys in unknown formats; use a dedicated secret scanner for that.
 - The code layout checks read imports as text, for Python, JavaScript/TypeScript and Go only. They can miss an unusual import or flag the odd false one, which is why they are warnings. Code in other languages is not checked and does not appear in the code map.
 - It adds steps. That is the point, but tiny fixes need the human-run bypass.
 
@@ -928,6 +1002,12 @@ The step-by-step version is in `docs/manual-testing.md`.
 **Does it work with Devin?** Yes, in the Devin CLI and Desktop app, with the same gate and documents. Devin cloud sessions get the skills but no hook enforcement, so add the git hook or the CI check there (5.28, 5.29). If your company has turned Devin plugins off, let Devin install GroundWork into the project instead (§11).
 
 **Will it restructure our existing code?** No. On first onboarding it asks: migrate to the standard layout, or keep the current structure. With *keep*, nothing moves and new code follows your patterns. With *migrate*, code moves only as planned, approved work. Either way, every repo gets a code map.
+
+**Will it reformat our code or change our linters?** Not unless you choose to. An existing repo is asked once: adopt GroundWork's standard tools, or keep its own. With *keep*, no config is added and no file is reformatted, and `verify` runs the commands you already have. With *adopt*, the reformat is made as a change of its own, so reviews stay readable.
+
+**Our agents keep writing the same kinds of bad code. Does this help?** Yes. The ten rules in AGENTS.md target the common faults: copy-paste instead of reuse, layers nobody needed, swallowed errors, unchecked input, invented packages. `verify` runs your linters, types and tests after every task, so code that breaks them can't be marked done. Rules a linter can check are enforced; the rest guide the agent and the reviewer.
+
+**Where do our API keys go?** In environment variables. Locally they come from `.env`, which GroundWork makes sure git ignores. The names go in `.env.example`, which is committed. In production your platform sets them, and the code doesn't change. A committed `.env` fails the check.
 
 **Why files, not a database?** Files live with the code, review in pull requests, and any person or agent can read them.
 

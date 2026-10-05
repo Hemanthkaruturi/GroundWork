@@ -15,7 +15,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-STANDARD_VERSION = "0.6.0"   # the version of STANDARD.md this code implements
+STANDARD_VERSION = "0.7.0"   # the version of STANDARD.md this code implements
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 TEMPLATES = PLUGIN_ROOT / "templates"

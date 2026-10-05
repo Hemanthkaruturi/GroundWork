@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**GroundWork (`groundwork-specflow`)** is a Claude Code plugin that also runs in Devin. This page says what it does with data. Last updated: 2026-09-30.
+**GroundWork (`groundwork-specflow`)** is a Claude Code plugin that also runs in Devin. This page says what it does with data. Last updated: 2026-10-05.
 
 ## Short version
 
@@ -9,6 +9,7 @@ GroundWork runs entirely on your machine. It collects no data, sends nothing ove
 ## What it reads
 
 - The files in your project, to check documents against the written standard.
+- To catch credentials written into code by mistake, `groundwork check` looks for key-shaped text (for example an API key prefix or a private key header) in files that are, or could be, committed. It reports only the file, the line and the kind of key. It never prints, stores or sends the matched text, and it never opens `.env` files.
 - Your local git identity (`git config user.name` and `user.email`, or the `USER` environment variable) and git history, to record who requested, approved, owns or deployed something.
 
 ## What it stores
@@ -23,7 +24,7 @@ These files live in your repository. You decide whether to commit or share them,
 
 ## What it sends
 
-Nothing. The plugin makes no network requests, runs no MCP servers or connectors, and reads no credentials or tokens. Claude Code itself, and your use of Claude, are covered by [Anthropic's privacy policy](https://www.anthropic.com/legal/privacy). If you use it in Devin, Devin itself is covered by Cognition's privacy policy.
+Nothing. The plugin makes no network requests, runs no MCP servers or connectors, and never uses, stores or transmits credentials or tokens. The key check above only notices them, so you can remove them. Claude Code itself, and your use of Claude, are covered by [Anthropic's privacy policy](https://www.anthropic.com/legal/privacy). If you use it in Devin, Devin itself is covered by Cognition's privacy policy.
 
 ## Retention and children
 

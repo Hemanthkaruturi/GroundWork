@@ -8,6 +8,7 @@ Humans:     groundwork.py status | approve <doc> | bypass <reason>
 People:     groundwork.py who <feature|RFC|bug> | who --person NAME | who --all | record <event> --ref R ...
 Resume:     groundwork.py board [--all] [--json] | note <text> | deps <feature|RFC> | new-bug <slug> | activate-bug <slug>
 Agents:     groundwork.py scaffold | new-rfc <slug> | new-feature <slug> --rfc N | activate <slug>
+Quality:    groundwork.py verify [--fix] [--step S] | quality [show|init [--create]|keep|set step=CMD]
 Code:       groundwork.py codemap [--check] | layout [--json] | layout init --profile P [--root R] [--create] | layout keep | layout map role=path [--legacy P]
 """
 from __future__ import annotations
@@ -38,7 +39,9 @@ import groundwork_hooks as H  # noqa: E402
 import groundwork_layout as L  # noqa: E402
 import groundwork_host as G  # noqa: E402
 import groundwork_people as P  # noqa: E402
+import groundwork_quality as Q  # noqa: E402
 import groundwork_relations as R  # noqa: E402
+import groundwork_secrets as S  # noqa: E402
 
 TRIAGE = ("Before changing any file, triage the request: a defect -> fix-bug skill; new or changed behaviour OR LOOK "
           "(UI redesign, restyle, copy) -> interview -> RFC -> approval -> spec -> plan -> tasks -> evals; continuing earlier work -> "
@@ -72,6 +75,8 @@ groundwork is active. These rules are enforced by hooks, not suggestions:
 16. UPSTREAM CHANGES: a plan/tasks/code never edits the spec silently. Found a spec problem? State the evidence, ask which reading is right (picker), amend the spec with a dated `## Changes` line (what and why), have the human re-approve, re-verify downstream, run `groundwork.py plan-sync`. Unresolved doubts are [NEEDS CLARIFICATION] markers, never chat footnotes.
 17. Always tell the user how to test what you built by hand, and write it into the spec's manual-test section.
 18. CODE LAYOUT: each repo records ONE decision (code-layout skill). STANDARD: code goes in fixed role folders: core (business logic, no I/O), connectors/<system> (the ONLY code that talks to LLMs, databases, HTTP APIs, queues, email), entrypoints (thin http/cli/workers), config (the only env/secret reads), and a wiring file that plugs connectors into core; core never imports connectors; no utils/helpers/common folders. KEEP: the user chose to keep the repo's own structure, so put new code where similar code already lives, copy its patterns, and never create layout folders or move existing code. An existing repo with no decision yet: ASK the user (migrate or keep) before writing code; never migrate without being asked. EVERY repo has CODEMAP.md (where each kind of code lives): read it before searching the code; after adding, moving or removing a folder run `groundwork.py codemap` and describe new folders in its Holds column.
+19. CREDENTIALS: code reads secrets ONLY from environment variables - never write a key, token or password into a file. Locally they come from `.env`, which must be git-ignored and never committed; every variable name goes in `.env.example` with no real value. Load `.env` in ONE place (config/ or the wiring file): Python `load_dotenv()` from python-dotenv (`uv add python-dotenv`), Node `--env-file=.env` or `dotenv`, Go `godotenv`; never let it override variables the platform already set. Front-end code never holds secrets (it ships to the browser); libraries never load `.env`. In a repo that keeps its own structure, keep its existing way of loading settings - only the safety rules apply.
+20. CODE QUALITY: each repo records ONE toolchain decision (code-quality skill): GroundWork's standard tools, or KEEP its own. After every task run `groundwork.py verify` (format, lint, types, tests) and fix what fails before marking it done; never weaken a rule, add an ignore or skip a test to get green. The coding rules are in AGENTS.md -> Code quality. An existing repo with no decision: ASK before adding or changing any tool config - a new formatter rewrites every file.
 Use `python3 ${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py status` (or `board`) any time you are unsure where you are."""
 RULES = RULES.replace("BREVITY_TEXT", BREVITY)
 
@@ -121,6 +126,7 @@ def describe(ctx: C.Ctx) -> str:
                       "unfinished": f"CODE MAP: CODEMAP.md - read it before searching the code; {why}: fill its Holds column.",
                       "outdated": "CODE MAP: CODEMAP.md no longer matches the code - run `groundwork.py codemap`, then fill any new Holds cells.",
                       "missing": "CODE MAP MISSING: run `groundwork.py codemap` to generate CODEMAP.md, then fill its Holds column."}[cm])
+        lines.append(Q.summary(Q.load(ctx.repo, ctx.config), L.has_code(ctx.repo)))
         lay = L.load(ctx.repo, ctx.config)
         if lay is not None:
             lines.append(L.summary(lay))
@@ -342,6 +348,10 @@ def scaffold_at(ctx: C.Ctx, dry: bool = False) -> list[str]:
         made.append(M.FILE)
         if not dry:
             M.write(base)
+    if ctx.level in ("repo", "standalone") and not S.env_ignored(base):      # local secrets never reach git
+        made.append(".gitignore entry for .env")
+        if not dry:
+            S.ensure_ignored(base)
     if not dry:
         gi = base / ".groundwork" / ".gitignore"
         if not gi.exists():
@@ -466,6 +476,9 @@ def cmd_layout(a) -> None:
             raise SystemExit("; ".join(lay.problems))
         L.write(repo, layout)
         made = L.create_folders(repo, lay) if a.create else []
+        if a.create and a.profile != "library" and S.example_names(repo)[0] is None:
+            (repo / ".env.example").write_text(S.example_stub(sorted(S.read_names(repo, lay))), encoding="utf-8")
+            made.append(".env.example")
         print(f"Recorded: standard layout, {a.profile} profile, root {layout['root']}."
               + (f" Created: {', '.join(made)}." if made else "")
               + ("" if a.create else " Folders are not created (add --create); map existing ones with: groundwork.py layout map role=path."))
@@ -509,6 +522,109 @@ def cmd_codemap(a) -> None:
     p = M.write(ctx.repo)
     st, why = M.state(ctx.repo)
     print(f"Wrote {p.name}." + (f" {why}: describe them in the Holds column." if st == "unfinished" else ""))
+
+
+def _repo_ctx(what: str) -> C.Ctx:
+    ctx = C.detect(Path.cwd())
+    if ctx.level not in ("repo", "standalone"):
+        raise SystemExit(f"The {what} is per repo. Run this inside a repository"
+                         + (" (the workspace holds no code)." if ctx.level == "workspace" else "."))
+    return ctx
+
+
+def cmd_quality(a) -> None:
+    ctx = _repo_ctx("code quality toolchain")
+    repo, current = ctx.repo, Q.load(ctx.repo)
+    raw = ctx.config.get("quality") if isinstance(ctx.config.get("quality"), dict) else {}
+    decided = {"decided_by": C.signer(), "decided": time.strftime("%Y-%m-%d")}
+    langs = Q.languages(repo)
+    if a.action == "show":
+        if current is None:
+            found = Q.detect_existing(repo)
+            print("No code quality decision recorded for this repo.")
+            if L.has_code(repo):
+                print("It already has code: ask the user whether to adopt the standard toolchain or keep the repo's own tools.")
+                print("  keep:   groundwork.py quality keep      (records the commands below; changes no file)")
+                print("  adopt:  groundwork.py quality init --create   (adds configs; the formatter will rewrite files)")
+                print("Commands the repo's files show (evidence, not a decision):")
+                print("\n".join(f"  {s:<7} {' · '.join(c)}" for s, c in found.items()) or "  none found")
+            else:
+                print("New code: groundwork.py quality init --create")
+            return
+        if current.problems:
+            raise SystemExit("Invalid quality entry: " + "; ".join(current.problems))
+        cmds, fix = Q.effective(repo, current)
+        print(f"Mode: {current.mode} ({'GroundWork standard toolchain' if current.mode == 'standard' else 'own tools, kept by choice'})")
+        print("Languages: " + (", ".join(langs) or "no code yet"))
+        for s in Q.STEPS:
+            print(f"  {s:<7} " + (" · ".join(cmds.get(s, [])) or "—") + (f"   (fix: {' · '.join(fix[s])})" if fix.get(s) else ""))
+        return
+    if a.action in ("init", "keep") and current is not None and not a.force:
+        raise SystemExit(f"This repo already recorded its quality decision (mode: {current.mode}). "
+                         "Change it only if the user asked to: add --force.")
+    if a.action == "init":
+        entry = {"mode": "standard", **decided}
+        C.write_config(repo, quality=entry)
+        made = Q.write_configs(repo, langs) if a.create else []
+        q = Q.load(repo)
+        agents = Q.ensure_agents_section(repo, q)
+        print("Recorded: GroundWork standard toolchain." + (f" Created: {', '.join(made)}." if made else ""))
+        installs = [Q.TOOLCHAIN[x]["install"] for x in ("python", "javascript", "go") if x in langs]
+        if installs:
+            print("Install the tools: " + " ; ".join(installs))
+        if agents:
+            print("AGENTS.md: Code quality section written (commands and coding rules for every agent).")
+        return
+    if a.action == "keep":
+        found = Q.detect_existing(repo)
+        C.write_config(repo, quality={"mode": "keep", "commands": found, **decided})
+        Q.ensure_agents_section(repo, Q.load(repo))
+        print("Recorded: this repo keeps its own tools. No config file was added or changed.")
+        print("Commands recorded: " + ("; ".join(f"{s}: {' · '.join(c)}" for s, c in found.items()) or "none found")
+              + ". Check them with the user; correct with: groundwork.py quality set step=\"command\"")
+        return
+    # set: step=command (repeat a step to give several commands; step= clears it)
+    if current is None:
+        raise SystemExit("Record a decision first: groundwork.py quality init  (standard) or  quality keep  (own tools).")
+    if not a.assign:
+        raise SystemExit('nothing to set: give step="command" pairs (flags such as --fix go after them)')
+    entry = dict(raw)
+    key = "fix" if a.fix else "commands"
+    table = {k: Q._cmds(v) for k, v in (entry.get(key) or {}).items()}
+    seen: set[str] = set()
+    for item in a.assign:
+        step, sep, cmd = item.partition("=")
+        if not sep or step not in Q.STEPS:
+            raise SystemExit(f"expected step=command with step one of {', '.join(Q.STEPS)}; got {item!r}")
+        if step not in seen:
+            table[step], seen = [], seen | {step}
+        if cmd.strip():
+            table[step].append(cmd.strip())
+    entry[key] = {k: v for k, v in table.items() if v}
+    C.write_config(repo, quality=entry)
+    Q.ensure_agents_section(repo, Q.load(repo))
+    a.action = "show"
+    cmd_quality(a)
+
+
+def cmd_verify(a) -> None:
+    ctx = _repo_ctx("verify command")
+    q = Q.load(ctx.repo)
+    if q is None:
+        raise SystemExit("No code quality decision recorded: groundwork.py quality init  (standard) or  quality keep  (own tools).")
+    if q.problems:
+        raise SystemExit("Invalid quality entry: " + "; ".join(q.problems))
+    results = Q.verify(ctx.repo, a.step or None, a.fix)
+    if not results:
+        print("Nothing to verify yet: no code, or no commands recorded (groundwork.py quality set step=CMD).")
+        return
+    for r in results:
+        print(f"{'PASS' if r.ok else 'FAIL'}  {r.step:<7} {r.command}  ({r.seconds:.1f}s)")
+        if not r.ok and r.tail:
+            print("\n".join("        " + ln for ln in r.tail.splitlines()))
+    bad = [r for r in results if not r.ok]
+    print(f"\nverify: {len(results) - len(bad)} passed, {len(bad)} failed" + (" — fix them; never weaken a rule to pass." if bad else ""))
+    raise SystemExit(1 if bad else 0)
 
 
 def cmd_doctor(a) -> None:
@@ -743,6 +859,15 @@ def main() -> None:
     p.add_argument("--as", dest="as_", choices=["repo", "workspace"], help="for a directory that is neither yet")
     p.add_argument("--retrofit", action="store_true", help="append missing required sections to existing foundation docs")
     p.add_argument("--dry-run", action="store_true"); p.set_defaults(fn=cmd_init)
+    p = sub.add_parser("quality", help="the repo's code quality toolchain: show, init (standard), keep (own tools), set")
+    p.add_argument("action", nargs="?", default="show", choices=["show", "init", "keep", "set"])
+    p.add_argument("assign", nargs="*", help='set: step="command", e.g. test="uv run pytest -q"')
+    p.add_argument("--create", action="store_true"); p.add_argument("--force", action="store_true")
+    p.add_argument("--fix", action="store_true", help="set: record fix commands instead of check commands")
+    p.set_defaults(fn=cmd_quality)
+    p = sub.add_parser("verify", help="run the repo's format, lint, type and test commands; exit 1 if any fails")
+    p.add_argument("--fix", action="store_true", help="run the fix commands first (formatter, lint autofix)")
+    p.add_argument("--step", action="append", choices=Q.STEPS); p.set_defaults(fn=cmd_verify)
     p = sub.add_parser("codemap", help="write CODEMAP.md: where each kind of code lives (kept: Holds column, Notes)")
     p.add_argument("--check", action="store_true", help="exit 1 unless the map is current and finished"); p.set_defaults(fn=cmd_codemap)
     p = sub.add_parser("layout", help="the repo's code layout: show, init (standard), keep (own structure), map")

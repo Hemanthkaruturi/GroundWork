@@ -51,7 +51,7 @@ class Init(Base):
     def test_as_repo_does_git_init_and_scaffolds(self):
         self.assertEqual(ca(self.root, "init", "--as", "repo").returncode, 0)
         self.assertTrue((self.root / ".git").exists() and (self.root / "PROJECT.md").exists())
-        self.assertEqual(json.loads((self.root / ".groundwork" / "config.json").read_text(encoding="utf-8"))["standard"], "0.6.0")
+        self.assertEqual(json.loads((self.root / ".groundwork" / "config.json").read_text(encoding="utf-8"))["standard"], "0.7.0")
 
     def test_as_workspace_marks_it(self):
         self.assertEqual(ca(self.root, "init", "--as", "workspace").returncode, 0)

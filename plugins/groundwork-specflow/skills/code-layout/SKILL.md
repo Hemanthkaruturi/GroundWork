@@ -76,6 +76,17 @@ tests/           mirrors the same folders; core tests need no network or databas
 
 **Connector rules:** one folder per external system; the connector converts vendor types and errors into core's own types (no SDK object ever reaches core); timeouts, retries, rate limits and logging of calls live here. Swapping a vendor touches only `connectors/<system>/` and the wiring file.
 
+## Credentials — every repo
+Code reads secrets **only from environment variables**. Never write a key, token, password or connection string into a file, not even "for now" or in a test.
+- **Locally, secrets live in `.env`**, which is git-ignored (`init` makes sure) and never committed. Every variable name goes in **`.env.example`** with an empty or placeholder value, and that file is committed. When you add a variable, add its name to `.env.example` in the same change.
+- **Load `.env` in one place**, `config/` (or the wiring file), so it never overrides values the platform already set:
+  - Python: `from dotenv import load_dotenv; load_dotenv()` (`uv add python-dotenv`), then `os.environ["NAME"]`.
+  - Node: `node --env-file=.env` (Node 20.6+) or `import "dotenv/config"`, then `process.env.NAME`.
+  - Go: `godotenv.Load()` in `cmd/<name>/main.go`, then `os.Getenv("NAME")`.
+- **Front ends never hold secrets.** Everything they read ships to the browser, so they get only public values and call a server for anything secret. **Libraries never load `.env`.**
+- **Keep repos:** keep the existing way of loading settings. Only the safety rules apply: `.env` ignored, never committed, no keys in files.
+- If you find a key in a file, don't just move it: tell the user it must be **rotated**, because it may already be in git history.
+
 ## The code map — every repo, whatever the decision
 `CODEMAP.md` at the repo root is generated from the code (`groundwork.py codemap`; `init` creates it). It lists each code folder with its role and file count, the outside systems called and from where, where settings are read, the entry/wiring files and the tests.
 - **Read it before searching the code.** It tells you where the code you need lives.

@@ -55,6 +55,12 @@ A bug is treated as a broken requirement. It has to be diagnosed and get a regre
 **Every repo looks the same inside.**
 Business logic, connections to outside systems (LLMs, databases, APIs) and settings each have one fixed folder, so people and agents know where to look. An existing repo is never restructured unless you choose to migrate it. If you keep its structure, new code follows the patterns already there. Either way, every repo gets a `CODEMAP.md`, generated from the code. It shows which folder holds what, where outside systems are called and where settings are read.
 
+**The same quality bar, whichever agent writes the code.**
+Each repo records one set of code quality tools: GroundWork's standard formatter, linter, type checker and test runner, or your own. One command, `verify`, runs them after every task. Ten coding rules in `AGENTS.md` target the mistakes agents make most, and other agents read that file too.
+
+**Secrets stay out of git.**
+Code reads credentials only from environment variables, which locally come from a `.env` file that GroundWork makes sure git ignores. A committed `.env` or an API key pasted into code is caught by the check, which never shows the key itself.
+
 **Docs that stay true.**
 GroundWork notices when the code or architecture moves on and flags the documents that are now out of date.
 
@@ -188,7 +194,7 @@ As a plugin, commands start with `/groundwork-specflow:`. To update, run `devin 
 
 Either way, start a new session after installing and run bootstrap: `/bootstrap` for the prompt install, `/groundwork-specflow:bootstrap` for the plugin. You approve documents when you're happy with them.
 
-**Code layout and the code map work the same in Devin, with either install.** Bootstrap writes `CODEMAP.md`, which shows which folder holds what, where outside systems are called and where settings are read. For a repo that already has code, it asks once whether to migrate to the standard layout or keep the current structure. If you keep it, nothing moves and new code follows your existing patterns. Every session tells Devin to read the map before searching the code.
+**Code layout, the code map and code quality work the same in Devin, with either install.** Bootstrap writes `CODEMAP.md`, which shows which folder holds what, where outside systems are called and where settings are read. For a repo that already has code, it asks once whether to migrate to the standard layout or keep the current structure. If you keep it, nothing moves and new code follows your existing patterns. Every session tells Devin to read the map before searching the code.
 
 What's different on Devin:
 

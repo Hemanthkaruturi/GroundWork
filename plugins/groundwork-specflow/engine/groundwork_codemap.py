@@ -163,6 +163,8 @@ def render(repo: Path, f: dict, previous: str = "") -> str:
         out.append("None found.")
     out += ["", "## Settings (where environment variables are read)", ""]
     out += [f"- `{x}`" for x in f["settings"]] or ["None found."]
+    import groundwork_secrets as S  # noqa: PLC0415
+    out += ["", S.summary(repo)]
     out += ["", "## Entry and wiring files", ""]
     out += [f"- `{x}`" for x in f["wiring"]] or ["None found."]
     out += ["", "## Tests", ""]

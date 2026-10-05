@@ -4,7 +4,7 @@ GroundWork is a plugin for Claude Code (and Devin) that makes a coding agent wor
 
 ## What it adds to Claude Code
 
-- **Skills** for each step: bootstrap, interview, RFC, spec, plan, tasks, evals, implement, handover, resume, bug fixing, ownership, code layout and plain writing.
+- **Skills** for each step: bootstrap, interview, RFC, spec, plan, tasks, evals, implement, handover, resume, bug fixing, ownership, code layout, code quality and plain writing.
 - **Commands you type:** `/groundwork-specflow:approve`, `/groundwork-specflow:bypass` (emergencies, logged) and `/groundwork-specflow:status`.
 - **Hooks** that run at session start, on each prompt, before file edits and shell commands, and at the end of a reply.
 - **A local command-line engine** (`engine/groundwork.py`) that checks projects against the written standard (`STANDARD.md`).
@@ -24,10 +24,12 @@ All hooks run the explicit path `${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py` wit
 
 - It runs a local Python 3 script, `engine/groundwork.py`, using only the standard library. There are no dependencies to install.
 - The Bash hook parses the proposed tool command as text to identify file writes. It never executes that command, dumps the process environment, or transmits hook input. Download commands mentioned in the standard are examples of writes to check, not commands the plugin runs.
+- `groundwork.py verify` runs the repo's own recorded check commands (formatter, linter, type checker, tests), and only when a person, an agent or CI runs it. No hook ever runs project tools. `quality init --create` copies GroundWork's tool configs into the repo, and never overwrites one.
+- `groundwork check` looks for key-shaped text in files that can be committed, to catch credentials pasted into code. It reports only the file, the line and the kind of key, never the text, and it never opens `.env` files. `init` adds `.env` to `.gitignore` if it is missing, and says so.
 - Discovery and freshness scans skip common secret files (`.env*`, keys, credential files, Terraform variables/state) and file symlinks.
 - It reads and writes files inside your project: the documents it manages, plus a `.groundwork/` folder for approvals, notes and freshness records.
 - It runs `git` to read your repository and, to record who approved or owns something, your local git identity (`git config user.name` and `user.email`) or the `USER` variable. That identity stays in your project files. It is never sent anywhere.
-- It does not read Git remote URLs, which can contain embedded credentials. It makes no network requests. It has no MCP servers, no telemetry, and reads no credentials or tokens.
+- It does not read Git remote URLs, which can contain embedded credentials. It makes no network requests. It has no MCP servers and no telemetry, and it never uses, stores or sends credentials or tokens.
 
 ## Install
 

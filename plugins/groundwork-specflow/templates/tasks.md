@@ -18,7 +18,7 @@ created: {{date}}
   - **Covers:** FR-1
 
 ## Verification
-- [ ] **T900** — full check/test command passes
+- [ ] **T900** — `groundwork.py verify` passes (format, lint, types, tests)
 - [ ] **T901** — every FR in the spec maps to at least one completed task
 - [ ] **T902** — the spec's manual-test section was run by hand and matches
 - [ ] **T903** — foundation docs (ARCHITECTURE/AGENTS/CONTRACTS/PROJECT) updated or explicitly unchanged; `groundwork.py fresh` is clean

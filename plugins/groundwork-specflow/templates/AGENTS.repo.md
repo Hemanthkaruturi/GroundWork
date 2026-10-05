@@ -23,6 +23,11 @@ where new code goes next to code of the same kind and copies its patterns.
 ## Conventions
 [TODO: language/style rules, folder layout, error handling, anything an agent gets wrong without being told]
 
+## Code quality
+Each repo records its toolchain (`groundwork.py quality`). Run `groundwork.py verify` after every change and fix what fails;
+never weaken a rule, add an ignore or skip a test to make it pass. `quality init` or `quality keep` fills this section with
+the repo's commands and the coding rules every agent follows.
+
 ## Process (enforced by the groundwork plugin)
 Interview → RFC → human approval → spec → plan → tasks → evals → implement → handover.
 Change behaviour ⇒ change the spec in the same change. Do not commit or push unless asked.

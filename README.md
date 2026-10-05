@@ -92,6 +92,21 @@ Prefer to install from the command line, or don't use a claude.ai account? Insta
 
 Use one route or the other, not both. If both are present, Claude Code loads the copy from the marketplace and ignores the synced one.
 
+**Alternative: Bootstrap installation (no marketplace required).** If your organization has disabled plugin marketplace access, you can install GroundWork directly into your project using the bootstrap method. This copies the plugin files to `.devin/skills/` so it works with Devin without requiring marketplace installation:
+
+```bash
+git clone https://github.com/Hemanthkaruturi/GroundWork.git .tmp-groundwork
+.tmp-groundwork/setup/install.sh
+```
+
+Or for a one-line installation:
+
+```bash
+git clone https://github.com/Hemanthkaruturi/GroundWork.git .tmp-groundwork && .tmp-groundwork/setup/install.sh
+```
+
+This installs GroundWork to `.devin/skills/groundwork-specflow/` and configures your project to load it automatically. See [setup/BOOTSTRAP.md](setup/BOOTSTRAP.md) for detailed instructions.
+
 **2. Set up your project.** Open Claude Code in your project (new or existing) and run:
 
 ```
@@ -127,6 +142,12 @@ claude plugin update groundwork-specflow@groundwork-specflow
 
 Restart Claude Code (or run `/reload-plugins`) to start using the new version. If it says you already have the latest version, there is nothing new to install yet.
 
+- **Installed via bootstrap:** To update, re-run the bootstrap installation commands. The version tracking in `.devin/groundwork-version` will be updated automatically:
+
+```bash
+git clone https://github.com/Hemanthkaruturi/GroundWork.git .tmp-groundwork && .tmp-groundwork/setup/install.sh
+```
+
 ### Using Devin instead
 
 GroundWork also runs in [Devin](https://devin.ai) (Devin CLI and Devin Desktop), from this same repository. You need Python 3.10+ and git, as above. Install it with:
@@ -142,6 +163,17 @@ This installs it for you, in every project. To install it for one project instea
   "requiredPlugins": ["Hemanthkaruturi/GroundWork#plugins/groundwork-specflow"]
 }
 ```
+
+Devin installs it when the project is opened.
+
+**Alternative: Bootstrap installation for Devin (no plugin system required).** If your organization has disabled the plugin system or you want to avoid it entirely, use the bootstrap method instead:
+
+```bash
+git clone https://github.com/Hemanthkaruturi/GroundWork.git .tmp-groundwork
+.tmp-groundwork/setup/install.sh
+```
+
+This copies the plugin directly to `.devin/skills/groundwork-specflow/` and configures your project to load it. No plugin system access is required. The bootstrap installation automatically adds the plugin to `.devin/config.json` so it loads when the project is opened.
 
 Devin installs it when the project is opened.
 

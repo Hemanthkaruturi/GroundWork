@@ -4,3 +4,7 @@ __pycache__/
 .venv/
 .DS_Store
 .env
+
+# GroundWork bootstrap temporary files
+.tmp-groundwork/
+.tmp-ca-standards/

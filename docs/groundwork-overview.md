@@ -2,7 +2,7 @@
 
 **Coding agents write code fast. GroundWork makes sure they write the right code, the way your team agreed, and that people can always see why.**
 
-GroundWork is a plugin for Claude Code. It makes the agent follow a shared, written plan: standard documents first, humans approve the important steps, and only then code. It is free and open source (MIT). The rules are enforced by the tool itself, not by asking nicely.
+GroundWork is a plugin for Claude Code and Devin. It makes the agent follow a shared, written plan: standard documents first, humans approve the important steps, and only then code. It is free and open source (MIT). The rules are enforced by the tool itself, not by asking nicely.
 
 **This is the base document for GroundWork.** It lists every feature, with a real example for each. Marketing material (slides, posts, one-pagers) should be built from it. Examples marked *(real output)* were produced by running the tool on the sample product described in section 5. Examples marked *(illustration)* show what a person or the agent writes or sees, and were not printed by the tool.
 
@@ -13,7 +13,8 @@ GroundWork is a plugin for Claude Code. It makes the agent follow a shared, writ
 | 16 skills | one for each step of the path, plus resume, refresh, bugs, ownership and plain writing |
 | 6 hooks | the gate before edits and shell commands, session awareness, reminders, reply length |
 | 46 numbered rules | checked with no AI and no network, on a laptop, in a git hook and in CI |
-| 154 automated tests | the whole lifecycle, and every rule has a test that breaks exactly that rule |
+| 170 automated tests | the whole lifecycle, and every rule has a test that breaks exactly that rule |
+| 2 coding agents | Claude Code, and Devin (CLI and Desktop), from the same plugin |
 | 3 platforms | Linux, macOS and Windows, tested on Python 3.10 and 3.12 |
 | 0 network calls | it runs on your machine, collects nothing and sends nothing |
 
@@ -36,7 +37,7 @@ Every feature, in one line, with where to see it.
 | **Cross-repo RFCs and contracts** | A change that crosses repos needs a versioned contract and more than one sign-off | 5.21, 5.22 |
 | **Evals and traceability** | Every requirement has a task, every acceptance criterion has a test scenario, written before code | 5.23 |
 | **Feature and RFC relationships** | depends on, builds against, extends, amends, supersedes, with cycle and clash detection | 5.10, 5.25 |
-| **Bug lifecycle** | A bug is a broken requirement: diagnose, classify, cite the requirement, test first | 5.9 |
+| **Bug lifecycle** | A bug is a broken requirement: record, diagnose, classify, cite the requirement, test first, prove, close | 5.9 |
 | **Resume anywhere** | A work board, notes, and files that survive closed sessions and hand-offs | 5.8 |
 | **Handover** | A standard pack so the next person or agent continues without guessing | 5.26 |
 | **Ownership and accountability** | Who requested, owns, built, deployed and supports every item, and whom to call | 5.11 |
@@ -47,6 +48,7 @@ Every feature, in one line, with where to see it.
 | **Short, plain replies** | Answer first, about 150 words, nothing important lost | 5.15 |
 | **Other skills can't skip the process** | A design skill is a tool for the build step, not a shortcut | 5.16 |
 | **Sensible defaults** | Python projects use `uv`, never `pip` | 5.17 |
+| **Claude Code and Devin** | One plugin, the same gate and documents, in either agent | 5.29, §11 |
 | **Private and cross-platform** | Runs locally, no telemetry, works on Linux, macOS and Windows | §8, §10 |
 | **Easy to install and update** | Two commands to install, auto-update or one command to update | §11 |
 
@@ -124,7 +126,7 @@ Fix *where* things live, *what* each document contains, and *who* approves. Leav
 - **Handover pack.** A standard document for finished or paused work: what was touched, what is done and what is deferred, decisions and rejected alternatives, contracts with examples, known limits, how to run and deploy, who supports it, and the next three actions.
 
 ### Real projects are messy, so it handles them
-- **Bug lifecycle.** A bug is a broken requirement. The fix is blocked until the bug is classified (code wrong, spec wrong, or decision wrong), tied to the exact requirements it violates (across several specs if needed), and given a regression test that fails first.
+- **Bug lifecycle.** A bug is a broken requirement. Each bug gets a record that moves from *open* to *diagnosed*, *fixed* and *closed*. The fix is blocked until the bug is reproduced, classified (code wrong, spec wrong, or decision wrong), tied to the exact requirements it violates (across several specs if needed), and given a regression test that fails first. It can't be called fixed until that test exists and the verification is written down.
 - **Feature relationships.** Each feature is independent, or says how it relates: *depends on*, *builds against* (parallel), *extends*, *amends*. RFCs can *supersede* or relate to earlier RFCs. Cycles, missing targets and clashes are flagged.
 - **Existing projects.** `groundwork init` reads a codebase and gathers evidence (stack, tests, CI, contributors). The agent drafts documents from facts and only asks what code can't tell. `groundwork doctor` shows how far a project is from the standard and what to do next.
 
@@ -149,6 +151,7 @@ Fix *where* things live, *what* each document contains, and *who* approves. Leav
 ### Private, portable and easy to keep current
 - Runs entirely on your machine. No network requests, no telemetry, no accounts. It reads your local git name and email only to record who did what, and keeps that in your own project files.
 - Works on Linux, macOS and Windows. It needs Python 3.10 or newer and git, and nothing else.
+- Works in **Claude Code** and in **Devin** (CLI and Desktop). Both agents run the same hooks, skills and engine, so a team can mix them on one project.
 - Two commands to install. Auto-update, or one command to update.
 
 ## 5. See each feature in action
@@ -166,6 +169,7 @@ One sample product is used throughout. **ShopFront** is a workspace called `shop
 | Work and people | 5.8 resume · 5.9 bugs · 5.11 who · 5.26 handover |
 | Keeping it true | 5.12 freshness · 5.13 and 5.28 git hook and CI |
 | Style and defaults | 5.15 short replies · 5.16 other skills · 5.17 `uv` |
+| Agents | 5.29 running in Devin |
 
 ### 5.1 The agent always knows where it is
 `groundwork init` in the empty workspace, then `groundwork doctor` *(real output)*:
@@ -278,18 +282,95 @@ IN FLIGHT (active first, then most recently touched)
       owner: priya@shop.example
 ```
 
-### 5.9 Fixing a bug without breaking the rules
-Priya reports "search crashes on empty query". The agent opens a bug record. It cannot touch code yet *(real output)*:
+### 5.9 Bugs: a bug is a broken requirement
+Priya reports "search crashes on an empty query". The first question is whether this is a bug at all. If the approved spec says it should work and it doesn't, it is a bug. If Priya wants behaviour nobody specified, it is a change request and goes through the interview and RFC instead. When the agent can't tell, it asks.
+
+Every bug follows the same path. The status sits in the bug record, and the gate reads it:
+```
+ report ──▶ open ──────▶ diagnosed ──────▶ fixed ──────────▶ closed
+            code blocked   code allowed:     regression test    the reporter
+                           test first,       exists and         checked it
+                           then the fix      verification       by hand
+                                             is written down
+```
+
+**1. Record it.** The agent asks who reported it and opens a record in the repo that has the bug *(real output)*:
+```
+> groundwork.py new-bug empty-query-crash --title "Search crashes on an empty query" --reported-by "Priya Nair"
+shop-api/bugs/001-empty-query-crash.md
+Active bug set to 001-empty-query-crash. Follow the fix-bug skill.
+```
+The record has seven fixed sections: *Report* (expected and actual), *Reproduction*, *Diagnosis* (the root cause with `file:line`, not the symptom), *Classification*, *Fix plan* (the smallest change, and what could regress), *Regression test* and *Verification*. Its front matter holds the status, severity, classification, the requirements it violates, the regression test, and who reported, owns and fixed it.
+
+**2. No code until it is diagnosed.** The agent reproduces the bug by actually running it, never by assuming. Until the record is complete, code edits are refused *(real output)*:
 ```
 DENIED: bug '001-empty-query-crash' does not yet allow edits: sections 1–6 still have 8
 unresolved marker(s) (use the fix-bug skill).
 ```
-The agent diagnoses it as a *code bug* and cites the requirement it violates. A made-up requirement is refused:
+The bug is on the work board, so a new session or a teammate can pick it up *(real output)*:
 ```
-DENIED: bug '001-empty-query-crash' does not yet allow edits: violates FR-9@001-product-search:
-no such requirement in that spec.
+ 1. [bug] shop-api/bug 001-empty-query-crash — open (unclassified)  (just now)  ← active
+      next: sections 1–6 still have 8 unresolved marker(s) (use the fix-bug skill)
+      owner: ravi@shop.example
 ```
-With the real requirement (FR-1) and a named regression test, editing is allowed. The regression test is written first and must fail before the fix. If the spec was wrong instead, the bug is classified as a *spec gap*, and the spec must be amended and re-approved first. If the original decision was wrong, it is a *design flaw* and needs a new approved RFC.
+
+**3. Classify it, and name the requirement.** Every bug is exactly one of three kinds, and each has a requirement the tool checks:
+
+| Kind | What went wrong | What must be true before the fix |
+| --- | --- | --- |
+| **code-bug** | The spec is right, the code is wrong | `violates:` lists every broken requirement, e.g. `[FR-1@001-product-search, AC-2@shop-web/001-search-box]`. Each one must exist in an approved spec |
+| **spec-gap** | The spec is silent, unclear or wrong | Each spec in `amends:` has a dated `## Changes` line naming the bug, and a human has approved it again |
+| **design-flaw** | The RFC's decision was wrong | `rfc:` points to a new or amending RFC that a human has approved |
+
+Each requirement is checked against the real documents *(real output, one line per attempt)*:
+```
+DENIED: ... violates FR-9@001-product-search: no such requirement in that spec
+DENIED: ... amends 001-product-search: amend its spec first — add a line for '001-empty-query-crash' under '## Changes'
+DENIED: ... amends 001-product-search: the amended spec is stale; the user must re-approve it
+DENIED: ... design-flaw needs `rfc:` set to a new or amending RFC (write it with the write-rfc skill)
+```
+If two specs or RFCs disagree about what is right, the agent never picks a winner. It asks, then treats the wrong one as a spec gap or a design flaw. Amending a spec for a spec gap works like any other amendment (5.7, 5.24): the plan, tasks and evals built on it must be re-checked too.
+
+**4. Regression test first, then the fix.** When the diagnosis is complete the agent sets `status: diagnosed`, but the gate stays shut until the record names its regression test *(real output)*:
+```
+DENIED: bug '001-empty-query-crash' does not yet allow edits: name the regression test in
+`regression_test:` (path relative to the repo) (use the fix-bug skill).
+```
+With `regression_test: tests/test_search.py::test_empty_query` set, the gate opens. The agent writes the test, runs it and watches it fail for the right reason, and only then fixes the code. A bug that turns out to be a real feature or a redesign stops here: the agent leaves a note and switches to the interview and RFC path.
+
+**5. "Fixed" has to be proven.** Setting `status: fixed` without the test file or a written verification fails the check *(real output)*:
+```
+ERROR   GW063  shop-api/bugs/001-empty-query-crash.md: regression_test 'tests/test_search.py::test_empty_query' does not exist
+ERROR   GW063  shop-api/bugs/001-empty-query-crash.md: §7 Verification is empty
+```
+*Verification* says what was run, what was seen, and whether the documents changed. If the fix changed something the foundation documents describe, the agent refreshes them first (5.12).
+
+**6. Close it, and keep the record.** The agent tells Priya how to check the fix by hand. When she is satisfied, the status becomes `closed` and the bug leaves the board. Who did what is recorded like any other work *(real output)*:
+```
+> groundwork.py record fixed --ref bugs/001-empty-query-crash --via claude-code
+recorded fixed on bugs/001-empty-query-crash by ravi@shop.example
+
+> groundwork.py who bugs/001-empty-query-crash
+bugs/001-empty-query-crash  [bug]  Search crashes on an empty query
+  Reported by     Priya Nair (Product owner) — priya@shop.example
+  Owner           Ravi Kumar (Backend lead) — ravi@shop.example
+  Fixed by        Ravi Kumar (Backend lead) — ravi@shop.example
+```
+
+**Several bugs at once.** Each bug has its own record and number. `groundwork.py activate-bug <NNN-slug>` switches which one the gate is checking.
+
+**Emergencies.** If production is on fire, only a human can lift the gate, for an hour and logged (5.27). Afterwards the agent writes the bug record anyway, so the reason and the regression test exist.
+
+**What `check` enforces on bug records**
+
+| Rule | Level | Fails when |
+| --- | --- | --- |
+| GW060 | error | front matter is wrong, the id doesn't match the file name, or the status is unknown |
+| GW061 | error | a completed record is missing a section |
+| GW062 | error | a diagnosed bug doesn't meet its kind's requirement (table above), or names no regression test |
+| GW063 | error | a fixed or closed bug's regression test doesn't exist, or *Verification* is empty |
+| GW064 | warning | an open bug record is still unfinished |
+| GW065 | error | a bug claims `diagnosed` or later but still has unresolved markers |
 
 ### 5.10 Features that depend on each other
 `shop-web/001-search-box` needs the search API. It says so in its spec (`depends_on: [shop-api/001-product-search]`). Until the API is done *(real output)*:
@@ -641,6 +722,22 @@ jobs:
 ```
 `check --strict` treats warnings as failures, so a stale document or a missing owner fails the pull request. `check --json` gives machine-readable output.
 
+### 5.29 Running in Devin
+The same plugin runs in Devin's CLI and Desktop app. Devin loads its hooks, skills and engine unchanged, so the gate, approvals, the board and every document work as in Claude Code. The engine sees which agent is calling and answers in that agent's format. Devin edits files with `write`, `edit` and `apply_patch` and runs shell commands with `exec`, and all four are gated. A patch is read file by file, so one allowed document cannot carry a code change past the gate *(real output, from Devin's hook interface)*:
+```
+{"decision": "block", "reason": "groundwork-specflow: bug '001-empty-query-crash' does not yet allow edits:
+ sections 1–6 still have 8 unresolved marker(s) (use the fix-bug skill). Approval and bypass are human acts."}
+```
+Devin has no clickable picker, so on Devin the session rules ask for questions in rounds instead *(real output)*:
+```
+8. ASK IN ROUNDS: up to 4 questions per round, each with a short numbered list of options, your recommendation
+first and marked (Recommended). Make the round the whole reply, end your turn and wait; write down the answers,
+then ask the next round.
+```
+Approval stays human: the user types `/groundwork-specflow:approve`, and Devin's agent is refused if it tries to run approve itself. Work is recorded `--via devin`, so `who` shows which agent built what.
+
+**Differences to know about.** Devin cloud sessions don't run plugin hooks. There, the skills guide the agent, but nothing blocks a code edit. Devin also runs plugin hooks "best effort": a hook that fails is skipped rather than stopping the session. The git hook and CI check (5.28) close that gap, because they check every commit whichever agent made it.
+
 ## 6. How it helps
 
 | If you are… | You get… |
@@ -691,9 +788,9 @@ The step-by-step version is in `docs/manual-testing.md`.
 | `ownership` | Records and looks up who requested, owns, built, deployed and supports |
 | `plain-writing` | Keeps replies and documents short, plain and decision-first |
 
-**6 hooks:** session start (awareness and in-flight work), every prompt (triage and style reminder), before edits and before shell commands (the gate, which can only deny and never approves anything), when another skill loads, and at reply end (optional length limit).
+**6 hooks:** session start (awareness and in-flight work), every prompt (triage and style reminder), before edits and before shell commands (the gate, which can only deny and never approves anything), when another skill loads, and at reply end (optional length limit). The same hook file serves Claude Code and Devin. Its matchers name both agents' tools.
 
-**Commands you type:** `/groundwork-specflow:approve`, `/groundwork-specflow:bypass` (emergencies, logged), `/groundwork-specflow:status`.
+**Commands you type:** `/groundwork-specflow:approve`, `/groundwork-specflow:bypass` (emergencies, logged), `/groundwork-specflow:status`. They are the same in Claude Code and Devin. In Devin, only the user can run them.
 
 **A command-line engine** (`groundwork.py`), pure Python with no dependencies and no Claude needed:
 
@@ -702,13 +799,13 @@ The step-by-step version is in `docs/manual-testing.md`.
 | `init`, `doctor` | onboard a project; show its stage and next steps |
 | `check`, `check --strict`, `check --json` | verify the 46 rules |
 | `status`, `board`, `note`, `activate` | where things stand, what is in flight, where work stopped |
-| `new-rfc`, `new-feature`, `new-bug`, `plan-sync` | create documents; pin the plan to the approved spec |
+| `new-rfc`, `new-feature`, `new-bug`, `activate-bug`, `plan-sync` | create documents; switch the active bug; pin the plan to the approved spec |
 | `approve`, `bypass` | human sign-off and the emergency bypass |
 | `deps`, `who`, `record` | relations, responsibility, and recording who did what |
 | `fresh`, `confirm` | detect stale documents; record a verified baseline |
 | `hooks install`, `hooks status`, `hooks uninstall` | manage the git hook, with `--vendor`, `--pre-push`, `--strict` |
 
-**Quality:** 154 automated tests cover the whole lifecycle, on Linux, macOS and Windows, on Python 3.10 and 3.12. Every numbered rule has a test that breaks exactly that rule.
+**Quality:** 170 automated tests cover the whole lifecycle, on Linux, macOS and Windows, on Python 3.10 and 3.12. Every numbered rule has a test that breaks exactly that rule.
 
 **Privacy:** it runs locally, makes no network requests, has no telemetry, and reads no credentials. See `PRIVACY.md`.
 
@@ -737,6 +834,8 @@ The step-by-step version is in `docs/manual-testing.md`.
 
 **Does it send our code or data anywhere?** No. It makes no network requests and has no telemetry. It reads your local git name and email to record who did what, and keeps that in your own project files.
 
+**Does it work with Devin?** Yes, in the Devin CLI and Desktop app, with the same gate and documents. Devin cloud sessions get the skills but no hook enforcement, so add the git hook or the CI check there (5.28, 5.29).
+
 **Why files, not a database?** Files live with the code, review in pull requests, and any person or agent can read them.
 
 ## 11. Get started
@@ -754,6 +853,14 @@ Then open Claude Code in your project and run `/groundwork-specflow:bootstrap`. 
 
 **Installed it before it was renamed?** It used to be called `groundwork`. If updating fails with `Plugin "groundwork" not found`, run `/plugin install groundwork-specflow@groundwork` once.
 
+**Using Devin?** Install from the same repository, then start a new session and run `/hooks` to check the groundwork hooks are loaded:
+
+```
+devin plugins install Hemanthkaruturi/GroundWork#plugins/groundwork-specflow
+```
+
+Then run `/groundwork-specflow:bootstrap` as above. To update: `devin plugins update groundwork-specflow`.
+
 **Existing project?** See where it stands without changing anything: `python3 <plugin>/engine/groundwork.py doctor` and `init --dry-run`.
 
 Full reference: `plugins/groundwork-specflow/STANDARD.md`. Hands-on scenarios: `docs/manual-testing.md`.
@@ -761,6 +868,7 @@ Full reference: `plugins/groundwork-specflow/STANDARD.md`. Hands-on scenarios: `
 ## 12. Where it goes next
 
 - Hooks that install themselves for every teammate on clone, and ready-made CI templates.
-- Adapters so other coding agents follow the same standard.
+- Adapters for more coding agents, beyond Claude Code and Devin.
+- Hook enforcement in Devin cloud sessions, once Devin runs plugin hooks there.
 - Automatic checks that each repo still honours the contract version it pinned.
 - A dashboard view of the work board and ownership map.

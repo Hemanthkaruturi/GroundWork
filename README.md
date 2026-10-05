@@ -164,7 +164,7 @@ This installs it for you, in every project. To install it for one project instea
 }
 ```
 
-Devin installs it when the project is opened.
+Devin installs it when the project is opened. This form, with the `#plugins/groundwork-specflow` path inside `requiredPlugins`, hasn't been tested in Devin yet.
 
 **Alternative: Bootstrap installation for Devin (no plugin system required).** If your organization has disabled the plugin system or you want to avoid it entirely, use the bootstrap method instead:
 
@@ -184,6 +184,7 @@ What's different on Devin:
 - **Questions come as numbered options in the reply** rather than clickable choices, because Devin has no picker tool.
 - **Rules are enforced only in the Devin CLI and Devin Desktop.** Devin doesn't run plugin hooks in cloud sessions, so there GroundWork's skills guide the agent but nothing blocks a code edit.
 - **Devin may skip a hook that fails.** It runs plugin hooks "best effort": if one fails to load or run, the session carries on without it. Add the git hook from `bootstrap` (or `groundwork.py hooks install`) so commits are checked either way.
+- **Your company may have turned plugins off.** If Devin says CLI plugins are disabled by your organization, no install method works (`--local` and `.devin/config.json` included) until a Devin enterprise admin turns on **Devin CLI plugins** in Enterprise settings. Until then, the git hook (`groundwork.py hooks install`) still checks commits.
 
 **Installed the plugin before it was renamed?** It used to be called `groundwork`. If updating fails with `Plugin "groundwork" not found`, run this once in Claude Code, then restart:
 

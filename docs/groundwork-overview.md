@@ -859,6 +859,16 @@ Then open Claude Code in your project and run `/groundwork-specflow:bootstrap`. 
 devin plugins install Hemanthkaruturi/GroundWork#plugins/groundwork-specflow
 ```
 
+That installs it for you, in every project. To install it for one project instead, so everyone who opens the repository in Devin gets it, add it to `.devin/config.json` at the repository root:
+
+```json
+{
+  "requiredPlugins": ["Hemanthkaruturi/GroundWork#plugins/groundwork-specflow"]
+}
+```
+
+Devin installs it when the project is opened. This form, with the `#plugins/groundwork-specflow` path inside `requiredPlugins`, hasn't been tested in Devin yet.
+
 Then run `/groundwork-specflow:bootstrap` as above. To update: `devin plugins update groundwork-specflow`.
 
 **Existing project?** See where it stands without changing anything: `python3 <plugin>/engine/groundwork.py doctor` and `init --dry-run`.

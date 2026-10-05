@@ -134,18 +134,23 @@ GroundWork also runs in [Devin](https://devin.ai) (Devin CLI and Devin Desktop),
 **Let Devin install it.** Open Devin in your project and paste this prompt:
 
 ```
-Install GroundWork into this project. From this project's root, run this as one command, exactly as written:
+Install GroundWork into this project. From this project's root, run these two commands, one after the other, exactly as written. They work in any shell, on Linux, macOS, Windows and WSL:
 
-( GW_TMP=$(mktemp -d) && git clone -q https://github.com/Hemanthkaruturi/GroundWork.git "$GW_TMP/GroundWork" && bash "$GW_TMP/GroundWork/setup/install.sh"; rc=$?; rm -rf "$GW_TMP"; exit $rc )
+git clone -q --depth 1 https://github.com/Hemanthkaruturi/GroundWork.git .groundwork-install
+python3 .groundwork-install/setup/install.py
 
-Do every step yourself; don't ask me to run anything. If it fails, show me its error and stop there. Don't try to install GroundWork another way. If it succeeds, tell me only that GroundWork is installed and to start a new Devin session in this project.
+If `python3` isn't found or opens the Microsoft Store message (common on Windows), run the second command with `py -3` instead, or `python`. If a .groundwork-install folder is already there from an earlier attempt, delete it first. The installer deletes it when it finishes.
+
+Do every step yourself; don't ask me to run anything. If a command fails, show me its error and stop there. Don't try to install GroundWork another way. If it succeeds, tell me only that GroundWork is installed and to start a new Devin session in this project.
 ```
 
-Devin runs [setup/install.sh](setup/install.sh), which puts GroundWork in your project's `.devin/` folder as Devin project skills and hooks rather than as a plugin. Commit that folder, and everyone who opens the project in Devin gets GroundWork. Commands have no prefix in this install: `/bootstrap`, `/approve`, `/bypass` and `/status`.
+Devin runs [setup/install.py](setup/install.py), which puts GroundWork in your project's `.devin/` folder as Devin project skills and hooks rather than as a plugin. Commit that folder, and everyone who opens the project in Devin gets GroundWork. Commands have no prefix in this install: `/bootstrap`, `/approve`, `/bypass` and `/status`.
 
 The install script checks its own work: it runs GroundWork's session-start hook the way Devin will, and fails with the error if that doesn't work. GroundWork loads when a Devin session starts, so start a new session after installing. GroundWork then leads the way: if the project documents don't exist yet, it starts by writing them with you.
 
 **To update**, paste the same prompt into Devin again, then start a new session. This also updates an install from the earlier bootstrap (before 0.1.7) and converts it to the new layout. Your project documents and any hooks of your own are kept. `.devin/groundwork-version` shows which version is installed.
+
+The install works the same on Linux, macOS, Windows and WSL, and needs Python 3.10+ and git. On Windows, GroundWork's hooks run in cmd, Git Bash and PowerShell 7, but not in Windows PowerShell 5.1, and Devin doesn't document which shell it uses for hooks there. The installer checks the hooks in cmd.
 
 Because this doesn't use Devin's plugin system, it's meant to work when your company has turned Devin plugins off. That hasn't been confirmed on such a setup yet. If a new session there shows no sign of GroundWork, please open an issue.
 

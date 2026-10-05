@@ -98,7 +98,7 @@ ASK_RULE_DEVIN = ("8. ASK IN ROUNDS: up to 4 questions per round, each with a sh
                   "next round. Never scatter questions through a longer reply.")
 
 
-# setup/install.sh puts the engine in <project>/.devin/groundwork and the skills in .devin/skills, with no plugin.
+# setup/install.py puts the engine in <project>/.devin/groundwork and the skills in .devin/skills, with no plugin.
 BOOTSTRAPPED = PLUGIN_ROOT.parent.name == ".devin"
 BOOTSTRAP_NOTE = ("- GroundWork is installed in this project's .devin/ folder, not as a plugin, so its commands have no prefix: "
                   "/approve, /bypass, /status, /bootstrap. Where a message says /groundwork-specflow:<name>, tell the user /<name>.")

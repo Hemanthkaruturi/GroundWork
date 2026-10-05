@@ -7,11 +7,12 @@ The bootstrap installs GroundWork into one project's `.devin/` folder as Devin p
 ## Procedure
 
 1. Work from the root of the target project, not from a GroundWork clone.
-2. Run this as **one** command. Shell variables may not survive between separate commands, so don't split it up:
-   ```bash
-   ( GW_TMP=$(mktemp -d) && git clone -q https://github.com/Hemanthkaruturi/GroundWork.git "$GW_TMP/GroundWork" && bash "$GW_TMP/GroundWork/setup/install.sh"; rc=$?; rm -rf "$GW_TMP"; exit $rc )
+2. Run these two commands, one after the other. They contain no shell variables or operators, so they work the same in bash, zsh, PowerShell and cmd:
    ```
-   It clones GroundWork into a temporary folder outside the project, runs the install script, and deletes the folder again. If it fails, report its error to the user and stop. Don't work around the error by copying files yourself.
+   git clone -q --depth 1 https://github.com/Hemanthkaruturi/GroundWork.git .groundwork-install
+   python3 .groundwork-install/setup/install.py
+   ```
+   On Windows, `python3` is often missing or opens a Microsoft Store message. Then run the second command with `py -3`, or `python`. If `.groundwork-install` already exists from an earlier attempt, delete it first. The installer deletes it when it finishes, whether or not the install worked. If a command fails, report its error to the user and stop. Don't work around the error by copying files yourself.
 3. Do every step yourself and don't ask the user to run anything. The script checks the install by running GroundWork's session-start hook. When it succeeds, tell the user only that GroundWork is installed and to start a new Devin session in this project. GroundWork loads at session start and leads from there.
 
 Don't commit anything. The user decides when to commit the `.devin/` folder.

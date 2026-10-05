@@ -188,10 +188,12 @@ As a plugin, commands start with `/groundwork-specflow:`. To update, run `devin 
 
 Either way, start a new session after installing and run bootstrap: `/bootstrap` for the prompt install, `/groundwork-specflow:bootstrap` for the plugin. You approve documents when you're happy with them.
 
+**Code layout and the code map work the same in Devin, with either install.** Bootstrap writes `CODEMAP.md`, which shows which folder holds what, where outside systems are called and where settings are read. For a repo that already has code, it asks once whether to migrate to the standard layout or keep the current structure. If you keep it, nothing moves and new code follows your existing patterns. Every session tells Devin to read the map before searching the code.
+
 What's different on Devin:
 
-- **Questions come as numbered options in the reply** rather than clickable choices, because Devin has no picker tool.
-- **Rules are enforced only in the Devin CLI and Devin Desktop.** Devin doesn't run plugin hooks in cloud sessions, so there GroundWork's skills guide the agent but nothing blocks a code edit.
+- **Questions come as numbered options in the reply** rather than clickable choices, because Devin has no picker tool. That includes the migrate-or-keep question for the code layout.
+- **Rules are enforced only in the Devin CLI and Devin Desktop.** Devin doesn't run plugin hooks in cloud sessions, so there GroundWork's skills guide the agent but nothing blocks a code edit. Cloud sessions also miss the session-start reminder about the code layout and `CODEMAP.md`, so run `groundwork check` in CI to catch layout breaks and an out-of-date map.
 - **Devin may skip a hook that fails.** It runs plugin hooks "best effort": if one fails to load or run, the session carries on without it. Add the git hook from `bootstrap` (or `groundwork.py hooks install`) so commits are checked either way.
 - **Your company may have turned plugins off.** If Devin says CLI plugins are disabled by your organization, the plugin install won't load, whether for you, with `--local` or through `.devin/config.json`. Use the prompt above instead.
 

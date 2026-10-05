@@ -13,6 +13,6 @@ If `python3` isn't found or opens the Microsoft Store message (common on Windows
 Do every step yourself; don't ask me to run anything. If a command fails, show me its error and stop there. Don't try to install GroundWork another way. If it succeeds, tell me that GroundWork is installed, and that to start using it I should open a new Devin session in this project and type /bootstrap there. That sets GroundWork up for this project (it runs groundwork init and writes the project documents with me).
 ```
 
-Devin installs GroundWork and the script checks the install. Then open a new Devin session in the project and type `/bootstrap`. GroundWork loads at session start, and `/bootstrap` sets it up for the project: it runs `groundwork init` and writes the project documents with you. Commit the `.devin/` folder so your team gets GroundWork too. To update, paste the same prompt again.
+Devin installs GroundWork and the script checks the install. Then open a new Devin session in the project and type `/bootstrap`. GroundWork loads at session start, and `/bootstrap` sets it up for the project: it runs `groundwork init` and writes the project documents with you. It also writes `CODEMAP.md`, a map of where each kind of code lives. If the repo already has code, it asks whether to migrate to the standard code layout or keep the current structure. Commit the `.devin/` folder so your team gets GroundWork too. To update, paste the same prompt again.
 
 The steps the agent follows, and what the script changes, are in [BOOTSTRAP.md](BOOTSTRAP.md).

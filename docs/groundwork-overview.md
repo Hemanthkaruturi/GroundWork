@@ -743,11 +743,19 @@ Devin has no clickable picker, so on Devin the session rules ask for questions i
 first and marked (Recommended). Make the round the whole reply, end your turn and wait; write down the answers,
 then ask the next round.
 ```
+The code layout and code map (5.30, 5.31) work the same way. In a repo with code and no layout decision yet, Devin's session starts with *(real output, from Devin's hook interface)*:
+```
+CODE MAP: CODEMAP.md - read it before searching the code; 1 folder(s) not described: fill its Holds column.
+CODE LAYOUT NOT DECIDED: this repo has code but no layout decision. Before writing code, use the code-layout skill
+to ask the user: migrate to the standard layout, or keep the current structure.
+```
+Devin asks the migrate-or-keep question as a numbered round, and the answer is recorded like any other.
+
 Approval stays human: the user types `/groundwork-specflow:approve`, and Devin's agent is refused if it tries to run approve itself. Work is recorded `--via devin`, so `who` shows which agent built what.
 
 **Differences to know about.** Devin cloud sessions don't run plugin hooks. There, the skills guide the agent, but nothing blocks a code edit. Devin also runs plugin hooks "best effort": a hook that fails is skipped rather than stopping the session. The git hook and CI check (5.28) close that gap, because they check every commit whichever agent made it.
 
-**Without Devin's plugin system.** Some companies turn Devin plugins off, and then no plugin install loads. For that case, Devin can install GroundWork into the project itself (§11). `setup/install.py` puts the engine in `.devin/groundwork/`, each skill and command in `.devin/skills/`, and the hooks in `.devin/hooks.v1.json`. These are Devin's project skills and hooks, not a plugin. The gate, approvals and documents work the same, and commands have no prefix: `/approve`, `/bypass`, `/status`. The script checks its own install by running the session-start hook the way Devin will. It runs on Linux, macOS, Windows and WSL. Committing `.devin/` gives the whole team GroundWork. That this works while plugins are turned off hasn't been confirmed yet.
+**Without Devin's plugin system.** Some companies turn Devin plugins off, and then no plugin install loads. For that case, Devin can install GroundWork into the project itself (§11). `setup/install.py` puts the engine in `.devin/groundwork/`, each skill and command in `.devin/skills/`, and the hooks in `.devin/hooks.v1.json`. These are Devin's project skills and hooks, not a plugin. The gate, approvals, documents, code layout and code map work the same, and commands have no prefix: `/approve`, `/bypass`, `/status`. The script checks its own install by running the session-start hook the way Devin will. It runs on Linux, macOS, Windows and WSL. Committing `.devin/` gives the whole team GroundWork. That this works while plugins are turned off hasn't been confirmed yet.
 
 ### 5.30 Code layout: one decision per repo, never a surprise migration
 `shop-api` already has code. Before any code is written, `groundwork.py layout` shows that no decision exists yet, and offers both choices *(real output)*:

@@ -116,7 +116,8 @@ In enforce mode, open the file named in the last line (`Full detail: …`): it m
 3. Ask "what level is this?". The answer should match `groundwork.py status`, and the context starts with the rules plus a `HOST: Devin` note.
 4. Ask for a code change before anything is approved. The `write`/`edit`/`apply_patch` call and an `exec` like `echo x > app.py` must both be blocked with a groundwork reason.
 5. Type `/groundwork-specflow:approve RFC-0001`. You should get a result line. If you get "no result" instead, the prompt hook didn't see the command, so note it and approve from a terminal with `groundwork.py approve`.
-6. If a gate doesn't fire, set `GROUNDWORK_HOOK_LOG=/tmp/gw-hooks.jsonl` before starting `devin`, retry, and check the `tool_name`/`tool_input` it logged.
+6. In a sandbox repo with code and no layout decision, start a session. The context should include `CODE MAP:` and `CODE LAYOUT NOT DECIDED`. Run bootstrap: it should ask migrate-or-keep as a numbered round. Choose keep, then check that `.groundwork/config.json` has `"layout": {"mode": "keep", …}`, nothing moved, and the next session says the repo keeps its own structure.
+7. If a gate doesn't fire, set `GROUNDWORK_HOOK_LOG=/tmp/gw-hooks.jsonl` before starting `devin`, retry, and check the `tool_name`/`tool_input` it logged.
 
 ## 4. Poke at the engine without Claude
 ```bash

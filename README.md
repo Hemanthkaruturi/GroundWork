@@ -135,6 +135,16 @@ GroundWork also runs in [Devin](https://devin.ai) (Devin CLI and Devin Desktop),
 devin plugins install Hemanthkaruturi/GroundWork#plugins/groundwork-specflow
 ```
 
+This installs it for you, in every project. To install it for one project instead, so everyone who opens the repository in Devin gets it, add it to `.devin/config.json` at the repository root:
+
+```json
+{
+  "requiredPlugins": ["Hemanthkaruturi/GroundWork#plugins/groundwork-specflow"]
+}
+```
+
+Devin installs it when the project is opened.
+
 Start a new session and run `/hooks` to check that the groundwork hooks are loaded. Then use it as described above: `/groundwork-specflow:bootstrap`, then `/groundwork-specflow:approve` when you're happy. To update, run `devin plugins update groundwork-specflow`.
 
 What's different on Devin:

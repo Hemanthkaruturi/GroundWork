@@ -9,12 +9,10 @@
   into a teammate that plans first, asks before building, and leaves a paper trail.
 </p>
 
+https://github.com/user-attachments/assets/32a6ebce-19bd-428f-abce-2431fff384e9
+
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=k6c6YWgRERQ">
-    <img src="files/groundwork_thumbnail.png" alt="Watch: GroundWork: Make Claude Code Plan First, Ask Questions, and Leave a Paper Trail" width="720">
-  </a>
-  <br>
-  <em>▶ Watch the video to see GroundWork in action</em>
+  <em>▶ Can't see the player? <a href="https://www.youtube.com/watch?v=k6c6YWgRERQ">Watch the video on YouTube</a>.</em>
 </p>
 
 ---

@@ -67,7 +67,7 @@ class Report:
             p = p.resolve().relative_to(self.base.resolve())
         except ValueError:
             pass
-        self.items.append(Finding(id, sev, str(p), msg, hint))
+        self.items.append(Finding(id, sev, p.as_posix(), msg, hint))
 
     def err(self, id, path, msg, hint=""): self.add(id, "error", path, msg, hint)
     def warn(self, id, path, msg, hint=""): self.add(id, "warning", path, msg, hint)

@@ -8,6 +8,7 @@ Three sources, all in the repository:
     (environment + version), supports, handed over. CI can append deploy events.
 Approvals are read from the approval records, not duplicated.
 """
+
 from __future__ import annotations
 
 import json
@@ -21,7 +22,16 @@ import groundwork_bugs as B
 import groundwork_core as C
 import groundwork_relations as R
 
-EVENTS = {"requested", "owner", "implemented", "deployed", "support", "handover", "reported", "fixed"}
+EVENTS = {
+    "requested",
+    "owner",
+    "implemented",
+    "deployed",
+    "support",
+    "handover",
+    "reported",
+    "fixed",
+}
 LIST_ROLES = {"implemented_by", "support"}
 
 
@@ -39,6 +49,7 @@ class Person:
 
 # --- the people table -----------------------------------------------------------------
 
+
 def people_home(ctx: C.Ctx) -> Path | None:
     base = ctx.workspace or ctx.repo
     return C._find_ci(base, "PROJECT.md") if base else None
@@ -48,7 +59,11 @@ def people(ctx: C.Ctx) -> list[Person]:
     p = people_home(ctx)
     if not p:
         return []
-    m = re.search(r"^## Who works on what[^\n]*\n(.*?)(?=^## |\Z)", p.read_text(encoding="utf-8"), re.M | re.S)
+    m = re.search(
+        r"^## Who works on what[^\n]*\n(.*?)(?=^## |\Z)",
+        p.read_text(encoding="utf-8"),
+        re.MULTILINE | re.DOTALL,
+    )
     if not m:
         return []
     rows = [ln for ln in m.group(1).splitlines() if ln.strip().startswith("|")]
@@ -59,13 +74,20 @@ def people(ctx: C.Ctx) -> list[Person]:
     def col(*names: str) -> int | None:
         return next((i for i, h in enumerate(head) if any(n in h for n in names)), None)
 
-    ci = {"name": col("person", "name"), "role": col("role"), "owns": col("owns", "ask"), "contact": col("contact")}
+    ci = {
+        "name": col("person", "name"),
+        "role": col("role"),
+        "owns": col("owns", "ask"),
+        "contact": col("contact"),
+    }
     out = []
     for r in rows[2:]:
         cells = [c.strip() for c in r.strip().strip("|").split("|")]
         if any(C.PLACEHOLDER.search(c) for c in cells) or not any(cells):
             continue
-        get = lambda k: cells[ci[k]] if ci[k] is not None and ci[k] < len(cells) else ""   # noqa: E731
+        get = lambda k, cells=cells: (
+            cells[ci[k]] if ci[k] is not None and ci[k] < len(cells) else ""
+        )
         if get("name"):
             out.append(Person(get("name"), get("role"), get("owns"), get("contact")))
     return out
@@ -82,7 +104,9 @@ def resolve(ppl: list[Person], s: str) -> Person | None:
         toks = re.split(r"[\s,;<>()]+", p.contact.lower())
         if s0 in toks or (len(s0) >= 4 and s0 in p.contact.lower()):
             return p
-    hits = [p for p in ppl if p.name.lower().startswith(s0) or s0 in p.name.lower().split()]
+    hits = [
+        p for p in ppl if p.name.lower().startswith(s0) or s0 in p.name.lower().split()
+    ]
     return hits[0] if len(hits) == 1 and len(s0) >= 3 else None
 
 
@@ -96,10 +120,15 @@ def show(ppl: list[Person], s: str) -> str:
 def whoami(ctx: C.Ctx) -> str:
     me = C.signer()
     p = resolve(people(ctx), me)
-    return f"{me} → {p.label()}" if p else f"{me} (not listed in PROJECT.md 'Who works on what')"
+    return (
+        f"{me} → {p.label()}"
+        if p
+        else f"{me} (not listed in PROJECT.md 'Who works on what')"
+    )
 
 
 # --- refs -----------------------------------------------------------------------------
+
 
 def locate(ctx: C.Ctx, ref: str) -> tuple[str, C.Ctx, Path] | None:
     """(kind, owning ctx, document) for a feature / RFC / bug reference."""
@@ -110,7 +139,15 @@ def locate(ctx: C.Ctx, ref: str) -> tuple[str, C.Ctx, Path] | None:
     repo_part, _, rest = ref.partition("/")
     if rest.startswith("bugs/") or ref.startswith("bugs/"):
         slug = ref.split("bugs/")[-1]
-        rc = ctx if ref.startswith("bugs/") else (C.detect(ctx.workspace / repo_part, ctx.workspace) if ctx.workspace else None)
+        rc = (
+            ctx
+            if ref.startswith("bugs/")
+            else (
+                C.detect(ctx.workspace / repo_part, ctx.workspace)
+                if ctx.workspace
+                else None
+            )
+        )
         if rc and rc.repo and (rc.repo / "bugs" / f"{slug}.md").is_file():
             return "bug", rc, rc.repo / "bugs" / f"{slug}.md"
         return None
@@ -124,7 +161,11 @@ def ledger_file(kind: str, owner: C.Ctx) -> Path:
 
 
 def key_of(kind: str, doc: Path) -> str:
-    return doc.stem if kind == "rfc" else (f"bugs/{doc.stem}" if kind == "bug" else doc.parent.name)
+    return (
+        doc.stem
+        if kind == "rfc"
+        else (f"bugs/{doc.stem}" if kind == "bug" else doc.parent.name)
+    )
 
 
 def read_ledger(kind: str, owner: C.Ctx, key: str) -> list[dict]:
@@ -136,44 +177,82 @@ def read_ledger(kind: str, owner: C.Ctx, key: str) -> list[dict]:
                 e = json.loads(ln)
             except ValueError:
                 continue
-            if e.get("ref") == key or (kind == "rfc" and e.get("ref") == key.split("-")[0] + "-" + key.split("-")[1]):
+            if e.get("ref") == key or (
+                kind == "rfc"
+                and e.get("ref") == key.split("-")[0] + "-" + key.split("-")[1]
+            ):
                 out.append(e)
     except OSError:
         pass
     return out
 
 
-def set_role(doc: Path, role: str, value: str | list[str], append: bool = False) -> None:
+def set_role(
+    doc: Path, role: str, value: str | list[str], append: bool = False
+) -> None:
     text = doc.read_text(encoding="utf-8")
     meta, _ = C.split_fm(text)
     if role in LIST_ROLES:
         cur = C.list_of(meta, role) if append else []
-        new = cur + [v for v in (value if isinstance(value, list) else [value]) if v not in cur]
+        new = cur + [
+            v for v in (value if isinstance(value, list) else [value]) if v not in cur
+        ]
         rendered = "[" + ", ".join(new) + "]"
     else:
         rendered = value if isinstance(value, str) else ", ".join(value)
     doc.write_text(C.set_fm(text, {role: rendered}), encoding="utf-8")
 
 
-ROLE_FOR_EVENT = {"requested": "requested_by", "owner": "owner", "implemented": "implemented_by", "support": "support",
-                  "handover": "owner", "reported": "reported_by", "fixed": "fixed_by"}
+ROLE_FOR_EVENT = {
+    "requested": "requested_by",
+    "owner": "owner",
+    "implemented": "implemented_by",
+    "support": "support",
+    "handover": "owner",
+    "reported": "reported_by",
+    "fixed": "fixed_by",
+}
 
 
-def record(ctx: C.Ctx, event: str, ref: str, by: str | None = None, via: str | None = None,
-           who: list[str] | None = None, env: str | None = None, version: str | None = None, text: str = "") -> dict:
+def record(
+    ctx: C.Ctx,
+    event: str,
+    ref: str,
+    by: str | None = None,
+    via: str | None = None,
+    who: list[str] | None = None,
+    env: str | None = None,
+    version: str | None = None,
+    text: str = "",
+) -> dict:
     if event not in EVENTS:
         raise SystemExit(f"unknown event '{event}'; one of {sorted(EVENTS)}")
     loc = locate(ctx, ref)
     if not loc:
-        raise SystemExit(f"cannot find '{ref}' (feature NNN-slug, repo/NNN-slug, RFC-000N or bugs/NNN-slug)")
+        raise SystemExit(
+            f"cannot find '{ref}' (feature NNN-slug, repo/NNN-slug, RFC-000N or bugs/NNN-slug)"
+        )
     kind, owner, doc = loc
     if event == "deployed" and not (env and version):
-        raise SystemExit("deployed needs --env and --version (e.g. --env prod --version 1.4.0)")
+        raise SystemExit(
+            "deployed needs --env and --version (e.g. --env prod --version 1.4.0)"
+        )
     if event in ("requested", "owner", "support", "handover", "reported") and not who:
         raise SystemExit(f"{event} needs --who <name[,name]>")
     by = by or C.signer()
-    e = {"ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "event": event, "ref": key_of(kind, doc), "by": by}
-    for k, v in (("via", via), ("env", env), ("version", version), ("who", who), ("text", text or None)):
+    e = {
+        "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "event": event,
+        "ref": key_of(kind, doc),
+        "by": by,
+    }
+    for k, v in (
+        ("via", via),
+        ("env", env),
+        ("version", version),
+        ("who", who),
+        ("text", text or None),
+    ):
         if v:
             e[k] = v
     f = ledger_file(kind, owner)
@@ -182,7 +261,11 @@ def record(ctx: C.Ctx, event: str, ref: str, by: str | None = None, via: str | N
         fh.write(json.dumps(e) + "\n")
     role = ROLE_FOR_EVENT.get(event)
     if role:
-        val = who if event in ("requested", "owner", "support", "handover", "reported") else [by]
+        val = (
+            who
+            if event in ("requested", "owner", "support", "handover", "reported")
+            else [by]
+        )
         if role == "support":
             set_role(doc, role, val or [])
         elif role in LIST_ROLES:
@@ -192,11 +275,18 @@ def record(ctx: C.Ctx, event: str, ref: str, by: str | None = None, via: str | N
     return e
 
 
-def auto_created(ctx: C.Ctx, kind: str, doc: Path, requested_by: str | None = None) -> None:
+def auto_created(
+    ctx: C.Ctx, kind: str, doc: Path, requested_by: str | None = None
+) -> None:
     """Called when an RFC / feature / bug is created: owner = whoever ran it, plus a ledger line."""
     owner_ctx = ctx
     me = C.signer()
-    rec = {"ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "event": "created", "ref": key_of(kind, doc), "by": me}
+    rec = {
+        "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "event": "created",
+        "ref": key_of(kind, doc),
+        "by": me,
+    }
     f = ledger_file(kind, owner_ctx)
     f.parent.mkdir(parents=True, exist_ok=True)
     with f.open("a", encoding="utf-8") as fh:
@@ -208,10 +298,25 @@ def auto_created(ctx: C.Ctx, kind: str, doc: Path, requested_by: str | None = No
 
 # --- rendering ------------------------------------------------------------------------
 
+
 def _git_contributors(repo: Path, slug: str) -> list[tuple[str, int]]:
     try:
-        out = subprocess.run(["git", "-C", str(repo), "log", "--format=%an <%ae>", f"--grep={slug}", "-i"],
-                             capture_output=True, text=True, encoding="utf-8", timeout=10).stdout.splitlines()
+        out = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo),
+                "log",
+                "--format=%an <%ae>",
+                f"--grep={slug}",
+                "-i",
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=10,
+            check=False,
+        ).stdout.splitlines()
     except (OSError, subprocess.SubprocessError):
         return []
     counts: dict[str, int] = {}
@@ -222,11 +327,15 @@ def _git_contributors(repo: Path, slug: str) -> list[tuple[str, int]]:
 
 def _approvals(kind: str, owner: C.Ctx, doc: Path) -> str:
     st = C.doc_state(doc, owner)
-    rec = C.load_approvals(C.owner_root(doc, owner)).get(str(doc.resolve().relative_to(C.owner_root(doc, owner).resolve())))
+    rec = C.load_approvals(C.owner_root(doc, owner)).get(
+        str(doc.resolve().relative_to(C.owner_root(doc, owner).resolve()))
+    )
     if not rec:
         return f"not approved ({st.status})"
     who = ", ".join(s["who"] + " " + s["at"][:10] for s in rec["signers"])
-    return f"{st.status}: {who}" + ("  [STALE — edited since]" if st.status == "stale" else "")
+    return f"{st.status}: {who}" + (
+        "  [STALE — edited since]" if st.status == "stale" else ""
+    )
 
 
 def describe(ctx: C.Ctx, ref: str) -> str:
@@ -240,7 +349,7 @@ def describe(ctx: C.Ctx, ref: str) -> str:
     events = read_ledger(kind, owner, key)
     lines = [f"{key}  [{kind}]  {meta.get('title', '')}".rstrip(), ""]
     rows: list[tuple[str, str]] = []
-    row = lambda k, v: rows.append((k, v))   # noqa: E731
+    row = lambda k, v: rows.append((k, v))
     if kind == "bug":
         row("Reported by", show(ppl, meta.get("reported_by", "")))
         row("Owner", show(ppl, meta.get("owner", "")))
@@ -252,16 +361,25 @@ def describe(ctx: C.Ctx, ref: str) -> str:
         row("Approved", _approvals(kind, owner, doc))
         if kind == "feature":
             impl = C.list_of(meta, "implemented_by")
-            row("Implemented by", "; ".join(show(ppl, x) for x in impl) if impl else "(not recorded)")
+            row(
+                "Implemented by",
+                "; ".join(show(ppl, x) for x in impl) if impl else "(not recorded)",
+            )
             sup = C.list_of(meta, "support")
-            row("Support", "; ".join(show(ppl, x) for x in sup) if sup else "(not recorded)")
+            row(
+                "Support",
+                "; ".join(show(ppl, x) for x in sup) if sup else "(not recorded)",
+            )
             dep = [e for e in events if e["event"] == "deployed"]
             if dep:
                 latest: dict[str, dict] = {}
                 for e in dep:
                     latest[e.get("env", "?")] = e
                 for env, e in latest.items():
-                    row(f"Deployed → {env}", f"{e.get('version', '?')} by {show(ppl, e['by'])} on {e['ts'][:10]}")
+                    row(
+                        f"Deployed → {env}",
+                        f"{e.get('version', '?')} by {show(ppl, e['by'])} on {e['ts'][:10]}",
+                    )
             else:
                 row("Deployed", "(no deployment recorded)")
             cont = _git_contributors(owner.repo, key.split("/")[-1])
@@ -275,7 +393,9 @@ def describe(ctx: C.Ctx, ref: str) -> str:
             extra = " ".join(f"{k}={e[k]}" for k in ("env", "version") if e.get(k))
             who = f" → {', '.join(e['who'])}" if e.get("who") else ""
             via = f" (via {e['via']})" if e.get("via") else ""
-            lines.append(f"    {e['ts'][:16]}  {e['event']:<11} {show(ppl, e['by'])}{via}{who} {extra}".rstrip())
+            lines.append(
+                f"    {e['ts'][:16]}  {e['event']:<11} {show(ppl, e['by'])}{via}{who} {extra}".rstrip()
+            )
     if kind == "feature":
         node = (owner.repo.name, doc.parent.name)
         mine = [e for e in R.edges(ctx) if e.src == node and e.dst]
@@ -283,17 +403,24 @@ def describe(ctx: C.Ctx, ref: str) -> str:
         lines += ["", "  People to talk to before changing it"]
         seen = False
         for e in mine:
-            trc, tfd = C.resolve_feature(owner, f"{e.dst[0]}/{e.dst[1]}" if e.dst[0] != owner.repo.name else e.dst[1])
+            _trc, tfd = C.resolve_feature(
+                owner,
+                f"{e.dst[0]}/{e.dst[1]}" if e.dst[0] != owner.repo.name else e.dst[1],
+            )
             if tfd:
                 m2, _ = C.split_fm((tfd / "spec.md").read_text(encoding="utf-8"))
-                lines.append(f"    it {e.kind.replace('_', ' ')} {e.dst[0]}/{e.dst[1]} — owner: {show(ppl, m2.get('owner', ''))}")
+                lines.append(
+                    f"    it {e.kind.replace('_', ' ')} {e.dst[0]}/{e.dst[1]} — owner: {show(ppl, m2.get('owner', ''))}"
+                )
                 seen = True
         for item in down["features"]:
             tref = item.split("  (")[0]
-            trc, tfd = C.resolve_feature(owner, tref)
+            _trc, tfd = C.resolve_feature(owner, tref)
             if tfd:
                 m2, _ = C.split_fm((tfd / "spec.md").read_text(encoding="utf-8"))
-                lines.append(f"    affects {item} — owner: {show(ppl, m2.get('owner', ''))}")
+                lines.append(
+                    f"    affects {item} — owner: {show(ppl, m2.get('owner', ''))}"
+                )
                 seen = True
         if not seen:
             lines.append("    (independent: no related features)")
@@ -309,12 +436,28 @@ def person_items(ctx: C.Ctx, who: str) -> str:
         lines.append(f"  listed as owning/knowing: {p.owns}")
     found = 0
     for kind, ref, meta in _all_items(ctx):
-        roles = [r for r in ("requested_by", "owner", "implemented_by", "support", "reported_by", "fixed_by")
-                 if any(resolve(ppl, x) == p if p else x.lower() == target.lower() for x in C.list_of(meta, r))]
+        roles = [
+            r
+            for r in (
+                "requested_by",
+                "owner",
+                "implemented_by",
+                "support",
+                "reported_by",
+                "fixed_by",
+            )
+            if any(
+                resolve(ppl, x) == p if p else x.lower() == target.lower()
+                for x in C.list_of(meta, r)
+            )
+        ]
         if roles:
             lines.append(f"  {ref:<32} {', '.join(roles)}")
             found += 1
-    return "\n".join(lines + ([] if found else ["  (no features, RFCs or bugs recorded for this person)"]))
+    return "\n".join(
+        lines
+        + ([] if found else ["  (no features, RFCs or bugs recorded for this person)"])
+    )
 
 
 def _all_items(ctx: C.Ctx):
@@ -323,17 +466,29 @@ def _all_items(ctx: C.Ctx):
     for rc in R.contexts(ctx):
         for fdir in C.feature_dirs(rc):
             if (fdir / "spec.md").is_file():
-                yield "feature", f"{rc.repo.name}/{fdir.name}", C.split_fm((fdir / "spec.md").read_text(encoding="utf-8"))[0]
+                yield (
+                    "feature",
+                    f"{rc.repo.name}/{fdir.name}",
+                    C.split_fm((fdir / "spec.md").read_text(encoding="utf-8"))[0],
+                )
         for bp in B.bug_paths(rc):
-            yield "bug", f"{rc.repo.name}/bugs/{bp.stem}", C.split_fm(bp.read_text(encoding="utf-8"))[0]
+            yield (
+                "bug",
+                f"{rc.repo.name}/bugs/{bp.stem}",
+                C.split_fm(bp.read_text(encoding="utf-8"))[0],
+            )
 
 
 def table(ctx: C.Ctx) -> str:
     ppl = people(ctx)
-    lines = [f"{'ITEM':<34}{'OWNER':<18}{'REQUESTED BY':<18}{'IMPLEMENTED BY':<18}SUPPORT"]
-    short = lambda s: (resolve(ppl, s).name if resolve(ppl, s) else s) if s else "-"   # noqa: E731
+    lines = [
+        f"{'ITEM':<34}{'OWNER':<18}{'REQUESTED BY':<18}{'IMPLEMENTED BY':<18}SUPPORT"
+    ]
+    short = lambda s: (resolve(ppl, s).name if resolve(ppl, s) else s) if s else "-"
     for kind, ref, meta in _all_items(ctx):
         impl = ",".join(short(x) for x in C.list_of(meta, "implemented_by")) or "-"
         sup = ",".join(short(x) for x in C.list_of(meta, "support")) or "-"
-        lines.append(f"{ref:<34}{short(meta.get('owner', '')):<18}{short(meta.get('requested_by', meta.get('reported_by', ''))):<18}{impl:<18}{sup}")
+        lines.append(
+            f"{ref:<34}{short(meta.get('owner', '')):<18}{short(meta.get('requested_by', meta.get('reported_by', ''))):<18}{impl:<18}{sup}"
+        )
     return "\n".join(lines)

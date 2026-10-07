@@ -8,3 +8,4 @@ __pycache__/
 # GroundWork bootstrap temporary files
 .tmp-groundwork/
 .tmp-ca-standards/
+.ruff_cache/

@@ -11,6 +11,7 @@ A repo records one decision in `.groundwork/config.json` under `"layout"`:
 The checks are static (imports, env reads, folder names), need no model, and only ever warn (GW101–GW107);
 `check --strict` makes them binding. A malformed `layout` entry is an error (GW100).
 """
+
 from __future__ import annotations
 
 import json
@@ -25,10 +26,10 @@ import groundwork_core as C
 
 PURPOSE = {
     "core": "business rules and use cases. Pure code: no network, database, SDKs or env vars. "
-            "It defines the interfaces it needs (e.g. core/ports.py) and connectors implement them",
+    "It defines the interfaces it needs (e.g. core/ports.py) and connectors implement them",
     "connectors": "the only code that talks to the outside world, one folder per external system named by its "
-                  "role (llm/, database/, email/, payments/); the vendor goes inside (llm/anthropic.py). "
-                  "Timeouts, retries and logging of external calls live here",
+    "role (llm/, database/, email/, payments/); the vendor goes inside (llm/anthropic.py). "
+    "Timeouts, retries and logging of external calls live here",
     "entrypoints": "how the app is called (http/, cli/, workers/, jobs/). Thin: parse input, call core, format the reply",
     "config": "the only place that reads environment variables, settings files and secrets",
     "prompts": "LLM prompt texts and templates, kept out of code",
@@ -48,78 +49,290 @@ SHORT = {
 
 # layer -> layers it may import (it may always import itself). Wiring files may import anything.
 PROFILES: dict[str, dict] = {
-    "service": {"about": "an API, web backend or background worker",
-                "imports": {"core": ["prompts"], "connectors": ["core", "config", "prompts"],
-                            "entrypoints": ["core", "config"], "config": [], "prompts": []},
-                "required": ["core", "entrypoints"], "env_layers": ["config"]},
-    "cli": {"about": "a command-line tool",
-            "imports": {"core": ["prompts"], "connectors": ["core", "config", "prompts"],
-                        "entrypoints": ["core", "config"], "config": [], "prompts": []},
-            "required": ["core", "entrypoints"], "env_layers": ["config"]},
-    "web": {"about": "a browser front end (React, Vue, Svelte, Angular, Next.js …)",
-            "imports": {"pages": ["components", "core", "config"], "components": ["core"],
-                        "core": ["connectors", "config", "prompts"], "connectors": ["config"],
-                        "config": [], "prompts": []},
-            "required": ["pages", "components", "core"], "env_layers": ["config"]},
-    "library": {"about": "a package other code imports; it takes settings as arguments",
-                "imports": {"core": ["prompts"], "connectors": ["core", "prompts"], "prompts": []},
-                "required": ["core"], "env_layers": []},
+    "service": {
+        "about": "an API, web backend or background worker",
+        "imports": {
+            "core": ["prompts"],
+            "connectors": ["core", "config", "prompts"],
+            "entrypoints": ["core", "config"],
+            "config": [],
+            "prompts": [],
+        },
+        "required": ["core", "entrypoints"],
+        "env_layers": ["config"],
+    },
+    "cli": {
+        "about": "a command-line tool",
+        "imports": {
+            "core": ["prompts"],
+            "connectors": ["core", "config", "prompts"],
+            "entrypoints": ["core", "config"],
+            "config": [],
+            "prompts": [],
+        },
+        "required": ["core", "entrypoints"],
+        "env_layers": ["config"],
+    },
+    "web": {
+        "about": "a browser front end (React, Vue, Svelte, Angular, Next.js …)",
+        "imports": {
+            "pages": ["components", "core", "config"],
+            "components": ["core"],
+            "core": ["connectors", "config", "prompts"],
+            "connectors": ["config"],
+            "config": [],
+            "prompts": [],
+        },
+        "required": ["pages", "components", "core"],
+        "env_layers": ["config"],
+    },
+    "library": {
+        "about": "a package other code imports; it takes settings as arguments",
+        "imports": {
+            "core": ["prompts"],
+            "connectors": ["core", "prompts"],
+            "prompts": [],
+        },
+        "required": ["core"],
+        "env_layers": [],
+    },
 }
 MODES = {"standard", "keep"}
 
 # Names that say nothing about what a folder or file holds.
-VAGUE = {"utils", "util", "helpers", "helper", "misc", "common", "shared", "stuff", "lib_utils", "tools_misc"}
+VAGUE = {
+    "utils",
+    "util",
+    "helpers",
+    "helper",
+    "misc",
+    "common",
+    "shared",
+    "stuff",
+    "lib_utils",
+    "tools_misc",
+}
 
-CODE_EXT = {".py", ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts", ".go", ".vue", ".svelte"}
-TEST_DIRS = {"tests", "test", "__tests__", "__mocks__", "testdata", "fixtures", "e2e", "cypress"}
-TEST_FILE = re.compile(r"(^test_.*\.py|.*_test\.(py|go)|.*\.(test|spec)\.[cm]?[jt]sx?|conftest\.py)$")
-WIRING_STEMS = {"app", "main", "__main__", "__init__", "index", "wiring", "container", "bootstrap", "server", "cli", "mod"}
+CODE_EXT = {
+    ".py",
+    ".js",
+    ".jsx",
+    ".mjs",
+    ".cjs",
+    ".ts",
+    ".tsx",
+    ".mts",
+    ".cts",
+    ".go",
+    ".vue",
+    ".svelte",
+}
+TEST_DIRS = {
+    "tests",
+    "test",
+    "__tests__",
+    "__mocks__",
+    "testdata",
+    "fixtures",
+    "e2e",
+    "cypress",
+}
+TEST_FILE = re.compile(
+    r"(^test_.*\.py|.*_test\.(py|go)|.*\.(test|spec)\.[cm]?[jt]sx?|conftest\.py)$"
+)
+WIRING_STEMS = {
+    "app",
+    "main",
+    "__main__",
+    "__init__",
+    "index",
+    "wiring",
+    "container",
+    "bootstrap",
+    "server",
+    "cli",
+    "mod",
+}
 
 # Libraries that reach outside the process. Allowed only in connectors (and, for servers, entrypoints).
 EXTERNAL_PY = {
-    "openai", "anthropic", "google.generativeai", "google.genai", "cohere", "mistralai", "litellm", "groq",
-    "langchain", "langchain_core", "langchain_openai", "langchain_anthropic", "llama_index", "ollama",
-    "requests", "httpx", "aiohttp", "urllib3", "urllib.request", "http.client", "websockets", "grpc",
-    "boto3", "botocore", "aiobotocore", "google.cloud", "azure", "firebase_admin", "supabase",
-    "psycopg", "psycopg2", "asyncpg", "pymysql", "MySQLdb", "mysql", "sqlite3", "sqlalchemy", "sqlmodel",
-    "pymongo", "motor", "redis", "aioredis", "elasticsearch", "opensearchpy", "cassandra", "neo4j",
-    "pinecone", "qdrant_client", "chromadb", "weaviate",
-    "kafka", "confluent_kafka", "aiokafka", "pika", "aio_pika", "nats",
-    "smtplib", "sendgrid", "twilio", "stripe", "slack_sdk", "paramiko", "ftplib",
+    "openai",
+    "anthropic",
+    "google.generativeai",
+    "google.genai",
+    "cohere",
+    "mistralai",
+    "litellm",
+    "groq",
+    "langchain",
+    "langchain_core",
+    "langchain_openai",
+    "langchain_anthropic",
+    "llama_index",
+    "ollama",
+    "requests",
+    "httpx",
+    "aiohttp",
+    "urllib3",
+    "urllib.request",
+    "http.client",
+    "websockets",
+    "grpc",
+    "boto3",
+    "botocore",
+    "aiobotocore",
+    "google.cloud",
+    "azure",
+    "firebase_admin",
+    "supabase",
+    "psycopg",
+    "psycopg2",
+    "asyncpg",
+    "pymysql",
+    "MySQLdb",
+    "mysql",
+    "sqlite3",
+    "sqlalchemy",
+    "sqlmodel",
+    "pymongo",
+    "motor",
+    "redis",
+    "aioredis",
+    "elasticsearch",
+    "opensearchpy",
+    "cassandra",
+    "neo4j",
+    "pinecone",
+    "qdrant_client",
+    "chromadb",
+    "weaviate",
+    "kafka",
+    "confluent_kafka",
+    "aiokafka",
+    "pika",
+    "aio_pika",
+    "nats",
+    "smtplib",
+    "sendgrid",
+    "twilio",
+    "stripe",
+    "slack_sdk",
+    "paramiko",
+    "ftplib",
 }
 EXTERNAL_JS = {
-    "openai", "@anthropic-ai/sdk", "@google/generative-ai", "@google/genai", "cohere-ai", "@mistralai/mistralai",
-    "langchain", "@langchain/*", "ai", "@ai-sdk/*", "ollama",
-    "axios", "node-fetch", "got", "undici", "ky", "superagent", "graphql-request", "@apollo/client", "socket.io-client",
-    "aws-sdk", "@aws-sdk/*", "@google-cloud/*", "@azure/*", "firebase", "firebase/*", "firebase-admin",
+    "openai",
+    "@anthropic-ai/sdk",
+    "@google/generative-ai",
+    "@google/genai",
+    "cohere-ai",
+    "@mistralai/mistralai",
+    "langchain",
+    "@langchain/*",
+    "ai",
+    "@ai-sdk/*",
+    "ollama",
+    "axios",
+    "node-fetch",
+    "got",
+    "undici",
+    "ky",
+    "superagent",
+    "graphql-request",
+    "@apollo/client",
+    "socket.io-client",
+    "aws-sdk",
+    "@aws-sdk/*",
+    "@google-cloud/*",
+    "@azure/*",
+    "firebase",
+    "firebase/*",
+    "firebase-admin",
     "@supabase/supabase-js",
-    "pg", "postgres", "mysql", "mysql2", "mongodb", "mongoose", "redis", "ioredis", "@prisma/client", "typeorm",
-    "sequelize", "knex", "drizzle-orm", "drizzle-orm/*", "better-sqlite3", "sqlite3", "@elastic/elasticsearch",
-    "@pinecone-database/pinecone", "@qdrant/js-client-rest", "chromadb",
-    "kafkajs", "amqplib", "nats", "bullmq",
-    "nodemailer", "@sendgrid/*", "twilio", "stripe", "@slack/web-api",
+    "pg",
+    "postgres",
+    "mysql",
+    "mysql2",
+    "mongodb",
+    "mongoose",
+    "redis",
+    "ioredis",
+    "@prisma/client",
+    "typeorm",
+    "sequelize",
+    "knex",
+    "drizzle-orm",
+    "drizzle-orm/*",
+    "better-sqlite3",
+    "sqlite3",
+    "@elastic/elasticsearch",
+    "@pinecone-database/pinecone",
+    "@qdrant/js-client-rest",
+    "chromadb",
+    "kafkajs",
+    "amqplib",
+    "nats",
+    "bullmq",
+    "nodemailer",
+    "@sendgrid/*",
+    "twilio",
+    "stripe",
+    "@slack/web-api",
 }
 EXTERNAL_GO = {
-    "database/sql", "net/smtp", "github.com/jackc/pgx/*", "github.com/lib/pq", "github.com/go-sql-driver/mysql",
-    "gorm.io/*", "go.mongodb.org/*", "github.com/redis/go-redis/*", "github.com/go-redis/redis/*",
-    "github.com/aws/aws-sdk-go*", "cloud.google.com/go/*", "github.com/Azure/azure-sdk-for-go/*",
-    "github.com/sashabaranov/go-openai", "github.com/anthropics/anthropic-sdk-go*", "github.com/openai/openai-go*",
-    "github.com/segmentio/kafka-go", "github.com/rabbitmq/amqp091-go", "github.com/nats-io/*", "github.com/stripe/*",
+    "database/sql",
+    "net/smtp",
+    "github.com/jackc/pgx/*",
+    "github.com/lib/pq",
+    "github.com/go-sql-driver/mysql",
+    "gorm.io/*",
+    "go.mongodb.org/*",
+    "github.com/redis/go-redis/*",
+    "github.com/go-redis/redis/*",
+    "github.com/aws/aws-sdk-go*",
+    "cloud.google.com/go/*",
+    "github.com/Azure/azure-sdk-for-go/*",
+    "github.com/sashabaranov/go-openai",
+    "github.com/anthropics/anthropic-sdk-go*",
+    "github.com/openai/openai-go*",
+    "github.com/segmentio/kafka-go",
+    "github.com/rabbitmq/amqp091-go",
+    "github.com/nats-io/*",
+    "github.com/stripe/*",
 }
-SERVER_SIDE = {"net/http", "net/http/*"}          # clients and servers alike: connectors or entrypoints
+SERVER_SIDE = {
+    "net/http",
+    "net/http/*",
+}  # clients and servers alike: connectors or entrypoints
 
 ENV_READ = {
-    "py": re.compile(r"\bos\.environ\b|\bos\.getenv\s*\(|\bload_dotenv\s*\(|\bdotenv_values\s*\(|^\s*from\s+os\s+import\s+[^\n]*\b(environ|getenv)\b", re.M),
-    "js": re.compile(r"""\bprocess\.env\b|\bimport\.meta\.env\b|\bDeno\.env\b|\bBun\.env\b|\bdotenv\.config\s*\(|['"]dotenv/config['"]"""),
-    "go": re.compile(r"\bos\.(Getenv|LookupEnv|Environ)\s*\(|\bgodotenv\.(Load|Overload|Read)\s*\("),
+    "py": re.compile(
+        r"\bos\.environ\b|\bos\.getenv\s*\(|\bload_dotenv\s*\(|\bdotenv_values\s*\(|^\s*from\s+os\s+import\s+[^\n]*\b(environ|getenv)\b",
+        re.MULTILINE,
+    ),
+    "js": re.compile(
+        r"""\bprocess\.env\b|\bimport\.meta\.env\b|\bDeno\.env\b|\bBun\.env\b|\bdotenv\.config\s*\(|['"]dotenv/config['"]"""
+    ),
+    "go": re.compile(
+        r"\bos\.(Getenv|LookupEnv|Environ)\s*\(|\bgodotenv\.(Load|Overload|Read)\s*\("
+    ),
 }
-JS_FETCH = re.compile(r"(?<![\w.$])(fetch|XMLHttpRequest|WebSocket|EventSource)\s*\(|new\s+(XMLHttpRequest|WebSocket|EventSource)\b")
+JS_FETCH = re.compile(
+    r"(?<![\w.$])(fetch|XMLHttpRequest|WebSocket|EventSource)\s*\(|new\s+(XMLHttpRequest|WebSocket|EventSource)\b"
+)
 
-PY_IMPORT = re.compile(r"^\s*import\s+([\w.]+(?:\s+as\s+\w+)?(?:\s*,\s*[\w.]+(?:\s+as\s+\w+)?)*)", re.M)
-PY_FROM = re.compile(r"^\s*from\s+(\.*)([\w.]*)\s+import\s+\(?\s*([\w*][\w\s,]*)", re.M)
-JS_IMPORT = re.compile(r"""(?:^|[^\w$.])(?:from|import|require)\s*\(?\s*['"]([^'"\n]+)['"]""", re.M)
-GO_BLOCK = re.compile(r"^import\s*\((.*?)\)", re.M | re.S)
-GO_SINGLE = re.compile(r'^import\s+(?:[\w.]+\s+)?"([^"]+)"', re.M)
+PY_IMPORT = re.compile(
+    r"^\s*import\s+([\w.]+(?:\s+as\s+\w+)?(?:\s*,\s*[\w.]+(?:\s+as\s+\w+)?)*)",
+    re.MULTILINE,
+)
+PY_FROM = re.compile(
+    r"^\s*from\s+(\.*)([\w.]*)\s+import\s+\(?\s*([\w*][\w\s,]*)", re.MULTILINE
+)
+JS_IMPORT = re.compile(
+    r"""(?:^|[^\w$.])(?:from|import|require)\s*\(?\s*['"]([^'"\n]+)['"]""", re.MULTILINE
+)
+GO_BLOCK = re.compile(r"^import\s*\((.*?)\)", re.MULTILINE | re.DOTALL)
+GO_SINGLE = re.compile(r'^import\s+(?:[\w.]+\s+)?"([^"]+)"', re.MULTILINE)
 GO_PATH = re.compile(r'"([^"]+)"')
 
 
@@ -134,19 +347,24 @@ def lang(path: str) -> str | None:
 
 # --- configuration --------------------------------------------------------------------
 
+
 @dataclass
 class Layout:
     mode: str
     profile: str = ""
     root: str = "."
-    folders: dict[str, list[str]] = field(default_factory=dict)   # effective layer -> repo-relative paths
+    folders: dict[str, list[str]] = field(
+        default_factory=dict
+    )  # effective layer -> repo-relative paths
     wiring: list[str] = field(default_factory=list)
     legacy: list[str] = field(default_factory=list)
     problems: list[str] = field(default_factory=list)
 
     @property
     def layers(self) -> list[str]:
-        return list(PROFILES[self.profile]["imports"]) if self.profile in PROFILES else []
+        return (
+            list(PROFILES[self.profile]["imports"]) if self.profile in PROFILES else []
+        )
 
 
 def _rel(p: str) -> str:
@@ -160,7 +378,13 @@ def _under(path: str, prefix: str) -> bool:
 
 
 def _paths(v) -> list[str]:
-    return [v] if isinstance(v, str) else [x for x in v if isinstance(x, str)] if isinstance(v, list) else []
+    return (
+        [v]
+        if isinstance(v, str)
+        else [x for x in v if isinstance(x, str)]
+        if isinstance(v, list)
+        else []
+    )
 
 
 def load(repo: Path, cfg: dict | None = None) -> Layout | None:
@@ -169,30 +393,54 @@ def load(repo: Path, cfg: dict | None = None) -> Layout | None:
     if raw is None:
         return None
     if not isinstance(raw, dict):
-        return Layout("standard", problems=['"layout" must be an object, e.g. {"mode": "keep"}'])
+        return Layout(
+            "standard", problems=['"layout" must be an object, e.g. {"mode": "keep"}']
+        )
     mode = raw.get("mode", "standard")
     if mode not in MODES:
-        return Layout("standard", problems=[f'unknown layout mode "{mode}" (use "standard" or "keep")'])
+        return Layout(
+            "standard",
+            problems=[f'unknown layout mode "{mode}" (use "standard" or "keep")'],
+        )
     if mode == "keep":
         return Layout("keep")
     lay = Layout("standard", str(raw.get("profile", "")), _rel(raw.get("root", ".")))
     if lay.profile not in PROFILES:
-        lay.problems.append(f'unknown profile "{lay.profile}" (use one of: {", ".join(PROFILES)})')
+        lay.problems.append(
+            f'unknown profile "{lay.profile}" (use one of: {", ".join(PROFILES)})'
+        )
         return lay
-    for p in [lay.root, *(x for v in (raw.get("folders") or {}).values() for x in _paths(v)),
-              *_paths(raw.get("wiring")), *_paths(raw.get("legacy"))]:
-        if p.startswith("/") or ".." in PurePosixPath(p).parts or re.match(r"^[A-Za-z]:", p):
-            lay.problems.append(f'path "{p}" must be relative to the repo and stay inside it')
+    for p in [
+        lay.root,
+        *(x for v in (raw.get("folders") or {}).values() for x in _paths(v)),
+        *_paths(raw.get("wiring")),
+        *_paths(raw.get("legacy")),
+    ]:
+        if (
+            p.startswith("/")
+            or ".." in PurePosixPath(p).parts
+            or re.match(r"^[A-Za-z]:", p)
+        ):
+            lay.problems.append(
+                f'path "{p}" must be relative to the repo and stay inside it'
+            )
     folders = raw.get("folders") or {}
     if not isinstance(folders, dict):
         lay.problems.append('"folders" must map a role to a path or a list of paths')
         folders = {}
     for k in folders:
         if k not in lay.layers:
-            lay.problems.append(f'"{k}" is not a folder role of the {lay.profile} profile ({", ".join(lay.layers)})')
+            lay.problems.append(
+                f'"{k}" is not a folder role of the {lay.profile} profile ({", ".join(lay.layers)})'
+            )
     for layer in lay.layers:
-        home = _rel(f"{lay.root}/{layer}")             # where new code goes; mapped folders are existing code in that role
-        lay.folders[layer] = [home, *(m for m in (_rel(x) for x in _paths(folders.get(layer))) if m != home)]
+        home = _rel(
+            f"{lay.root}/{layer}"
+        )  # where new code goes; mapped folders are existing code in that role
+        lay.folders[layer] = [
+            home,
+            *(m for m in (_rel(x) for x in _paths(folders.get(layer))) if m != home),
+        ]
     lay.wiring = [_rel(x) for x in _paths(raw.get("wiring"))]
     lay.legacy = [_rel(x) for x in _paths(raw.get("legacy"))]
     return lay
@@ -214,7 +462,9 @@ def is_wiring(lay: Layout, rel: str) -> bool:
     parent = p.parent.as_posix() if p.parent.as_posix() != "" else "."
     if parent == lay.root and p.stem in WIRING_STEMS:
         return True
-    return "cmd" in p.parts[:-1] and (p.parts.index("cmd") == 0 or _under(rel, _rel(f"{lay.root}/cmd")))
+    return "cmd" in p.parts[:-1] and (
+        p.parts.index("cmd") == 0 or _under(rel, _rel(f"{lay.root}/cmd"))
+    )
 
 
 def is_legacy(lay: Layout, rel: str) -> bool:
@@ -228,8 +478,11 @@ def is_test(rel: str) -> bool:
 
 # --- scanning -------------------------------------------------------------------------
 
+
 def _scan_roots(lay: Layout) -> list[str]:
-    roots = sorted({lay.root, *(p for ps in lay.folders.values() for p in ps), *lay.wiring})
+    roots = sorted(
+        {lay.root, *(p for ps in lay.folders.values() for p in ps), *lay.wiring}
+    )
     return [r for r in roots if not any(o != r and _under(r, o) for o in roots)]
 
 
@@ -244,9 +497,23 @@ def code_files(repo: Path, lay: Layout, limit: int = 5000) -> list[str]:
             continue
         for d, dirs, files in os.walk(base):
             rd = _rel(Path(d).relative_to(repo).as_posix())
-            dirs[:] = sorted(x for x in dirs if x not in C.SKIP_DIRS and not x.startswith(".")
-                             and x not in {"specs", "bugs", "DECISIONS", "CONTRACTS", "docs", "target", "coverage"}
-                             and not is_legacy(lay, _rel(f"{rd}/{x}")))
+            dirs[:] = sorted(
+                x
+                for x in dirs
+                if x not in C.SKIP_DIRS
+                and not x.startswith(".")
+                and x
+                not in {
+                    "specs",
+                    "bugs",
+                    "DECISIONS",
+                    "CONTRACTS",
+                    "docs",
+                    "target",
+                    "coverage",
+                }
+                and not is_legacy(lay, _rel(f"{rd}/{x}"))
+            )
             for f in sorted(files):
                 rel = _rel(f"{rd}/{f}")
                 if lang(rel) and not (Path(d) / f).is_symlink():
@@ -258,9 +525,11 @@ def code_files(repo: Path, lay: Layout, limit: int = 5000) -> list[str]:
 
 def _strip_comments(text: str, lg: str) -> str:
     if lg == "py":
-        return re.sub(r"^\s*#.*$", "", text, flags=re.M)
-    text = re.sub(r"/\*.*?\*/", lambda m: "\n" * m.group(0).count("\n"), text, flags=re.S)
-    return re.sub(r"^\s*//.*$", "", text, flags=re.M)
+        return re.sub(r"^\s*#.*$", "", text, flags=re.MULTILINE)
+    text = re.sub(
+        r"/\*.*?\*/", lambda m: "\n" * m.group(0).count("\n"), text, flags=re.DOTALL
+    )
+    return re.sub(r"^\s*//.*$", "", text, flags=re.MULTILINE)
 
 
 def _line(text: str, pos: int) -> int:
@@ -276,7 +545,9 @@ def imports(text: str, lg: str) -> list[tuple[str, int, int]]:
                 out.append((part.split(" as ")[0].strip(), _line(text, m.start()), 0))
         for m in PY_FROM.finditer(text):
             dots, mod = len(m.group(1)), m.group(2)
-            if dots and not mod:                     # from . import a, b  → each name is a module candidate
+            if (
+                dots and not mod
+            ):  # from . import a, b  → each name is a module candidate
                 for name in re.split(r"[\s,]+", m.group(3)):
                     if name and name != "*":
                         out.append((name, _line(text, m.start()), dots))
@@ -296,13 +567,19 @@ def imports(text: str, lg: str) -> list[tuple[str, int, int]]:
 
 def _go_module(repo: Path) -> str | None:
     try:
-        m = re.search(r"^module\s+(\S+)", (repo / "go.mod").read_text(encoding="utf-8"), re.M)
+        m = re.search(
+            r"^module\s+(\S+)",
+            (repo / "go.mod").read_text(encoding="utf-8"),
+            re.MULTILINE,
+        )
         return m.group(1) if m else None
     except OSError:
         return None
 
 
-def target_path(repo: Path, lay: Layout, src: str, spec: str, lg: str, level: int, gomod: str | None) -> str | None:
+def target_path(
+    repo: Path, lay: Layout, src: str, spec: str, lg: str, level: int, gomod: str | None
+) -> str | None:
     """The repo-relative path an internal import points at, or None for a third-party import."""
     here = PurePosixPath(src).parent
     if lg == "py":
@@ -316,20 +593,31 @@ def target_path(repo: Path, lay: Layout, src: str, spec: str, lg: str, level: in
         for base in (root.parent.as_posix(), lay.root, "src", "."):
             cand = _rel(f"{base}/{mod}")
             first = _rel(f"{base}/{mod.split('/')[0]}")
-            if first != "." and ((repo / first).is_dir() or (repo / f"{first}.py").is_file()) and layer_of(lay, cand):
+            if (
+                first != "."
+                and ((repo / first).is_dir() or (repo / f"{first}.py").is_file())
+                and layer_of(lay, cand)
+            ):
                 return cand
         return None
     if lg == "js":
         if spec.startswith("."):
-            return _rel(os.path.normpath(f"{here.as_posix()}/{spec}").replace("\\", "/"))
+            return _rel(
+                os.path.normpath(f"{here.as_posix()}/{spec}").replace("\\", "/")
+            )
         for alias in ("@/", "~/", "#/", "$lib/", "src/"):
             if spec.startswith(alias):
-                rest = spec[len(alias):]
+                rest = spec[len(alias) :]
                 return _rel(f"{'src' if alias == 'src/' else lay.root}/{rest}")
         cand = _rel(f"{lay.root}/{spec}")
-        return cand if (repo / _rel(f"{lay.root}/{spec.split('/')[0]}")).is_dir() and layer_of(lay, cand) else None
+        return (
+            cand
+            if (repo / _rel(f"{lay.root}/{spec.split('/')[0]}")).is_dir()
+            and layer_of(lay, cand)
+            else None
+        )
     if gomod and (spec == gomod or spec.startswith(gomod + "/")):
-        return _rel(spec[len(gomod):].lstrip("/") or ".")
+        return _rel(spec[len(gomod) :].lstrip("/") or ".")
     return None
 
 
@@ -347,9 +635,19 @@ def _match(spec: str, names: set[str]) -> str | None:
 def external(spec: str, lg: str) -> tuple[str, set[str]] | None:
     """(library, layers allowed to use it) when `spec` reaches outside the process."""
     if lg == "py":
-        hit = next((n for n in sorted(EXTERNAL_PY, key=len, reverse=True)
-                    if spec == n or spec.startswith(n + ".")), None)
-        return (hit, {"connectors", "entrypoints"} if hit == "grpc" else {"connectors"}) if hit else None
+        hit = next(
+            (
+                n
+                for n in sorted(EXTERNAL_PY, key=len, reverse=True)
+                if spec == n or spec.startswith(n + ".")
+            ),
+            None,
+        )
+        return (
+            (hit, {"connectors", "entrypoints"} if hit == "grpc" else {"connectors"})
+            if hit
+            else None
+        )
     if lg == "js":
         if spec.startswith((".", "node:")):
             return None
@@ -375,15 +673,28 @@ def assess(repo: Path, cfg: dict | None = None) -> list[Finding]:
     if lay is None or lay.mode == "keep":
         return []
     if lay.problems:
-        return [Finding("GW100", ".groundwork/config.json", p, "fix the \"layout\" entry; see STANDARD.md §5f")
-                for p in lay.problems]
+        return [
+            Finding(
+                "GW100",
+                ".groundwork/config.json",
+                p,
+                'fix the "layout" entry; see STANDARD.md §5f',
+            )
+            for p in lay.problems
+        ]
     prof = PROFILES[lay.profile]
     out: list[Finding] = []
     for layer in prof["required"]:
         if not any((repo / p).is_dir() for p in lay.folders[layer]):
-            out.append(Finding("GW101", lay.folders[layer][0], f"the {lay.profile} profile needs a {layer}/ folder ({SHORT[layer]})",
-                               "groundwork.py layout init --create, or map an existing folder: groundwork.py layout map "
-                               f"{layer}=<path>"))
+            out.append(
+                Finding(
+                    "GW101",
+                    lay.folders[layer][0],
+                    f"the {lay.profile} profile needs a {layer}/ folder ({SHORT[layer]})",
+                    "groundwork.py layout init --create, or map an existing folder: groundwork.py layout map "
+                    f"{layer}=<path>",
+                )
+            )
     files = code_files(repo, lay)
     gomod = _go_module(repo)
     outside: dict[str, int] = {}
@@ -393,20 +704,38 @@ def assess(repo: Path, cfg: dict | None = None) -> list[Finding]:
             continue
         p = PurePosixPath(rel)
         for i, part in enumerate(p.parts[:-1]):
-            d = "/".join(p.parts[:i + 1])
+            d = "/".join(p.parts[: i + 1])
             if part.lower() in VAGUE and d not in seen_dirs and _under(d, lay.root):
                 seen_dirs.add(d)
-                out.append(Finding("GW106", d, f'folder name "{part}" says nothing about what it holds',
-                                   "move each file next to the code it serves, or name the folder for its job"))
+                out.append(
+                    Finding(
+                        "GW106",
+                        d,
+                        f'folder name "{part}" says nothing about what it holds',
+                        "move each file next to the code it serves, or name the folder for its job",
+                    )
+                )
         if p.stem.lower() in VAGUE:
-            out.append(Finding("GW106", rel, f'file name "{p.name}" says nothing about what it holds',
-                               "split it into files named for what they do"))
+            out.append(
+                Finding(
+                    "GW106",
+                    rel,
+                    f'file name "{p.name}" says nothing about what it holds',
+                    "split it into files named for what they do",
+                )
+            )
         if is_test(rel):
             continue
         wiring = is_wiring(lay, rel)
         layer = layer_of(lay, rel)
         if not wiring and layer is None:
-            inner = rel if lay.root == "." else rel[len(lay.root) + 1:] if _under(rel, lay.root) else None
+            inner = (
+                rel
+                if lay.root == "."
+                else rel[len(lay.root) + 1 :]
+                if _under(rel, lay.root)
+                else None
+            )
             key = _rel(f"{lay.root}/{inner.split('/')[0]}") if inner else rel
             outside[key] = outside.get(key, 0) + 1
             continue
@@ -414,9 +743,21 @@ def assess(repo: Path, cfg: dict | None = None) -> list[Finding]:
             continue
         if layer == "connectors" and not wiring:
             home = next(c for c in lay.folders["connectors"] if _under(rel, c))
-            if p.parent.as_posix() == home and p.stem not in ("__init__", "index", "mod", "ports", "base"):
-                out.append(Finding("GW107", rel, "connector code sits directly in the connectors folder",
-                                   f"give each external system its own folder: {home}/<system>/ (e.g. llm/, database/)"))
+            if p.parent.as_posix() == home and p.stem not in (
+                "__init__",
+                "index",
+                "mod",
+                "ports",
+                "base",
+            ):
+                out.append(
+                    Finding(
+                        "GW107",
+                        rel,
+                        "connector code sits directly in the connectors folder",
+                        f"give each external system its own folder: {home}/<system>/ (e.g. llm/, database/)",
+                    )
+                )
         lg = lang(rel)
         try:
             raw = (repo / rel).read_text(encoding="utf-8", errors="replace")[:300_000]
@@ -431,9 +772,16 @@ def assess(repo: Path, cfg: dict | None = None) -> list[Finding]:
                 lib, ok = ext
                 if layer not in ok and lib not in flagged:
                     flagged.add(lib)
-                    out.append(Finding("GW103", rel, f"line {line}: {layer}/ uses {lib}, which talks to an outside system",
-                                       f"move that call into {lay.folders['connectors'][0]}/<system>/ behind an interface core defines"
-                                       if "connectors" in lay.folders else "libraries take such clients as arguments"))
+                    out.append(
+                        Finding(
+                            "GW103",
+                            rel,
+                            f"line {line}: {layer}/ uses {lib}, which talks to an outside system",
+                            f"move that call into {lay.folders['connectors'][0]}/<system>/ behind an interface core defines"
+                            if "connectors" in lay.folders
+                            else "libraries take such clients as arguments",
+                        )
+                    )
                 continue
             tgt = target_path(repo, lay, rel, spec, lg, level, gomod)
             if not tgt or is_legacy(lay, tgt):
@@ -441,53 +789,167 @@ def assess(repo: Path, cfg: dict | None = None) -> list[Finding]:
             tl = layer_of(lay, tgt)
             if tl and tl not in allowed and tl not in flagged:
                 flagged.add(tl)
-                out.append(Finding("GW102", rel, f"line {line}: {layer}/ imports {tl}/ ({spec}), which the {lay.profile} profile forbids",
-                                   f"{layer}/ may import: {', '.join(sorted(allowed - {layer})) or 'nothing outside itself'}. "
-                                   + ("Define an interface in core and let the wiring file plug the connector in" if tl == "connectors" else
-                                      "Move the shared piece to the layer both may use")))
+                out.append(
+                    Finding(
+                        "GW102",
+                        rel,
+                        f"line {line}: {layer}/ imports {tl}/ ({spec}), which the {lay.profile} profile forbids",
+                        f"{layer}/ may import: {', '.join(sorted(allowed - {layer})) or 'nothing outside itself'}. "
+                        + (
+                            "Define an interface in core and let the wiring file plug the connector in"
+                            if tl == "connectors"
+                            else "Move the shared piece to the layer both may use"
+                        ),
+                    )
+                )
         if lg == "js" and layer not in ("connectors",) and (m := JS_FETCH.search(text)):
-            out.append(Finding("GW103", rel, f"line {_line(text, m.start())}: {layer}/ calls the network directly ({m.group(0).strip('( ')})",
-                               "put the call in a connector and call that"))
+            out.append(
+                Finding(
+                    "GW103",
+                    rel,
+                    f"line {_line(text, m.start())}: {layer}/ calls the network directly ({m.group(0).strip('( ')})",
+                    "put the call in a connector and call that",
+                )
+            )
         m = ENV_READ[lg].search(text)
         if m and layer not in prof["env_layers"]:
-            out.append(Finding("GW105", rel, f"line {_line(text, m.start())}: {layer}/ reads environment variables",
-                               "read settings once in config/ and pass them in" if prof["env_layers"]
-                               else "a library takes its settings as arguments; it never reads the environment"))
+            out.append(
+                Finding(
+                    "GW105",
+                    rel,
+                    f"line {_line(text, m.start())}: {layer}/ reads environment variables",
+                    "read settings once in config/ and pass them in"
+                    if prof["env_layers"]
+                    else "a library takes its settings as arguments; it never reads the environment",
+                )
+            )
     for key, n in sorted(outside.items()):
-        out.append(Finding("GW104", key, f"{n} code file(s) belong to no folder role of the layout",
-                           f"move them into a role folder, map the folder (groundwork.py layout map <role>={key}), "
-                           f"or mark it not yet migrated (groundwork.py layout map --legacy {key})"))
+        out.append(
+            Finding(
+                "GW104",
+                key,
+                f"{n} code file(s) belong to no folder role of the layout",
+                f"move them into a role folder, map the folder (groundwork.py layout map <role>={key}), "
+                f"or mark it not yet migrated (groundwork.py layout map --legacy {key})",
+            )
+        )
     return out
 
 
 # --- suggestions for an existing codebase -----------------------------------------------
 
 ROLE_GUESS = {
-    "core": {"core", "domain", "services", "service", "usecases", "use_cases", "business", "logic", "features", "model", "models"},
-    "connectors": {"connectors", "clients", "client", "integrations", "adapters", "gateways", "gateway", "db", "database",
-                   "repositories", "repository", "repos", "infra", "infrastructure", "external", "providers", "storage",
-                   "persistence", "dao", "llm", "api_clients", "services_external"},
-    "entrypoints": {"entrypoints", "api", "routes", "routers", "handlers", "controllers", "cli", "commands", "cmd",
-                    "workers", "jobs", "http", "server", "endpoints", "views"},
+    "core": {
+        "core",
+        "domain",
+        "services",
+        "service",
+        "usecases",
+        "use_cases",
+        "business",
+        "logic",
+        "features",
+        "model",
+        "models",
+    },
+    "connectors": {
+        "connectors",
+        "clients",
+        "client",
+        "integrations",
+        "adapters",
+        "gateways",
+        "gateway",
+        "db",
+        "database",
+        "repositories",
+        "repository",
+        "repos",
+        "infra",
+        "infrastructure",
+        "external",
+        "providers",
+        "storage",
+        "persistence",
+        "dao",
+        "llm",
+        "api_clients",
+        "services_external",
+    },
+    "entrypoints": {
+        "entrypoints",
+        "api",
+        "routes",
+        "routers",
+        "handlers",
+        "controllers",
+        "cli",
+        "commands",
+        "cmd",
+        "workers",
+        "jobs",
+        "http",
+        "server",
+        "endpoints",
+        "views",
+    },
     "config": {"config", "settings", "conf", "configuration", "env"},
     "prompts": {"prompts"},
     "pages": {"pages", "app", "screens", "routes", "views"},
     "components": {"components", "ui", "widgets"},
 }
-WEB_DEPS = {"react", "vue", "svelte", "@angular/core", "next", "nuxt", "solid-js", "preact", "@sveltejs/kit"}
-SERVER_DEPS = {"express", "fastify", "koa", "@nestjs/core", "hono", "fastapi", "flask", "django", "starlette",
-               "aiohttp", "sanic", "tornado", "litestar", "github.com/gin-gonic/gin", "github.com/labstack/echo"}
-CLI_DEPS = {"click", "typer", "commander", "yargs", "github.com/spf13/cobra", "argparse"}
+WEB_DEPS = {
+    "react",
+    "vue",
+    "svelte",
+    "@angular/core",
+    "next",
+    "nuxt",
+    "solid-js",
+    "preact",
+    "@sveltejs/kit",
+}
+SERVER_DEPS = {
+    "express",
+    "fastify",
+    "koa",
+    "@nestjs/core",
+    "hono",
+    "fastapi",
+    "flask",
+    "django",
+    "starlette",
+    "aiohttp",
+    "sanic",
+    "tornado",
+    "litestar",
+    "github.com/gin-gonic/gin",
+    "github.com/labstack/echo",
+}
+CLI_DEPS = {
+    "click",
+    "typer",
+    "commander",
+    "yargs",
+    "github.com/spf13/cobra",
+    "argparse",
+}
 
 
 def guess_root(repo: Path) -> str:
     src = repo / "src"
     if src.is_dir():
-        pkgs = [d for d in src.iterdir() if d.is_dir() and (d / "__init__.py").is_file()]
+        pkgs = [
+            d for d in src.iterdir() if d.is_dir() and (d / "__init__.py").is_file()
+        ]
         return f"src/{pkgs[0].name}" if len(pkgs) == 1 else "src"
     if (repo / "go.mod").is_file() and (repo / "internal").is_dir():
         return "internal"
-    pkgs = [d for d in repo.iterdir() if d.is_dir() and (d / "__init__.py").is_file() and d.name not in TEST_DIRS]
+    pkgs = [
+        d
+        for d in repo.iterdir()
+        if d.is_dir() and (d / "__init__.py").is_file() and d.name not in TEST_DIRS
+    ]
     if len(pkgs) == 1:
         return pkgs[0].name
     return "src" if (repo / "package.json").is_file() else "."
@@ -495,12 +957,26 @@ def guess_root(repo: Path) -> str:
 
 def guess_profile(repo: Path) -> str:
     text = ""
-    for f in ("package.json", "pyproject.toml", "requirements.txt", "go.mod", "setup.cfg"):
+    for f in (
+        "package.json",
+        "pyproject.toml",
+        "requirements.txt",
+        "go.mod",
+        "setup.cfg",
+    ):
         try:
-            text += "\n" + (repo / f).read_text(encoding="utf-8", errors="replace")[:100_000].lower() + "\n"
+            text += (
+                "\n"
+                + (repo / f)
+                .read_text(encoding="utf-8", errors="replace")[:100_000]
+                .lower()
+                + "\n"
+            )
         except OSError:
             pass
-    has = lambda deps: any(re.search(rf'["\'\s/]{re.escape(d.lower())}["\'\s=<>~^@\[]', text) for d in deps)  # noqa: E731
+    has = lambda deps: any(
+        re.search(rf'["\'\s/]{re.escape(d.lower())}["\'\s=<>~^@\[]', text) for d in deps
+    )
     if has(WEB_DEPS) and not has(SERVER_DEPS - {"aiohttp"}):
         return "web"
     if has(SERVER_DEPS) or (repo / "Dockerfile").is_file():
@@ -513,7 +989,13 @@ def guess_profile(repo: Path) -> str:
 def has_code(repo: Path, limit: int = 4000) -> bool:
     n = 0
     for d, dirs, files in os.walk(repo):
-        dirs[:] = [x for x in dirs if x not in C.SKIP_DIRS and not x.startswith(".") and x not in {"specs", "bugs", "docs"}]
+        dirs[:] = [
+            x
+            for x in dirs
+            if x not in C.SKIP_DIRS
+            and not x.startswith(".")
+            and x not in {"specs", "bugs", "docs"}
+        ]
         for f in files:
             n += 1
             if lang(f) and not is_test(f):
@@ -533,18 +1015,29 @@ def suggest(repo: Path) -> dict:
     if base.is_dir():
         for d in sorted(base.iterdir()):
             if d.is_dir() and d.name not in C.SKIP_DIRS and not d.name.startswith("."):
-                role = next((r for r in roles if d.name.lower() in ROLE_GUESS.get(r, set())), None)
+                role = next(
+                    (r for r in roles if d.name.lower() in ROLE_GUESS.get(r, set())),
+                    None,
+                )
                 folders[_rel(f"{root}/{d.name}")] = role or "?"
-    return {"has_code": has_code(repo), "profile_guess": profile, "root_guess": root, "folders": folders}
+    return {
+        "has_code": has_code(repo),
+        "profile_guess": profile,
+        "root_guess": root,
+        "folders": folders,
+    }
 
 
 # --- writing the decision ---------------------------------------------------------------
 
+
 def readme(layer: str, profile: str) -> str:
     may = PROFILES[profile]["imports"].get(layer, [])
-    return (f"# {layer}/\n\n{PURPOSE[layer]}.\n\n"
-            f"May import: {', '.join(may + ['itself']) if may else 'only itself'}.\n\n"
-            "Part of the GroundWork code layout (STANDARD.md §5f). Run `groundwork.py layout` for the whole map.\n")
+    return (
+        f"# {layer}/\n\n{PURPOSE[layer]}.\n\n"
+        f"May import: {', '.join(may + ['itself']) if may else 'only itself'}.\n\n"
+        "Part of the GroundWork code layout (STANDARD.md §5f). Run `groundwork.py layout` for the whole map.\n"
+    )
 
 
 def summary(lay: Layout | None) -> str:
@@ -552,19 +1045,37 @@ def summary(lay: Layout | None) -> str:
     if lay is None:
         return ""
     if lay.mode == "keep":
-        return ("CODE LAYOUT: this repo KEEPS ITS OWN STRUCTURE (the user chose not to migrate). Put new code where the "
-                "existing code of the same kind lives and copy its patterns and naming. Do not create GroundWork layout "
-                "folders (core/, connectors/, entrypoints/ …) and do not move or restructure existing code unless the user "
-                "asks for a migration (then: code-layout skill).")
+        return (
+            "CODE LAYOUT: this repo KEEPS ITS OWN STRUCTURE (the user chose not to migrate). Put new code where the "
+            "existing code of the same kind lives and copy its patterns and naming. Do not create GroundWork layout "
+            "folders (core/, connectors/, entrypoints/ …) and do not move or restructure existing code unless the user "
+            "asks for a migration (then: code-layout skill)."
+        )
     if lay.problems:
-        return "CODE LAYOUT: the \"layout\" entry in .groundwork/config.json is invalid — " + "; ".join(lay.problems)
+        return (
+            'CODE LAYOUT: the "layout" entry in .groundwork/config.json is invalid — '
+            + "; ".join(lay.problems)
+        )
     imp = PROFILES[lay.profile]["imports"]
     parts = [f"{lay.folders[l][0]}/ = {SHORT[l]}" for l in imp]
-    rule = "; ".join(f"{l} may import {', '.join(imp[l]) or 'nothing else'}" for l in imp if l != "prompts")
-    legacy = (f" Not yet migrated (leave alone unless a task moves it): {', '.join(lay.legacy)}." if lay.legacy else "")
-    return (f"CODE LAYOUT ({lay.profile} profile, root {lay.root}): " + " | ".join(parts) + ". "
-            f"Dependency rule: {rule}; wiring files (app/main) may import everything. Never create utils/helpers/common/misc "
-            "folders. Put every new file in its role folder; full map: groundwork.py layout." + legacy)
+    rule = "; ".join(
+        f"{l} may import {', '.join(imp[l]) or 'nothing else'}"
+        for l in imp
+        if l != "prompts"
+    )
+    legacy = (
+        f" Not yet migrated (leave alone unless a task moves it): {', '.join(lay.legacy)}."
+        if lay.legacy
+        else ""
+    )
+    return (
+        f"CODE LAYOUT ({lay.profile} profile, root {lay.root}): "
+        + " | ".join(parts)
+        + ". "
+        f"Dependency rule: {rule}; wiring files (app/main) may import everything. Never create utils/helpers/common/misc "
+        "folders. Put every new file in its role folder; full map: groundwork.py layout."
+        + legacy
+    )
 
 
 def render(repo: Path) -> str:
@@ -573,31 +1084,54 @@ def render(repo: Path) -> str:
         s = suggest(repo)
         lines = ["No code layout decision recorded for this repo."]
         if s["has_code"]:
-            lines.append("It already has code: ask the user whether to migrate it to the standard layout or keep its structure.")
-            lines.append(f"  keep:     groundwork.py layout keep")
-            lines.append(f"  migrate:  groundwork.py layout init --profile {s['profile_guess']} --root {s['root_guess']}  "
-                         "(then map existing folders; moving code is planned work)")
+            lines.append(
+                "It already has code: ask the user whether to migrate it to the standard layout or keep its structure."
+            )
+            lines.append("  keep:     groundwork.py layout keep")
+            lines.append(
+                f"  migrate:  groundwork.py layout init --profile {s['profile_guess']} --root {s['root_guess']}  "
+                "(then map existing folders; moving code is planned work)"
+            )
             if s["folders"]:
-                lines.append("Existing folders and the role they look like (a guess, not a decision):")
+                lines.append(
+                    "Existing folders and the role they look like (a guess, not a decision):"
+                )
                 lines += [f"  {d:<32} {r}" for d, r in s["folders"].items()]
         else:
-            lines.append(f"New code: groundwork.py layout init --profile {s['profile_guess']} --root {s['root_guess']} --create")
+            lines.append(
+                f"New code: groundwork.py layout init --profile {s['profile_guess']} --root {s['root_guess']} --create"
+            )
         return "\n".join(lines)
     if lay.mode == "keep":
         return "This repo keeps its own structure (layout mode: keep). New code follows the existing patterns."
     if lay.problems:
         return "Invalid layout entry:\n" + "\n".join("  " + p for p in lay.problems)
     imp = PROFILES[lay.profile]["imports"]
-    lines = [f"Profile: {lay.profile} — {PROFILES[lay.profile]['about']}", f"Root:    {lay.root}", ""]
+    lines = [
+        f"Profile: {lay.profile} — {PROFILES[lay.profile]['about']}",
+        f"Root:    {lay.root}",
+        "",
+    ]
     for l in imp:
         where = ", ".join(lay.folders[l])
-        mark = "" if any((repo / p).is_dir() for p in lay.folders[l]) else "   (not created yet)"
+        mark = (
+            ""
+            if any((repo / p).is_dir() for p in lay.folders[l])
+            else "   (not created yet)"
+        )
         lines.append(f"  {where + '/':<34} {PURPOSE[l]}{mark}")
-        lines.append(f"  {'':<34} may import: {', '.join(imp[l]) or 'nothing outside itself'}")
-    lines.append(f"\n  wiring: app/main files in {lay.root}" + (f", {', '.join(lay.wiring)}" if lay.wiring else "")
-                 + " — the only code that may import everything (it plugs connectors into core)")
+        lines.append(
+            f"  {'':<34} may import: {', '.join(imp[l]) or 'nothing outside itself'}"
+        )
+    lines.append(
+        f"\n  wiring: app/main files in {lay.root}"
+        + (f", {', '.join(lay.wiring)}" if lay.wiring else "")
+        + " — the only code that may import everything (it plugs connectors into core)"
+    )
     if lay.legacy:
-        lines.append("  not yet migrated (exempt from checks): " + ", ".join(lay.legacy))
+        lines.append(
+            "  not yet migrated (exempt from checks): " + ", ".join(lay.legacy)
+        )
     return "\n".join(lines)
 
 
@@ -621,5 +1155,15 @@ def create_folders(repo: Path, lay: Layout) -> list[str]:
 def as_json(lay: Layout | None) -> str:
     if lay is None:
         return "null"
-    return json.dumps({"mode": lay.mode, "profile": lay.profile, "root": lay.root, "folders": lay.folders,
-                       "wiring": lay.wiring, "legacy": lay.legacy, "problems": lay.problems}, indent=2)
+    return json.dumps(
+        {
+            "mode": lay.mode,
+            "profile": lay.profile,
+            "root": lay.root,
+            "folders": lay.folders,
+            "wiring": lay.wiring,
+            "legacy": lay.legacy,
+            "problems": lay.problems,
+        },
+        indent=2,
+    )

@@ -1,12 +1,13 @@
 """Code quality (STANDARD.md §5i): one recorded toolchain per repo, run by `verify`, the same for every agent."""
+
 import json
 import sys
 import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from test_check import check  # noqa: E402
-from test_flow import Base, ca, git_init, hook  # noqa: E402
+from test_check import check
+from test_flow import Base, ca, git_init, hook
 
 PY = f'"{sys.executable}"'
 
@@ -29,7 +30,9 @@ class Decision(Base):
         git_init(self.repo)
 
     def cfg(self):
-        return json.loads((self.repo / ".groundwork" / "config.json").read_text(encoding="utf-8"))["quality"]
+        return json.loads(
+            (self.repo / ".groundwork" / "config.json").read_text(encoding="utf-8")
+        )["quality"]
 
     def context(self):
         return hook(self.repo, "session-context", {})["additionalContext"]
@@ -48,8 +51,12 @@ class Decision(Base):
         before = sorted(p.name for p in self.repo.iterdir())
         r = ca(self.repo, "quality", "keep")
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertEqual(self.cfg()["commands"], {"lint": ["make lint"], "test": ["make test"]})
-        self.assertEqual(sorted(p.name for p in self.repo.iterdir()), before)          # no tool config added
+        self.assertEqual(
+            self.cfg()["commands"], {"lint": ["make lint"], "test": ["make test"]}
+        )
+        self.assertEqual(
+            sorted(p.name for p in self.repo.iterdir()), before
+        )  # no tool config added
         agents = (self.repo / "AGENTS.md").read_text(encoding="utf-8")
         self.assertEqual(agents.count("## Code quality"), 1)
         self.assertIn("- lint: `make lint`", agents)
@@ -62,16 +69,32 @@ class Decision(Base):
     def test_standard_writes_configs_without_overwriting(self):
         write(self.repo, "src/a.py", "x = 1\n")
         write(self.repo, "src/b.ts", "export const b = 1\n")
-        write(self.repo, "pyproject.toml", '[project]\nname = "a"\n\n[tool.ruff]\nline-length = 88\n')
+        write(
+            self.repo,
+            "pyproject.toml",
+            '[project]\nname = "a"\n\n[tool.ruff]\nline-length = 88\n',
+        )
         ca(self.repo, "init")
         r = ca(self.repo, "quality", "init", "--create")
         self.assertEqual(r.returncode, 0, r.stderr)
-        for made in ("mypy.ini", "eslint.config.mjs", ".prettierrc.json", ".editorconfig"):
+        for made in (
+            "mypy.ini",
+            "eslint.config.mjs",
+            ".prettierrc.json",
+            ".editorconfig",
+        ):
             self.assertTrue((self.repo / made).is_file(), made)
-        self.assertFalse((self.repo / "ruff.toml").exists())                          # [tool.ruff] already there
+        self.assertFalse(
+            (self.repo / "ruff.toml").exists()
+        )  # [tool.ruff] already there
         self.assertIn("uv add --dev ruff mypy pytest", r.stdout)
         shown = ca(self.repo, "quality").stdout
-        for cmd in ("uv run ruff check .", "npx eslint .", "npx tsc --noEmit", "uv run pytest"):
+        for cmd in (
+            "uv run ruff check .",
+            "npx eslint .",
+            "npx tsc --noEmit",
+            "uv run pytest",
+        ):
             self.assertIn(cmd, shown)
         self.assertEqual(rules(self.repo, "GW121", "GW122"), [])
 
@@ -82,10 +105,17 @@ class Decision(Base):
         write(self.repo, "go.mod", "module example.com/x\n")
         write(self.repo, "main.go", "package main\n")
         self.assertIn("go test ./...", ca(self.repo, "quality").stdout)
-        self.assertEqual([f["message"] for f in rules(self.repo, "GW121")], ["go code has no config for its standard tools"])
+        self.assertEqual(
+            [f["message"] for f in rules(self.repo, "GW121")],
+            ["go code has no config for its standard tools"],
+        )
 
     def test_invalid_entry_is_an_error(self):
-        write(self.repo, ".groundwork/config.json", json.dumps({"quality": {"mode": "lax", "commands": {"style": "x"}}}))
+        write(
+            self.repo,
+            ".groundwork/config.json",
+            json.dumps({"quality": {"mode": "lax", "commands": {"style": "x"}}}),
+        )
         found = rules(self.repo, "GW120")
         self.assertEqual(len(found), 2)
         self.assertEqual({f["severity"] for f in found}, {"error"})
@@ -101,20 +131,37 @@ class Verify(Base):
         ca(self.repo, "quality", "keep")
 
     def test_verify_runs_each_step_and_fails_on_any_failure(self):
-        r = ca(self.repo, "quality", "set", f'lint={PY} -c "print(1)"',
-               f'test={PY} -c "import sys; print(\'2 tests failed\'); sys.exit(3)"')
+        r = ca(
+            self.repo,
+            "quality",
+            "set",
+            f'lint={PY} -c "print(1)"',
+            f"test={PY} -c \"import sys; print('2 tests failed'); sys.exit(3)\"",
+        )
         self.assertEqual(r.returncode, 0, r.stderr)
         v = ca(self.repo, "verify")
         self.assertEqual(v.returncode, 1)
         self.assertIn("PASS  lint", v.stdout)
         self.assertIn("FAIL  test", v.stdout)
-        self.assertIn("2 tests failed", v.stdout)                                    # the failure's output is shown
+        self.assertIn("2 tests failed", v.stdout)  # the failure's output is shown
         self.assertEqual(ca(self.repo, "verify", "--step", "lint").returncode, 0)
 
     def test_fix_commands_run_first(self):
-        ca(self.repo, "quality", "set", f'format={PY} -c "import pathlib,sys; sys.exit(0 if pathlib.Path(\'fixed\').exists() else 1)"',
-           f'lint={PY} -c "print(1)"', f'test={PY} -c "print(1)"')
-        r = ca(self.repo, "quality", "set", f'format={PY} -c "import pathlib; pathlib.Path(\'fixed\').touch()"', "--fix")
+        ca(
+            self.repo,
+            "quality",
+            "set",
+            f"format={PY} -c \"import pathlib,sys; sys.exit(0 if pathlib.Path('fixed').exists() else 1)\"",
+            f'lint={PY} -c "print(1)"',
+            f'test={PY} -c "print(1)"',
+        )
+        r = ca(
+            self.repo,
+            "quality",
+            "set",
+            f"format={PY} -c \"import pathlib; pathlib.Path('fixed').touch()\"",
+            "--fix",
+        )
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(ca(self.repo, "verify").returncode, 1)
         self.assertEqual(ca(self.repo, "verify", "--fix").returncode, 0)
@@ -122,8 +169,13 @@ class Verify(Base):
     def test_missing_required_steps_are_reported(self):
         ca(self.repo, "quality", "set", "test=")
         msgs = [f["message"] for f in rules(self.repo, "GW122")]
-        self.assertEqual(sorted(msgs), ['no "lint" command recorded, so verify cannot check it',
-                                        'no "test" command recorded, so verify cannot check it'])
+        self.assertEqual(
+            sorted(msgs),
+            [
+                'no "lint" command recorded, so verify cannot check it',
+                'no "test" command recorded, so verify cannot check it',
+            ],
+        )
 
 
 class FileSize(Base):
@@ -136,8 +188,12 @@ class FileSize(Base):
         ca(repo, "quality", "keep")
         self.assertEqual(rules(repo, "GW123"), [])
         ca(repo, "quality", "init", "--force")
-        self.assertEqual([f["path"] for f in rules(repo, "GW123")], ["src/big.py"])     # tests exempt
-        cfg = json.loads((repo / ".groundwork" / "config.json").read_text(encoding="utf-8"))
+        self.assertEqual(
+            [f["path"] for f in rules(repo, "GW123")], ["src/big.py"]
+        )  # tests exempt
+        cfg = json.loads(
+            (repo / ".groundwork" / "config.json").read_text(encoding="utf-8")
+        )
         cfg["quality"]["max_file_lines"] = 500
         write(repo, ".groundwork/config.json", json.dumps(cfg))
         self.assertEqual(rules(repo, "GW123"), [])

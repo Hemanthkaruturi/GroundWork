@@ -13,6 +13,7 @@ It installs into the project's .devin/ folder:
 A clone in .groundwork-install/ is deleted afterwards, whether or not the install worked.
 Running it again updates an existing install. With --uninstall, it removes GroundWork from the folder's .devin/.
 """
+
 import datetime
 import json
 import os
@@ -22,14 +23,16 @@ import subprocess
 import sys
 from pathlib import Path
 
-if sys.version_info < (3, 10):
-    sys.exit(f"error: GroundWork needs Python 3.10 or newer; this is Python {sys.version.split()[0]}.")
+if sys.version_info < (3, 10):  # noqa: UP036 -- friendly exit for users on older Python
+    sys.exit(
+        f"error: GroundWork needs Python 3.10 or newer; this is Python {sys.version.split()[0]}."
+    )
 
 SRC_ROOT = Path(__file__).resolve().parents[1]
 PLUGIN = SRC_ROOT / "plugins" / "groundwork-specflow"
 TARGET = Path.cwd().resolve()
-CLONE_DIR = ".groundwork-install"                # the temporary clone the README prompt makes
-MARKER = ".groundwork-installed"                 # marks a skill folder this script owns
+CLONE_DIR = ".groundwork-install"  # the temporary clone the README prompt makes
+MARKER = ".groundwork-installed"  # marks a skill folder this script owns
 ENGINE = ".devin/groundwork/engine/groundwork.py"
 UTF8 = {"encoding": "utf-8"}
 
@@ -48,9 +51,11 @@ def write(path: Path, text: str) -> None:
 
 def rmtree(path: Path) -> None:
     """Delete a folder, including a git clone's read-only files on Windows."""
+
     def make_writable(func, p, *_):
         os.chmod(p, stat.S_IWRITE)
         func(p)
+
     if sys.version_info >= (3, 12):
         shutil.rmtree(path, onexc=make_writable)
     else:
@@ -61,20 +66,22 @@ def rmtree(path: Path) -> None:
 # nearest folder above it with .devin/groundwork, since Devin may run hooks from a subfolder. If there is no engine,
 # it warns and exits 0, so a broken install can't block every prompt, including the one that reinstalls it.
 # Single quotes only, and no $, %, ` or !, so the same text works in bash, sh, cmd and PowerShell.
-LAUNCHER = ("import os,sys,runpy;from pathlib import Path as P;"
-            "d=P(os.environ.get('DEVIN_PROJECT_DIR') or os.getcwd()).resolve();"
-            "e=next((x/'.devin/groundwork/engine/groundwork.py' for x in (d,*d.parents) "
-            "if (x/'.devin/groundwork/engine/groundwork.py').is_file()),None);"
-            "e or sys.exit(print('groundwork: engine not found in .devin/groundwork, so its hooks are off. "
-            "Paste the GroundWork install prompt again to fix it.',file=sys.stderr));"
-            "sys.path.insert(0,str(e.parent));sys.argv=[str(e),'{sub}'];runpy.run_path(str(e),run_name='__main__')")
+LAUNCHER = (
+    "import os,sys,runpy;from pathlib import Path as P;"
+    "d=P(os.environ.get('DEVIN_PROJECT_DIR') or os.getcwd()).resolve();"
+    "e=next((x/'.devin/groundwork/engine/groundwork.py' for x in (d,*d.parents) "
+    "if (x/'.devin/groundwork/engine/groundwork.py').is_file()),None);"
+    "e or sys.exit(print('groundwork: engine not found in .devin/groundwork, so its hooks are off. "
+    "Paste the GroundWork install prompt again to fix it.',file=sys.stderr));"
+    "sys.path.insert(0,str(e.parent));sys.argv=[str(e),'{sub}'];runpy.run_path(str(e),run_name='__main__')"
+)
 
 
 def hook_command(cmd: str) -> str:
     """The plugin's hook command, rewritten to run the project copy of the engine through LAUNCHER.
 
     The fallbacks cover machines with only `python` (many Windows installs) or only the `py` launcher."""
-    sub = cmd.split("groundwork.py\" ", 1)[1].split()[0]       # session-context, gate, ...
+    sub = cmd.split('groundwork.py" ', 1)[1].split()[0]  # session-context, gate, ...
     code = LAUNCHER.replace("{sub}", sub)
     return " || ".join(f'{py} -c "{code}"' for py in ("python3", "python", "py -3"))
 
@@ -84,13 +91,29 @@ def install() -> str:
     home = devin / "groundwork"
     skills = devin / "skills"
 
-    sources = sorted((PLUGIN / "skills").iterdir()) + sorted((PLUGIN / "devin" / "commands").iterdir())
-    taken = [s.name for s in sources if (skills / s.name).exists() and not (skills / s.name / MARKER).exists()]
+    sources = sorted((PLUGIN / "skills").iterdir()) + sorted(
+        (PLUGIN / "devin" / "commands").iterdir()
+    )
+    taken = [
+        s.name
+        for s in sources
+        if (skills / s.name).exists() and not (skills / s.name / MARKER).exists()
+    ]
     if taken:
-        fail(f".devin/skills/ already has {', '.join(taken)}, not installed by GroundWork. "
-             "Rename or remove them, then run this again. Nothing was changed.")
+        fail(
+            f".devin/skills/ already has {', '.join(taken)}, not installed by GroundWork. "
+            "Rename or remove them, then run this again. Nothing was changed."
+        )
 
-    if subprocess.run(["git", "rev-parse", "--git-dir"], cwd=TARGET, capture_output=True).returncode != 0:
+    if (
+        subprocess.run(
+            ["git", "rev-parse", "--git-dir"],
+            cwd=TARGET,
+            capture_output=True,
+            check=False,
+        ).returncode
+        != 0
+    ):
         print("Not a git repository yet; running git init.")
         subprocess.run(["git", "init", "-q"], cwd=TARGET, check=True)
 
@@ -98,21 +121,30 @@ def install() -> str:
     if home.exists():
         rmtree(home)
     home.mkdir(parents=True)
-    shutil.copytree(PLUGIN / "engine", home / "engine", ignore=shutil.ignore_patterns("__pycache__"))
+    shutil.copytree(
+        PLUGIN / "engine", home / "engine", ignore=shutil.ignore_patterns("__pycache__")
+    )
     shutil.copytree(PLUGIN / "templates", home / "templates")
     shutil.copy2(PLUGIN / "STANDARD.md", home / "STANDARD.md")
 
     # 2. Skills and commands as Devin project skills. Paths point at .devin/groundwork, and commands
     #    are /approve, /bypass and /status rather than /groundwork-specflow:approve and so on.
-    for old in skills.glob(f"*/{MARKER}"):          # drop skills an earlier version installed
+    for old in skills.glob(f"*/{MARKER}"):  # drop skills an earlier version installed
         rmtree(old.parent)
     for src in sources:
         dest = skills / src.name
         dest.mkdir(parents=True)
         for f in src.iterdir():
-            write(dest / f.name, read(f).replace("${CLAUDE_PLUGIN_ROOT}", ".devin/groundwork")
-                                        .replace("/groundwork-specflow:", "/"))
-        write(dest / MARKER, "Installed by GroundWork's setup/install.py. Running it again replaces this folder.\n")
+            write(
+                dest / f.name,
+                read(f)
+                .replace("${CLAUDE_PLUGIN_ROOT}", ".devin/groundwork")
+                .replace("/groundwork-specflow:", "/"),
+            )
+        write(
+            dest / MARKER,
+            "Installed by GroundWork's setup/install.py. Running it again replaces this folder.\n",
+        )
 
     # 3. Hooks. Same hooks as the plugin, in Devin's project format (event names at the top level).
     ours = json.loads(read(PLUGIN / "hooks" / "hooks.json"))["hooks"]
@@ -122,8 +154,10 @@ def install() -> str:
                 hook["command"] = hook_command(hook["command"])
     hooks_file = devin / "hooks.v1.json"
     config = json.loads(read(hooks_file)) if hooks_file.exists() else {}
+
     def mine(group: dict) -> bool:
         return any(ENGINE in h.get("command", "") for h in group.get("hooks", []))
+
     for event in list(config):
         config[event] = [g for g in config[event] if not mine(g)]
         if not config[event]:
@@ -140,18 +174,31 @@ def install() -> str:
     if cfg_file.exists():
         cfg = json.loads(read(cfg_file))
         required = cfg.get("requiredPlugins")
-        if isinstance(required, list) and ".devin/skills/groundwork-specflow" in required:
-            cfg["requiredPlugins"] = [p for p in required if p != ".devin/skills/groundwork-specflow"]
+        if (
+            isinstance(required, list)
+            and ".devin/skills/groundwork-specflow" in required
+        ):
+            cfg["requiredPlugins"] = [
+                p for p in required if p != ".devin/skills/groundwork-specflow"
+            ]
             write(cfg_file, json.dumps(cfg, indent=2) + "\n")
     (devin / "groundwork-README.md").unlink(missing_ok=True)
 
     # 5. Version record.
     version = json.loads(read(PLUGIN / ".claude-plugin" / "plugin.json"))["version"]
-    sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=SRC_ROOT, capture_output=True, text=True).stdout.strip()
-    write(devin / "groundwork-version",
-          "# Written by GroundWork's setup/install.py. Run it again to update.\n"
-          "source=https://github.com/Hemanthkaruturi/GroundWork.git\n"
-          f"version={version}\ncommit={sha or 'unknown'}\ninstalled={datetime.date.today().isoformat()}\n")
+    sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=SRC_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout.strip()
+    write(
+        devin / "groundwork-version",
+        "# Written by GroundWork's setup/install.py. Run it again to update.\n"
+        "source=https://github.com/Hemanthkaruturi/GroundWork.git\n"
+        f"version={version}\ncommit={sha or 'unknown'}\ninstalled={datetime.datetime.now().astimezone().date().isoformat()}\n",
+    )
     print(f"Installed {len(sources)} skills and the hooks into .devin/.")
     return version
 
@@ -160,7 +207,10 @@ def uninstall() -> None:
     """Remove what install() added to this folder's .devin/, keeping everything else."""
     devin = TARGET / ".devin"
     removed = 0
-    for path in [devin / "groundwork", *(m.parent for m in devin.glob(f"skills/*/{MARKER}"))]:
+    for path in [
+        devin / "groundwork",
+        *(m.parent for m in devin.glob(f"skills/*/{MARKER}")),
+    ]:
         if path.exists():
             rmtree(path)
             removed += 1
@@ -168,7 +218,11 @@ def uninstall() -> None:
     if hooks_file.exists():
         config = json.loads(read(hooks_file))
         for event in list(config):
-            config[event] = [g for g in config[event] if not any(ENGINE in h.get("command", "") for h in g.get("hooks", []))]
+            config[event] = [
+                g
+                for g in config[event]
+                if not any(ENGINE in h.get("command", "") for h in g.get("hooks", []))
+            ]
             if not config[event]:
                 del config[event]
         if config:
@@ -177,24 +231,46 @@ def uninstall() -> None:
             hooks_file.unlink()
         removed += 1
     (devin / "groundwork-version").unlink(missing_ok=True)
-    print(f"GroundWork removed from {devin}." if removed else f"GroundWork is not installed in {devin}.")
+    print(
+        f"GroundWork removed from {devin}."
+        if removed
+        else f"GroundWork is not installed in {devin}."
+    )
 
 
 def check() -> None:
     """Run the session-start hook exactly as hooks.v1.json says, in this platform's shell, the way Devin will."""
     config = json.loads(read(TARGET / ".devin" / "hooks.v1.json"))
-    command = next(h["command"] for g in config["SessionStart"] for h in g["hooks"] if ENGINE in h["command"])
-    run = subprocess.run(command, shell=True, cwd=TARGET, input='{"hook_event_name": "SessionStart"}',
-                         capture_output=True, text=True, encoding="utf-8", errors="replace",
-                         env={**os.environ, "DEVIN_PROJECT_DIR": str(TARGET)})
+    command = next(
+        h["command"]
+        for g in config["SessionStart"]
+        for h in g["hooks"]
+        if ENGINE in h["command"]
+    )
+    run = subprocess.run(
+        command,
+        shell=True,
+        cwd=TARGET,
+        input='{"hook_event_name": "SessionStart"}',
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env={**os.environ, "DEVIN_PROJECT_DIR": str(TARGET)},
+        check=False,
+    )
     if run.returncode != 0 or "groundwork is active" not in run.stdout:
         output = "\n".join((run.stdout + run.stderr).strip().splitlines()[:20])
-        fail(f"GroundWork was copied into .devin/, but its session-start hook did not run correctly:\n{output}")
+        fail(
+            f"GroundWork was copied into .devin/, but its session-start hook did not run correctly:\n{output}"
+        )
 
 
 def main() -> None:
     if not (PLUGIN / "engine" / "groundwork.py").exists():
-        fail(f"{SRC_ROOT} is not a GroundWork checkout (no plugins/groundwork-specflow/engine/groundwork.py).")
+        fail(
+            f"{SRC_ROOT} is not a GroundWork checkout (no plugins/groundwork-specflow/engine/groundwork.py)."
+        )
     if TARGET == SRC_ROOT or SRC_ROOT in TARGET.parents:
         fail("run this from your project's root, not from inside the GroundWork clone.")
     temporary = SRC_ROOT == TARGET / CLONE_DIR
@@ -203,17 +279,25 @@ def main() -> None:
             uninstall()
             return
         if TARGET == Path.home().resolve():
-            fail(f"this is your home folder ({TARGET}), not a project. Its .devin/ folder holds Devin's settings "
-                 "for every project. Open Devin in your project's folder and run the install there.")
+            fail(
+                f"this is your home folder ({TARGET}), not a project. Its .devin/ folder holds Devin's settings "
+                "for every project. Open Devin in your project's folder and run the install there."
+            )
         version = install()
         check()
     finally:
         if temporary:
             rmtree(SRC_ROOT)
     print()
-    print(f"GroundWork {version} is installed in .devin/ and checked: its session-start hook runs.")
-    print("It loads when a Devin session starts, so it takes effect from the next session in this project.")
-    print("Next: open a new Devin session in this project and type /bootstrap. That sets GroundWork up for the")
+    print(
+        f"GroundWork {version} is installed in .devin/ and checked: its session-start hook runs."
+    )
+    print(
+        "It loads when a Devin session starts, so it takes effect from the next session in this project."
+    )
+    print(
+        "Next: open a new Devin session in this project and type /bootstrap. That sets GroundWork up for the"
+    )
     print("project: it runs groundwork init and writes the project documents with you.")
     print("To share GroundWork with your team, commit the .devin/ folder.")
 

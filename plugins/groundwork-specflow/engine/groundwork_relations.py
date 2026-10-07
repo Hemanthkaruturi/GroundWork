@@ -3,17 +3,17 @@
 Relations live in spec front matter (values are `NNN-slug` in the same repo or `repo/NNN-slug` in a
 sibling repo of the workspace). Everything here is read from files; nothing is remembered.
 """
+
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from pathlib import Path
 
 import groundwork_bugs as B
 import groundwork_core as C
 
 KINDS = ["depends_on", "builds_against", "extends", "amends"]
-Node = tuple[str, str]      # (repo name, feature slug)
+Node = tuple[str, str]  # (repo name, feature slug)
 
 
 @dataclass
@@ -21,14 +21,16 @@ class Edge:
     src: Node
     kind: str
     raw: str
-    dst: Node | None        # None when the reference does not resolve
+    dst: Node | None  # None when the reference does not resolve
 
 
 def contexts(ctx: C.Ctx) -> list[C.Ctx]:
     if ctx.level == "workspace":
         return [C.detect(k, ctx.workspace) for k in C.child_repos(ctx.workspace)]
     if ctx.level == "repo" and ctx.workspace:
-        return [C.detect(k, ctx.workspace) for k in C.child_repos(ctx.workspace)]   # siblings matter for cross-repo refs
+        return [
+            C.detect(k, ctx.workspace) for k in C.child_repos(ctx.workspace)
+        ]  # siblings matter for cross-repo refs
     return [ctx] if ctx.level in ("repo", "standalone") else []
 
 
@@ -43,7 +45,14 @@ def edges(ctx: C.Ctx) -> list[Edge]:
             for kind in KINDS:
                 for raw in C.list_of(meta, kind):
                     trc, tfd = C.resolve_feature(rc, raw)
-                    out.append(Edge((rc.repo.name, fdir.name), kind, raw, (trc.repo.name, tfd.name) if tfd else None))
+                    out.append(
+                        Edge(
+                            (rc.repo.name, fdir.name),
+                            kind,
+                            raw,
+                            (trc.repo.name, tfd.name) if tfd else None,
+                        )
+                    )
     return out
 
 
@@ -63,10 +72,11 @@ def find_cycles(es: list[Edge]) -> list[list[Node]]:
 
     def dfs(n: Node, path: list[Node]) -> None:
         if n in path:
-            cyc = path[path.index(n):] + [n]
+            cyc = path[path.index(n) :] + [n]
             key = frozenset(cyc)
             if key not in seen:
-                seen.add(key); cycles.append(cyc)
+                seen.add(key)
+                cycles.append(cyc)
             return
         for m in graph.get(n, []):
             dfs(m, path + [n])
@@ -89,10 +99,16 @@ def downstream(ctx: C.Ctx, target: Node) -> dict[str, list[str]]:
     for rc in contexts(ctx):
         for bp in B.bug_paths(rc):
             meta, _ = C.split_fm(bp.read_text(encoding="utf-8"))
-            hits = [r for r in C.list_of(meta, "violates") if node_of(rc, r.partition("@")[2].strip()) == target]
+            hits = [
+                r
+                for r in C.list_of(meta, "violates")
+                if node_of(rc, r.partition("@")[2].strip()) == target
+            ]
             hits += [a for a in C.list_of(meta, "amends") if node_of(rc, a) == target]
             if hits:
-                res["bugs"].append(f"{rc.repo.name}/bugs/{bp.stem}  ({meta.get('status', '?')})")
+                res["bugs"].append(
+                    f"{rc.repo.name}/bugs/{bp.stem}  ({meta.get('status', '?')})"
+                )
     return res
 
 
@@ -107,11 +123,17 @@ def describe(ctx: C.Ctx, ref: str) -> str:
         lines.append(f"{rid}: specs built from it")
         for rc in contexts(ctx):
             for fdir in C.feature_dirs(rc):
-                m, _ = C.split_fm((fdir / "spec.md").read_text(encoding="utf-8")) if (fdir / "spec.md").is_file() else ({}, "")
+                m, _ = (
+                    C.split_fm((fdir / "spec.md").read_text(encoding="utf-8"))
+                    if (fdir / "spec.md").is_file()
+                    else ({}, "")
+                )
                 if m.get("rfc") == rid:
                     lines.append(f"  - {rc.repo.name}/{fdir.name}")
         for r in C.rfcs(ctx):
-            if rid in C.list_of(r.meta, "supersedes") or rid in C.list_of(r.meta, "related_rfcs"):
+            if rid in C.list_of(r.meta, "supersedes") or rid in C.list_of(
+                r.meta, "related_rfcs"
+            ):
                 lines.append(f"  - {r.path.stem}  (RFC that supersedes/relates to it)")
         return "\n".join(lines)
     node = node_of(ctx, ref) or ("", "")
@@ -120,7 +142,6 @@ def describe(ctx: C.Ctx, ref: str) -> str:
     mine = [e for e in edges(ctx) if e.src == node]
     lines.append(f"{fmt(node)}")
     for e in mine:
-        rc = ctx if "/" not in e.raw else ctx
         state = "MISSING" if e.dst is None else ""
         if e.dst:
             for c in contexts(ctx):

@@ -3,6 +3,7 @@
 Pure standard library. Nothing here talks to the network or to a model; every rule the
 plugin enforces is decided by code in this file, so it can be tested without an agent.
 """
+
 from __future__ import annotations
 
 import fnmatch
@@ -15,7 +16,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-STANDARD_VERSION = "0.7.0"   # the version of STANDARD.md this code implements
+STANDARD_VERSION = "0.7.0"  # the version of STANDARD.md this code implements
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 TEMPLATES = PLUGIN_ROOT / "templates"
@@ -37,22 +38,32 @@ FOUNDATION = {
 # Paths (relative to their owning root) that are documentation, not code. Editing these is
 # how the process itself is carried out, so the implementation gate lets them through.
 DOC_GLOBS = [
-    "*.md", "*.mdx", ".groundwork/*", "specs/*", "bugs/*", "DECISIONS/*", "CONTRACTS/*", "docs/*",
-    ".gitignore", "LICENSE*", ".claude/*",
+    "*.md",
+    "*.mdx",
+    ".groundwork/*",
+    "specs/*",
+    "bugs/*",
+    "DECISIONS/*",
+    "CONTRACTS/*",
+    "docs/*",
+    ".gitignore",
+    "LICENSE*",
+    ".claude/*",
 ]
 
-PLACEHOLDER = re.compile(r"\[TODO\b|\[NEEDS CLARIFICATION", re.I)
+PLACEHOLDER = re.compile(r"\[TODO\b|\[NEEDS CLARIFICATION", re.IGNORECASE)
 SKIP_DIRS = {"node_modules", ".git", ".venv", "venv", "__pycache__", "dist", "build"}
 
 
 # --- context detection ----------------------------------------------------------------
 
+
 @dataclass
 class Ctx:
-    level: str                    # workspace | repo | standalone | unknown
-    root: Path                    # the directory this level is anchored at
+    level: str  # workspace | repo | standalone | unknown
+    root: Path  # the directory this level is anchored at
     workspace: Path | None = None  # workspace root when level is repo/workspace
-    repo: Path | None = None       # repo root when level is repo/standalone
+    repo: Path | None = None  # repo root when level is repo/standalone
     note: str = ""
     config: dict = field(default_factory=dict)
 
@@ -62,7 +73,9 @@ class Ctx:
 
     @property
     def enforcement(self) -> str:
-        return os.environ.get("GROUNDWORK_ENFORCEMENT") or self.config.get("enforcement", "block")
+        return os.environ.get("GROUNDWORK_ENFORCEMENT") or self.config.get(
+            "enforcement", "block"
+        )
 
 
 def _exists(p: Path) -> bool:
@@ -100,13 +113,21 @@ def child_repos(d: Path) -> list[Path]:
         kids = sorted(d.iterdir())
     except OSError:
         return []
-    return [k for k in kids if _isdir(k) and k.name not in SKIP_DIRS
-            and not k.name.startswith(".") and _exists(k / ".git")]
+    return [
+        k
+        for k in kids
+        if _isdir(k)
+        and k.name not in SKIP_DIRS
+        and not k.name.startswith(".")
+        and _exists(k / ".git")
+    ]
 
 
 def read_config(root: Path) -> dict:
     try:
-        return json.loads((root / ".groundwork" / "config.json").read_text(encoding="utf-8"))
+        return json.loads(
+            (root / ".groundwork" / "config.json").read_text(encoding="utf-8")
+        )
     except (OSError, ValueError):
         return {}
 
@@ -145,15 +166,22 @@ def detect(path: Path | str, session_cwd: Path | str | None = None) -> Ctx:
         ws = _find_workspace_above(git)
         if ws is None and session_cwd:
             s = detect(session_cwd)
-            if s.level == "workspace" and s.workspace != git and _within(git, s.workspace):
+            if (
+                s.level == "workspace"
+                and s.workspace != git
+                and _within(git, s.workspace)
+            ):
                 ws = s.workspace
         if ws:
             return Ctx("repo", git, workspace=ws, repo=git, config=cfg)
         return Ctx("standalone", git, repo=git, config=cfg)
     # not inside any git repo
     for d in [start, *start.parents]:
-        if read_config(d).get("level") == "workspace" or _exists(d / "PROJECT.md") \
-                or (d == start and child_repos(d)):
+        if (
+            read_config(d).get("level") == "workspace"
+            or _exists(d / "PROJECT.md")
+            or (d == start and child_repos(d))
+        ):
             return Ctx("workspace", d, workspace=d, config=read_config(d))
         if d == Path.home() or d == d.parent:
             break
@@ -162,7 +190,7 @@ def detect(path: Path | str, session_cwd: Path | str | None = None) -> Ctx:
 
 # --- front matter ---------------------------------------------------------------------
 
-FM = re.compile(r"\A---\n(.*?)\n---\n?", re.S)
+FM = re.compile(r"\A---\n(.*?)\n---\n?", re.DOTALL)
 
 
 def split_fm(text: str) -> tuple[dict, str]:
@@ -178,7 +206,7 @@ def split_fm(text: str) -> tuple[dict, str]:
                 meta[k.strip()] = [x.strip() for x in v[1:-1].split(",") if x.strip()]
             else:
                 meta[k.strip()] = v
-    return meta, text[m.end():]
+    return meta, text[m.end() :]
 
 
 def set_fm(text: str, updates: dict) -> str:
@@ -194,7 +222,7 @@ def set_fm(text: str, updates: dict) -> str:
                 break
         else:
             lines.append(new)
-    return "---\n" + "\n".join(lines) + "\n---\n" + text[m.end():]
+    return "---\n" + "\n".join(lines) + "\n---\n" + text[m.end() :]
 
 
 def body_hash(text: str) -> str:
@@ -203,6 +231,7 @@ def body_hash(text: str) -> str:
 
 
 # --- approvals ------------------------------------------------------------------------
+
 
 def owner_root(path: Path, ctx: Ctx) -> Path:
     """The root whose ``.groundwork/approvals.json`` vouches for ``path``."""
@@ -236,7 +265,14 @@ def load_approvals(root: Path) -> dict:
 def signer() -> str:
     for cmd in (["git", "config", "user.email"], ["git", "config", "user.name"]):
         try:
-            out = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=5).stdout.strip()
+            out = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=5,
+                check=False,
+            ).stdout.strip()
             if out:
                 return out
         except (OSError, subprocess.SubprocessError):
@@ -248,7 +284,7 @@ def signer() -> str:
 class DocState:
     path: Path
     exists: bool
-    status: str          # missing | draft | in-review | approved | stale
+    status: str  # missing | draft | in-review | approved | stale
     signers: list[str]
     needed: int
     placeholders: int
@@ -274,7 +310,7 @@ def doc_state(path: Path, ctx: Ctx) -> DocState:
     if rec and rec.get("hash") == body_hash(text):
         status = "approved" if len(set(signers)) >= needed else "in-review"
     elif rec:
-        status, signers = "stale", []          # edited since it was approved
+        status, signers = "stale", []  # edited since it was approved
     else:
         status = "draft"
     return DocState(path, True, status, signers, needed, placeholders, meta)
@@ -282,8 +318,8 @@ def doc_state(path: Path, ctx: Ctx) -> DocState:
 
 def changes_count(text: str) -> int:
     """Entries in a spec's '## Changes' section (dated lines saying what changed and why)."""
-    m = re.search(r"^## Changes\b(.*?)(?=^## |\Z)", text, re.M | re.S)
-    return len(re.findall(r"^\s*[-*] ", m.group(1), re.M)) if m else 0
+    m = re.search(r"^## Changes\b(.*?)(?=^## |\Z)", text, re.MULTILINE | re.DOTALL)
+    return len(re.findall(r"^\s*[-*] ", m.group(1), re.MULTILINE)) if m else 0
 
 
 def approve(path: Path, ctx: Ctx, who: str | None = None) -> DocState:
@@ -293,23 +329,32 @@ def approve(path: Path, ctx: Ctx, who: str | None = None) -> DocState:
     text = path.read_text(encoding="utf-8")
     meta, _ = split_fm(text)
     if not meta:
-        raise SystemExit(f"{path.name} has no front matter; it is not a governed document")
+        raise SystemExit(
+            f"{path.name} has no front matter; it is not a governed document"
+        )
     st = doc_state(path, ctx)
     if st.placeholders:
-        raise SystemExit(f"{path.name} still has {st.placeholders} [TODO]/[NEEDS CLARIFICATION] "
-                         "marker(s). Resolve them before approval.")
+        raise SystemExit(
+            f"{path.name} still has {st.placeholders} [TODO]/[NEEDS CLARIFICATION] "
+            "marker(s). Resolve them before approval."
+        )
     root = owner_root(path, ctx)
     rel = str(path.relative_to(root.resolve()))
     store = load_approvals(root)
     h = body_hash(text)
     rec = store.get(rel)
-    if rec and rec.get("hash") != h and path.name == "spec.md":
-        # A spec that was approved and then changed may be re-approved only with the change explained.
-        if changes_count(text) <= rec.get("changes", 0):
-            raise SystemExit(
-                "this spec was approved before and has changed since. Record what changed and why as a dated line under "
-                "'## Changes' (after the required sections), e.g. '- 2026-09-30: FR-6 now means the exact, unrounded payment "
-                "(found while planning; user chose this reading)', then approve again.")
+    # A spec that was approved and then changed may be re-approved only with the change explained.
+    if (
+        rec
+        and rec.get("hash") != h
+        and path.name == "spec.md"
+        and changes_count(text) <= rec.get("changes", 0)
+    ):
+        raise SystemExit(
+            "this spec was approved before and has changed since. Record what changed and why as a dated line under "
+            "'## Changes' (after the required sections), e.g. '- 2026-09-30: FR-6 now means the exact, unrounded payment "
+            "(found while planning; user chose this reading)', then approve again."
+        )
     if not rec or rec.get("hash") != h:
         rec = {"hash": h, "signers": [], "changes": changes_count(text)}
     who = who or signer()
@@ -321,14 +366,21 @@ def approve(path: Path, ctx: Ctx, who: str | None = None) -> DocState:
     f.write_text(json.dumps(store, indent=2) + "\n", encoding="utf-8")
     needed = int(meta.get("signoffs_required", "1") or 1)
     done = len({s["who"] for s in rec["signers"]}) >= needed
-    path.write_text(set_fm(text, {
-        "status": "approved" if done else "in-review",
-        "approved_by": "[" + ", ".join(s["who"] for s in rec["signers"]) + "]",
-    }), encoding="utf-8")
+    path.write_text(
+        set_fm(
+            text,
+            {
+                "status": "approved" if done else "in-review",
+                "approved_by": "[" + ", ".join(s["who"] for s in rec["signers"]) + "]",
+            },
+        ),
+        encoding="utf-8",
+    )
     return doc_state(path, ctx)
 
 
 # --- foundation -----------------------------------------------------------------------
+
 
 def foundation_gaps(ctx: Ctx) -> tuple[list[str], list[str]]:
     """(missing, unfinished) foundation items, as names relative to their level's root.
@@ -336,7 +388,9 @@ def foundation_gaps(ctx: Ctx) -> tuple[list[str], list[str]]:
     A repo inside a workspace answers for the workspace's foundation too — the repo reads
     upward, so the product-level docs must exist before anything is built in it.
     """
-    missing, unfinished = _gaps_at(ctx.level, ctx.workspace if ctx.level == "workspace" else ctx.repo, "")
+    missing, unfinished = _gaps_at(
+        ctx.level, ctx.workspace if ctx.level == "workspace" else ctx.repo, ""
+    )
     if ctx.level == "repo" and ctx.workspace:
         m, u = _gaps_at("workspace", ctx.workspace, "workspace/")
         missing, unfinished = m + missing, u + unfinished
@@ -372,6 +426,7 @@ def _find_ci(base: Path, name: str) -> Path | None:
 
 # --- features -------------------------------------------------------------------------
 
+
 def rfcs(ctx: Ctx) -> list[DocState]:
     d = ctx.rfc_home / "DECISIONS"
     if not d.is_dir():
@@ -381,7 +436,7 @@ def rfcs(ctx: Ctx) -> list[DocState]:
 
 def find_rfc(ctx: Ctx, ref: str) -> Path | None:
     d = ctx.rfc_home / "DECISIONS"
-    m = re.match(r"(?:RFC-)?0*(\d+)", ref or "", re.I)
+    m = re.match(r"(?:RFC-)?0*(\d+)", ref or "", re.IGNORECASE)
     if not m or not d.is_dir():
         return None
     for p in d.glob("RFC-*.md"):
@@ -394,7 +449,9 @@ def active_slug(ctx: Ctx) -> str | None:
     if not ctx.repo:
         return None
     try:
-        return (ctx.repo / ".groundwork" / "active").read_text(encoding="utf-8").strip() or None
+        return (ctx.repo / ".groundwork" / "active").read_text(
+            encoding="utf-8"
+        ).strip() or None
     except OSError:
         return None
 
@@ -423,7 +480,11 @@ def resolve_feature(ctx: Ctx, ref: str) -> tuple[Ctx | None, Path | None]:
     if "/" in ref:
         repo, ref = ref.split("/", 1)
         base = ctx.workspace
-        rctx = detect(base / repo, base) if base and (base / repo / ".git").exists() else None
+        rctx = (
+            detect(base / repo, base)
+            if base and (base / repo / ".git").exists()
+            else None
+        )
     if rctx is None or not rctx.repo:
         return None, None
     fdir = rctx.repo / "specs" / ref
@@ -435,7 +496,7 @@ def feature_implemented(rctx: Ctx, fdir: Path) -> tuple[bool, str]:
     return (total > 0 and done == total), f"tasks {done}/{total}"
 
 
-def dependency_problems(ctx: Ctx, spec: "DocState") -> list[str]:
+def dependency_problems(ctx: Ctx, spec: DocState) -> list[str]:
     bad = []
     for ref in list_of(spec.meta, "depends_on"):
         rc, fd = resolve_feature(ctx, ref)
@@ -452,7 +513,9 @@ def dependency_problems(ctx: Ctx, spec: "DocState") -> list[str]:
             continue
         sp, pl = doc_state(fd / "spec.md", rc), doc_state(fd / "plan.md", rc)
         if not sp.approved or not pl.exists or pl.placeholders:
-            bad.append(f"{ref} (spec not approved or plan not finished — needed to build against it)")
+            bad.append(
+                f"{ref} (spec not approved or plan not finished — needed to build against it)"
+            )
     return bad
 
 
@@ -463,29 +526,87 @@ def feature_steps(ctx: Ctx, slug: str) -> list[Step]:
     ref = spec.meta.get("rfc", "")
     rfc_path = find_rfc(ctx, ref)
     if rfc_path is None:
-        steps.append(Step("rfc", False, f"spec cites RFC '{ref or '(none)'}' which does not exist"))
+        steps.append(
+            Step(
+                "rfc", False, f"spec cites RFC '{ref or '(none)'}' which does not exist"
+            )
+        )
     else:
         r = doc_state(rfc_path, ctx)
-        steps.append(Step("rfc", r.approved, f"{rfc_path.name} is {r.status}"
-                          + (f" ({len(set(r.signers))}/{r.needed} sign-offs)" if r.status == "in-review" else "")))
-    steps.append(Step("spec", spec.approved, f"spec.md is {spec.status}"
-                      + (f", {spec.placeholders} unresolved marker(s)" if spec.placeholders else "")))
+        steps.append(
+            Step(
+                "rfc",
+                r.approved,
+                f"{rfc_path.name} is {r.status}"
+                + (
+                    f" ({len(set(r.signers))}/{r.needed} sign-offs)"
+                    if r.status == "in-review"
+                    else ""
+                ),
+            )
+        )
+    steps.append(
+        Step(
+            "spec",
+            spec.approved,
+            f"spec.md is {spec.status}"
+            + (
+                f", {spec.placeholders} unresolved marker(s)"
+                if spec.placeholders
+                else ""
+            ),
+        )
+    )
     for name in ("plan", "tasks", "evals"):
         s = doc_state(fdir / f"{name}.md", ctx)
         ok = s.exists and s.placeholders == 0
-        steps.append(Step(name, ok, f"{name}.md " + ("missing" if not s.exists else
-                          f"has {s.placeholders} unresolved marker(s)" if s.placeholders else "complete")))
-    shash = body_hash((fdir / "spec.md").read_text(encoding="utf-8")) if (fdir / "spec.md").is_file() else ""
+        steps.append(
+            Step(
+                name,
+                ok,
+                f"{name}.md "
+                + (
+                    "missing"
+                    if not s.exists
+                    else f"has {s.placeholders} unresolved marker(s)"
+                    if s.placeholders
+                    else "complete"
+                ),
+            )
+        )
+    shash = (
+        body_hash((fdir / "spec.md").read_text(encoding="utf-8"))
+        if (fdir / "spec.md").is_file()
+        else ""
+    )
     stale_docs = []
     for name in ("plan", "tasks", "evals"):
         f = fdir / f"{name}.md"
-        pinned = split_fm(f.read_text(encoding="utf-8"))[0].get("spec_version", "") if f.is_file() else ""
+        pinned = (
+            split_fm(f.read_text(encoding="utf-8"))[0].get("spec_version", "")
+            if f.is_file()
+            else ""
+        )
         if pinned and pinned != shash:
             stale_docs.append(f"{name}.md")
-    steps.append(Step("sync", not stale_docs, "plan/tasks/evals match the approved spec" if not stale_docs else
-                      ", ".join(stale_docs) + " were written against an earlier version of the spec"))
+    steps.append(
+        Step(
+            "sync",
+            not stale_docs,
+            "plan/tasks/evals match the approved spec"
+            if not stale_docs
+            else ", ".join(stale_docs)
+            + " were written against an earlier version of the spec",
+        )
+    )
     bad = dependency_problems(ctx, spec)
-    steps.append(Step("deps", not bad, "dependencies ready" if not bad else "waiting on " + "; ".join(bad)))
+    steps.append(
+        Step(
+            "deps",
+            not bad,
+            "dependencies ready" if not bad else "waiting on " + "; ".join(bad),
+        )
+    )
     return steps
 
 
@@ -494,40 +615,51 @@ def task_counts(ctx: Ctx, slug: str) -> tuple[int, int]:
     if not p.is_file():
         return 0, 0
     t = p.read_text(encoding="utf-8")
-    done = len(re.findall(r"^\s*- \[x\]", t, re.M | re.I))
-    return done, done + len(re.findall(r"^\s*- \[[ ~]\]", t, re.M))
+    done = len(re.findall(r"^\s*- \[x\]", t, re.MULTILINE | re.IGNORECASE))
+    return done, done + len(re.findall(r"^\s*- \[[ ~]\]", t, re.MULTILINE))
 
 
 INSTRUCTIONS = {
     "rfc": "RFC not approved. Ask the user to review it, then to run /groundwork-specflow:approve <path>.",
     "spec": "Write/finish spec.md with the write-spec skill, resolve every [NEEDS CLARIFICATION], "
-            "then ask the user to run /groundwork-specflow:approve on it.",
+    "then ask the user to run /groundwork-specflow:approve on it.",
     "plan": "Write plan.md with the write-plan skill.",
     "tasks": "Write tasks.md with the write-tasks skill.",
     "evals": "Write evals.md with the write-evals skill.",
     "sync": "The spec changed after the plan/tasks/evals were written. Re-read them against the CURRENT spec, fix what no longer "
-            "matches (and say so to the user), then run `groundwork.py plan-sync`.",
+    "matches (and say so to the user), then run `groundwork.py plan-sync`.",
     "deps": "Finish (resume) the features it depends on first. If they can proceed in parallel against an approved "
-            "contract, ask the user and move them from depends_on to builds_against.",
+    "contract, ask the user and move them from depends_on to builds_against.",
 }
 
 
 def next_step(ctx: Ctx) -> tuple[str, str]:
     """(phase, instruction) — the single most useful thing to do next."""
     if ctx.level == "unknown":
-        return "classify", ("This directory is neither a git repository nor a workspace. Ask the user "
-                            "which it should be: `git init` (a repo) or a workspace that will hold repos.")
+        return "classify", (
+            "This directory is neither a git repository nor a workspace. Ask the user "
+            "which it should be: `git init` (a repo) or a workspace that will hold repos."
+        )
     missing, unfinished = foundation_gaps(ctx)
     if missing or unfinished:
-        return "bootstrap", ("Foundation docs are incomplete (" + ", ".join(missing + unfinished) +
-                             "). Use the bootstrap skill before anything else (it starts with `groundwork.py init`).")
+        return "bootstrap", (
+            "Foundation docs are incomplete ("
+            + ", ".join(missing + unfinished)
+            + "). Use the bootstrap skill before anything else (it starts with `groundwork.py init`)."
+        )
     if ctx.level == "workspace":
         pend = [r for r in rfcs(ctx) if not r.approved]
         if pend:
-            return "rfc", f"{pend[0].path.name} is {pend[0].status}. Finish it, or get it approved."
-        return "idle", ("Workspace is ready. For new work: interview skill, then write-rfc. "
-                        "Code is written inside a repo, not here.")
-    import groundwork_bugs as B  # noqa: PLC0415 — bugs import this module
+            return (
+                "rfc",
+                f"{pend[0].path.name} is {pend[0].status}. Finish it, or get it approved.",
+            )
+        return "idle", (
+            "Workspace is ready. For new work: interview skill, then write-rfc. "
+            "Code is written inside a repo, not here."
+        )
+    import groundwork_bugs as B
+
     bug = B.active_bug(ctx)
     if bug:
         b = B.bug_state(ctx, bug)
@@ -535,26 +667,41 @@ def next_step(ctx: Ctx) -> tuple[str, str]:
             return "bug", f"[bug {bug}] {b.next}"
     slug = active_slug(ctx)
     if not slug:
-        import groundwork_board as W  # noqa: PLC0415
+        import groundwork_board as W
+
         items = W.collect(ctx)
         if items:
             top = "; ".join(f"{i.label} — {i.state}" for i in items[:3])
-            return "resume", (f"{len(items)} item(s) in flight: {top}. If the user's request continues one, use the "
-                              "resume skill (groundwork.py board); otherwise start new work with the interview skill.")
-        return "idle", ("Nothing in flight. If the user wants to build something, start with the interview skill "
-                        "(then write-rfc); if they report a bug, use the fix-bug skill.")
+            return "resume", (
+                f"{len(items)} item(s) in flight: {top}. If the user's request continues one, use the "
+                "resume skill (groundwork.py board); otherwise start new work with the interview skill."
+            )
+        return "idle", (
+            "Nothing in flight. If the user wants to build something, start with the interview skill "
+            "(then write-rfc); if they report a bug, use the fix-bug skill."
+        )
     if not (ctx.repo / "specs" / slug).is_dir():
-        return "idle", f"Active feature '{slug}' has no specs/{slug}/ directory. Clear or recreate it."
+        return (
+            "idle",
+            f"Active feature '{slug}' has no specs/{slug}/ directory. Clear or recreate it.",
+        )
     for st in feature_steps(ctx, slug):
         if not st.ok:
             return st.key, f"[{slug}] {st.detail}. " + INSTRUCTIONS[st.key]
     done, total = task_counts(ctx, slug)
     if total and done == total:
-        return "handover", f"[{slug}] all {total} tasks done. Verify against evals.md, run the refresh skill, then write specs/{slug}/handover.md (and the workspace DECISIONS/handovers/ file if the RFC is cross-repo)."
-    return "implement", f"[{slug}] approved and planned. Work one task at a time ({done}/{total} done)."
+        return (
+            "handover",
+            f"[{slug}] all {total} tasks done. Verify against evals.md, run the refresh skill, then write specs/{slug}/handover.md (and the workspace DECISIONS/handovers/ file if the RFC is cross-repo).",
+        )
+    return (
+        "implement",
+        f"[{slug}] approved and planned. Work one task at a time ({done}/{total} done).",
+    )
 
 
 # --- the implementation gate ----------------------------------------------------------
+
 
 def is_doc_path(path: Path, root: Path) -> bool:
     try:
@@ -562,35 +709,47 @@ def is_doc_path(path: Path, root: Path) -> bool:
     except ValueError:
         return False
     # fnmatch's '*' crosses '/', so "specs/*" covers everything below specs/.
-    return any(fnmatch.fnmatch(rel, g) or fnmatch.fnmatch(Path(rel).name, g) for g in DOC_GLOBS)
+    return any(
+        fnmatch.fnmatch(rel, g) or fnmatch.fnmatch(Path(rel).name, g) for g in DOC_GLOBS
+    )
 
 
 def bypass_active(root: Path) -> dict | None:
     try:
-        b = json.loads((root / ".groundwork" / "bypass.json").read_text(encoding="utf-8"))
+        b = json.loads(
+            (root / ".groundwork" / "bypass.json").read_text(encoding="utf-8")
+        )
     except (OSError, ValueError):
         return None
     return b if b.get("until", 0) > time.time() else None
 
 
-def gate_code_edit(path: Path, session_cwd: Path | str | None = None) -> tuple[bool, str]:
+def gate_code_edit(
+    path: Path, session_cwd: Path | str | None = None
+) -> tuple[bool, str]:
     """May this file be written? Returns (allowed, reason-if-denied)."""
     ctx = detect(path, session_cwd)
     if ctx.enforcement == "off":
         return True, ""
     if ctx.level == "unknown":
-        return False, ("groundwork-specflow: this directory is neither a git repository nor a workspace. "
-                       "Ask the user whether to `git init` here (a repo) or to make it a workspace, "
-                       "then run the bootstrap skill. Do not write code yet.")
+        return False, (
+            "groundwork-specflow: this directory is neither a git repository nor a workspace. "
+            "Ask the user whether to `git init` here (a repo) or to make it a workspace, "
+            "then run the bootstrap skill. Do not write code yet."
+        )
     if ctx.level == "workspace":
-        return True, ""     # code lives in the repos; a repo inside resolves as its own context
+        return (
+            True,
+            "",
+        )  # code lives in the repos; a repo inside resolves as its own context
     root = ctx.repo
     if is_doc_path(path, root):
         return True, ""
     reason = _why_blocked(ctx)
     if reason is None:
         return True, ""
-    import groundwork_bugs as B  # noqa: PLC0415
+    import groundwork_bugs as B
+
     bug = B.active_bug(ctx)
     if bug and B.bug_state(ctx, bug).ready:
         return True, ""
@@ -610,42 +769,61 @@ def gate_code_edit(path: Path, session_cwd: Path | str | None = None) -> tuple[b
 def _why_blocked(ctx: Ctx) -> str | None:
     missing, unfinished = foundation_gaps(ctx)
     if missing or unfinished:
-        return ("code edits are blocked until the foundation docs exist and are filled in "
-                f"(missing: {', '.join(missing) or 'none'}; unfinished: {', '.join(unfinished) or 'none'}). "
-                "Use the bootstrap skill. If this is a genuine emergency the USER can run "
-                "/groundwork-specflow:bypass <reason>.")
+        return (
+            "code edits are blocked until the foundation docs exist and are filled in "
+            f"(missing: {', '.join(missing) or 'none'}; unfinished: {', '.join(unfinished) or 'none'}). "
+            "Use the bootstrap skill. If this is a genuine emergency the USER can run "
+            "/groundwork-specflow:bypass <reason>."
+        )
     slug = active_slug(ctx)
     if not slug:
-        return ("no active feature and no diagnosed bug, so there is no approved spec to build against. New work: interview "
-                "the user (interview skill), RFC → approval → spec → plan → tasks → evals. A bug: the fix-bug skill (diagnose, "
-                "classify, cite the violated requirements, name a regression test). Resuming: the resume skill. "
-                "For a tiny emergency the USER can run /groundwork-specflow:bypass <reason>.")
-    for st in feature_steps(ctx, slug) if (ctx.repo / "specs" / slug).is_dir() else [
-            Step("spec", False, f"specs/{slug}/ does not exist")]:
+        return (
+            "no active feature and no diagnosed bug, so there is no approved spec to build against. New work: interview "
+            "the user (interview skill), RFC → approval → spec → plan → tasks → evals. A bug: the fix-bug skill (diagnose, "
+            "classify, cite the violated requirements, name a regression test). Resuming: the resume skill. "
+            "For a tiny emergency the USER can run /groundwork-specflow:bypass <reason>."
+        )
+    for st in (
+        feature_steps(ctx, slug)
+        if (ctx.repo / "specs" / slug).is_dir()
+        else [Step("spec", False, f"specs/{slug}/ does not exist")]
+    ):
         if not st.ok:
-            return (f"feature '{slug}' is not ready to build: {st.detail}. "
-                    f"{INSTRUCTIONS.get(st.key, '')} Approval is a human act (/groundwork-specflow:approve); "
-                    "you cannot approve documents yourself.")
+            return (
+                f"feature '{slug}' is not ready to build: {st.detail}. "
+                f"{INSTRUCTIONS.get(st.key, '')} Approval is a human act (/groundwork-specflow:approve); "
+                "you cannot approve documents yourself."
+            )
     return None
 
 
 PROTECTED_PATH = re.compile(r"(^|/)\.groundwork/(approvals|bypass)\.json$")
-PROTECTED_CMD = re.compile(r"\.groundwork/(approvals|bypass)\.json|groundwork\.py[\"']?\s+[\"']?(approve|bypass)|groundwork_core\.py")
+PROTECTED_CMD = re.compile(
+    r"\.groundwork/(approvals|bypass)\.json|groundwork\.py[\"']?\s+[\"']?(approve|bypass)|groundwork_core\.py"
+)
 
 
 def is_protected_path(path: Path) -> bool:
     return bool(PROTECTED_PATH.search(path.as_posix()))
 
 
-_PROTECTED_WORD = re.compile(r"approvals\.json|bypass\.json|groundwork_core|groundwork\.py|groundwork[/\\]engine")
+_PROTECTED_WORD = re.compile(
+    r"approvals\.json|bypass\.json|groundwork_core|groundwork\.py|groundwork[/\\]engine"
+)
 _SHELLS = {"sh", "bash", "zsh", "dash", "ksh", "fish"}
-_INTERPRETERS = re.compile(r"^(python[\d.]*|node|nodejs|ruby|perl|php|deno|bun|pwsh|powershell)$")
+_INTERPRETERS = re.compile(
+    r"^(python[\d.]*|node|nodejs|ruby|perl|php|deno|bun|pwsh|powershell)$"
+)
 _ASSIGN = re.compile(r"^([A-Za-z_]\w*)=(.*)$")
 _SCRIPT_READ_LIMIT = 200_000
 
 
 def _expand_vars(tok: str, env: dict[str, str]) -> str:
-    return re.sub(r"\$(?:\{(\w+)\}|(\w+))", lambda m: env.get(m.group(1) or m.group(2), m.group(0)), tok)
+    return re.sub(
+        r"\$(?:\{(\w+)\}|(\w+))",
+        lambda m: env.get(m.group(1) or m.group(2), m.group(0)),
+        tok,
+    )
 
 
 def _glob_hits_protected(tok: str) -> bool:
@@ -664,7 +842,9 @@ def _script_is_protected(word: str, cwd: Path | None) -> bool:
     p = p if p.is_absolute() else cwd / p
     try:
         if p.is_file() and p.stat().st_size <= _SCRIPT_READ_LIMIT:
-            return bool(PROTECTED_CMD.search(p.read_text(encoding="utf-8", errors="ignore")))
+            return bool(
+                PROTECTED_CMD.search(p.read_text(encoding="utf-8", errors="ignore"))
+            )
     except OSError:
         pass
     return False
@@ -680,10 +860,14 @@ def is_protected_command(cmd: str, cwd: Path | None = None, _depth: int = 0) -> 
     """
     if PROTECTED_CMD.search(cmd):
         return True
-    if _depth > 3:                                    # nested bash -c / eval chains this deep: refuse
+    if _depth > 3:  # nested bash -c / eval chains this deep: refuse
         return True
     stripped, bodies = _strip_heredocs(cmd)
-    if PROTECTED_CMD.search(bodies) or _PROTECTED_WORD.search(bodies) and re.search(r"\b(approve|bypass)\b", bodies):
+    if (
+        PROTECTED_CMD.search(bodies)
+        or _PROTECTED_WORD.search(bodies)
+        and re.search(r"\b(approve|bypass)\b", bodies)
+    ):
         return True
     env: dict[str, str] = {}
     for argv in _simple_commands(stripped):
@@ -703,16 +887,30 @@ def is_protected_command(cmd: str, cwd: Path | None = None, _depth: int = 0) -> 
         base = [Path(w).name for w in words]
         if any(b in ("groundwork.py", "groundwork_core.py") for b in base):
             sub = base.index("groundwork.py") if "groundwork.py" in base else None
-            if sub is None or any(w in ("approve", "bypass") for w in words[sub + 1:]):
+            if sub is None or any(w in ("approve", "bypass") for w in words[sub + 1 :]):
                 return True
         if name == "eval" or (name in _SHELLS and "-c" in words):
-            payload = " ".join(words[1:]) if name == "eval" else words[words.index("-c") + 1:][0] if words.index("-c") + 1 < len(words) else ""
+            payload = (
+                " ".join(words[1:])
+                if name == "eval"
+                else words[words.index("-c") + 1 :][0]
+                if words.index("-c") + 1 < len(words)
+                else ""
+            )
             if is_protected_command(payload, cwd, _depth + 1):
                 return True
-        if name in _SHELLS | {"source", "."} and len(words) > 1 and _script_is_protected(words[1], cwd):
+        if (
+            name in _SHELLS | {"source", "."}
+            and len(words) > 1
+            and _script_is_protected(words[1], cwd)
+        ):
             return True
         if _INTERPRETERS.match(name):
-            if any(w in ("-c", "-e", "-r", "-E", "--eval", "--command") or w.startswith("-c") for w in words[1:]) and _PROTECTED_WORD.search(joined):
+            if any(
+                w in ("-c", "-e", "-r", "-E", "--eval", "--command")
+                or w.startswith("-c")
+                for w in words[1:]
+            ) and _PROTECTED_WORD.search(joined):
                 return True
             script = next((w for w in words[1:] if not w.startswith("-")), "")
             if _script_is_protected(script, cwd):
@@ -720,12 +918,16 @@ def is_protected_command(cmd: str, cwd: Path | None = None, _depth: int = 0) -> 
         elif words[0].startswith(("./", "/")) and _script_is_protected(words[0], cwd):
             return True
     # a decoder piped into a shell hides its payload from us
-    if re.search(r"\b(base64|xxd|openssl\s+enc|rev)\b[^|;&]*\|[^;&]*\b(sh|bash|zsh|dash|python3?|eval)\b", stripped):
-        return True
-    return False
+    return bool(
+        re.search(
+            r"\b(base64|xxd|openssl\s+enc|rev)\b[^|;&]*\|[^;&]*\b(sh|bash|zsh|dash|python3?|eval)\b",
+            stripped,
+        )
+    )
 
 
 # --- scaffolding ----------------------------------------------------------------------
+
 
 def render(template: str, **vars: str) -> str:
     t = (TEMPLATES / template).read_text(encoding="utf-8")
@@ -759,13 +961,16 @@ def write_config(root: Path, **updates) -> dict:
 # it finds the files the command would write, so they can go through the same gate. It cannot see
 # everything (a script that writes files when run is opaque), and it says so in the docs.
 
-import shlex  # noqa: E402
+import shlex
 
 IGNORED_TARGETS = re.compile(
     r"(^|/)(node_modules|__pycache__|\.venv|venv|dist|build|target|coverage|\.git|\.pytest_cache|\.mypy_cache|"
-    r"\.ruff_cache|\.next|\.cache)(/|$)|\.(log|tmp|out|pyc|lock)$|^/dev/|^/proc/")
-_INLINE_WRITE = re.compile(r"write_text\(|write_bytes\(|\bopen\([^)]*['\"][wax]b?\+?['\"]|writeFileSync|writeFile\(|"
-                           r"appendFile|fs\.write|Set-Content|File\.write|\.write\(")
+    r"\.ruff_cache|\.next|\.cache)(/|$)|\.(log|tmp|out|pyc|lock)$|^/dev/|^/proc/"
+)
+_INLINE_WRITE = re.compile(
+    r"write_text\(|write_bytes\(|\bopen\([^)]*['\"][wax]b?\+?['\"]|writeFileSync|writeFile\(|"
+    r"appendFile|fs\.write|Set-Content|File\.write|\.write\("
+)
 _OPAQUE = ("patch", "git apply")
 
 
@@ -779,7 +984,7 @@ def _simple_commands(cmd: str) -> list[list[str]]:
         return []
     cmds, cur = [], []
     for t in toks:
-        if t and set(t) <= set(";&|") :
+        if t and set(t) <= set(";&|"):
             if cur:
                 cmds.append(cur)
             cur = []
@@ -801,7 +1006,8 @@ def _strip_heredocs(cmd: str) -> tuple[str, str]:
         if m:
             tag = m.group(2)
             while i < len(lines) and lines[i].strip() != tag:
-                bodies.append(lines[i]); i += 1
+                bodies.append(lines[i])
+                i += 1
             i += 1
     return "\n".join(out), "\n".join(bodies)
 
@@ -810,8 +1016,9 @@ def shell_write_targets(cmd: str, cwd: Path) -> tuple[list[Path], bool]:
     """(files a shell command would write, whether it also writes somewhere unknowable)."""
     stripped, bodies = _strip_heredocs(cmd)
     targets: list[str] = []
-    opaque = bool(_INLINE_WRITE.search(bodies) or _INLINE_WRITE.search(stripped)) and bool(
-        re.search(r"\b(python3?|node|ruby|perl|php|deno|bun)\b", stripped))
+    opaque = bool(
+        _INLINE_WRITE.search(bodies) or _INLINE_WRITE.search(stripped)
+    ) and bool(re.search(r"\b(python3?|node|ruby|perl|php|deno|bun)\b", stripped))
     here = cwd
     for argv in _simple_commands(stripped):
         # redirections: '>' '>>' '>|' and the '2>' forms (shlex splits digits off as their own token)
@@ -821,8 +1028,14 @@ def shell_write_targets(cmd: str, cwd: Path) -> tuple[list[Path], bool]:
             if t in (">", ">>", ">|") and i + 1 < len(argv):
                 targets.append((here, argv[i + 1]))
             i += 1
-        words = [w for j, w in enumerate(argv) if not (w in (">", ">>", ">|", "<", "<<", "<<<", ">&", "2>", "&>")
-                                                       or (j and argv[j - 1] in (">", ">>", ">|", "<", "<<", "<<<", ">&")))]
+        words = [
+            w
+            for j, w in enumerate(argv)
+            if not (
+                w in (">", ">>", ">|", "<", "<<", "<<<", ">&", "2>", "&>")
+                or (j and argv[j - 1] in (">", ">>", ">|", "<", "<<", "<<<", ">&"))
+            )
+        ]
         if not words:
             continue
         name, args = Path(words[0]).name, words[1:]
@@ -832,8 +1045,16 @@ def shell_write_targets(cmd: str, cwd: Path) -> tuple[list[Path], bool]:
             here = (here / pos[0]) if not Path(pos[0]).is_absolute() else Path(pos[0])
         elif name == "tee":
             targets += [(here, a) for a in pos]
-        elif name in ("sed", "gsed") and any(re.match(r"-[A-Za-z]*i|--in-place", o) for o in opts):
-            files = pos if any(o.startswith(("-e", "-f", "--expression", "--file")) for o in opts) else pos[1:]
+        elif name in ("sed", "gsed") and any(
+            re.match(r"-[A-Za-z]*i|--in-place", o) for o in opts
+        ):
+            files = (
+                pos
+                if any(
+                    o.startswith(("-e", "-f", "--expression", "--file")) for o in opts
+                )
+                else pos[1:]
+            )
             targets += [(here, a) for a in files]
         elif name == "perl" and any(re.match(r"-[A-Za-z]*i", o) for o in opts):
             targets += [(here, a) for a in pos[1:] if not a.startswith("s/")]
@@ -843,7 +1064,9 @@ def shell_write_targets(cmd: str, cwd: Path) -> tuple[list[Path], bool]:
             targets += [(here, a[3:]) for a in args if a.startswith("of=")]
         elif name in ("curl", "wget"):
             for j, a in enumerate(args):
-                if a in ("-o", "-O", "--output", "--output-document") and j + 1 < len(args):
+                if a in ("-o", "-O", "--output", "--output-document") and j + 1 < len(
+                    args
+                ):
                     targets.append((here, args[j + 1]))
         elif name in ("patch",) or (name == "git" and pos[:1] == ["apply"]):
             opaque = True
@@ -852,7 +1075,7 @@ def shell_write_targets(cmd: str, cwd: Path) -> tuple[list[Path], bool]:
         if not t or t.startswith("&") or t == "-":
             continue
         p = Path(t).expanduser()
-        resolved.append((p if p.is_absolute() else base / p))
+        resolved.append(p if p.is_absolute() else base / p)
     return resolved, opaque
 
 
@@ -870,15 +1093,23 @@ def gate_shell_command(cmd: str, cwd: Path) -> tuple[bool, str]:
         try:
             rel = p.resolve().relative_to(rroot)
         except ValueError:
-            continue                                  # outside the project: not ours to gate
+            continue  # outside the project: not ours to gate
         if not IGNORED_TARGETS.search(rel.as_posix()):
             check.append(p)
     if opaque:
-        check.append(Path(root) / "__shell_write__.code")      # unknown target: judged as a code write at the root
+        check.append(
+            Path(root) / "__shell_write__.code"
+        )  # unknown target: judged as a code write at the root
     for p in check:
         ok, why = gate_code_edit(p, cwd)
         if not ok:
-            what = "an inline script/patch that writes files" if p.name == "__shell_write__.code" else str(p)
-            return False, (why + f" — blocked because this shell command writes {what}. "
-                           "The shell is gated exactly like the Write/Edit tools; do not route around the gate.")
+            what = (
+                "an inline script/patch that writes files"
+                if p.name == "__shell_write__.code"
+                else str(p)
+            )
+            return False, (
+                why + f" — blocked because this shell command writes {what}. "
+                "The shell is gated exactly like the Write/Edit tools; do not route around the gate."
+            )
     return True, ""

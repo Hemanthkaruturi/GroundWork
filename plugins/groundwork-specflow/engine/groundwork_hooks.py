@@ -3,6 +3,7 @@
 The hook is a small POSIX shell script. It never replaces someone else's hook: an existing one is
 renamed ``<hook>.groundwork-orig`` and called first; ``uninstall`` puts it back.
 """
+
 from __future__ import annotations
 
 import shutil
@@ -38,8 +39,13 @@ PY=$(command -v python3 || command -v python) || {{ echo "groundwork-specflow: p
 
 
 def hooks_dir(repo: Path) -> Path:
-    out = subprocess.run(["git", "-C", str(repo), "rev-parse", "--git-path", "hooks"],
-                         capture_output=True, text=True, encoding="utf-8", check=True).stdout.strip()
+    out = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "--git-path", "hooks"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
+    ).stdout.strip()
     p = Path(out)
     return p if p.is_absolute() else repo / p
 
@@ -66,9 +72,11 @@ def vendor(repo: Path) -> Path:
     dest = repo / ".groundwork" / "engine"
     dest.mkdir(parents=True, exist_ok=True)
     src = C.PLUGIN_ROOT / "engine"
-    for f in sorted(src.glob("*.py")):          # everything: a new module must never be forgotten
+    for f in sorted(
+        src.glob("*.py")
+    ):  # everything: a new module must never be forgotten
         shutil.copy2(f, dest / f.name)
-    for f in dest.glob("*.py"):                 # drop modules that no longer exist upstream
+    for f in dest.glob("*.py"):  # drop modules that no longer exist upstream
         if not (src / f.name).exists():
             f.unlink()
     # a vendored engine's PLUGIN_ROOT is .groundwork/, so templates and the standard live beside engine/
@@ -77,13 +85,17 @@ def vendor(repo: Path) -> Path:
     return dest
 
 
-def install(repo: Path, strict: bool = False, pre_push: bool = False, vendored: bool = False) -> list[str]:
+def install(
+    repo: Path, strict: bool = False, pre_push: bool = False, vendored: bool = False
+) -> list[str]:
     d = hooks_dir(repo)
     d.mkdir(parents=True, exist_ok=True)
     notes = []
     if vendored:
         vendor(repo)
-        notes.append("vendored engine into .groundwork/engine/ (commit it so teammates and CI can use it)")
+        notes.append(
+            "vendored engine into .groundwork/engine/ (commit it so teammates and CI can use it)"
+        )
     for name, verb in (("pre-commit", "commit"), ("pre-push", "push")):
         path = d / name
         if name == "pre-push" and not pre_push:
@@ -94,11 +106,19 @@ def install(repo: Path, strict: bool = False, pre_push: bool = False, vendored: 
                 raise SystemExit(f"{orig} already exists; resolve by hand")
             path.rename(orig)
             notes.append(f"kept your existing {name} hook (chained first)")
-        script = SCRIPT.format(marker=MARKER, verb=verb, strict="--strict " if strict else "",
-                               engine=(C.PLUGIN_ROOT / "engine" / "groundwork.py").as_posix())
-        path.write_bytes(script.encode("utf-8"))    # bytes: a Windows CRLF would break the #! line
+        script = SCRIPT.format(
+            marker=MARKER,
+            verb=verb,
+            strict="--strict " if strict else "",
+            engine=(C.PLUGIN_ROOT / "engine" / "groundwork.py").as_posix(),
+        )
+        path.write_bytes(
+            script.encode("utf-8")
+        )  # bytes: a Windows CRLF would break the #! line
         path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-        notes.append(f"installed {name}" + (" (strict: warnings also block)" if strict else ""))
+        notes.append(
+            f"installed {name}" + (" (strict: warnings also block)" if strict else "")
+        )
     return notes
 
 
@@ -122,6 +142,13 @@ def status(repo: Path) -> str:
     for name in ("pre-commit", "pre-push"):
         p = d / name
         if p.exists() and _ours(p):
-            found.append(name + (" [strict]" if "--strict" in p.read_text(encoding="utf-8") else ""))
-    v = " + vendored engine" if (repo / ".groundwork" / "engine" / "groundwork.py").exists() else ""
+            found.append(
+                name
+                + (" [strict]" if "--strict" in p.read_text(encoding="utf-8") else "")
+            )
+    v = (
+        " + vendored engine"
+        if (repo / ".groundwork" / "engine" / "groundwork.py").exists()
+        else ""
+    )
     return (", ".join(found) or "not installed") + v

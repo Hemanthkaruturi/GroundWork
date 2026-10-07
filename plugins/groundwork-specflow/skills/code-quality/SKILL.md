@@ -44,6 +44,14 @@ Both `init` and `keep` write the *Code quality* section of AGENTS.md. Agents wit
 - **Never make it green by weakening it:** no new `# noqa`, `# type: ignore`, `eslint-disable`, `//nolint`, `@ts-ignore` or skipped test. The one exception is a rule that is genuinely wrong for that line: then the suppression carries the specific rule and the reason on the same line, and you tell the user.
 - Don't edit tool configs to silence findings. Changing a team rule is a decision for the user.
 
+## Python: ruff format and ruff check on every file you touch
+Many teams run `ruff format --check` and `ruff check` in CI on all Python code, so Python you write must pass both **whatever the decision above**.
+- After editing Python, run `ruff format <changed .py files>`, then `ruff check --fix <changed .py files>`, then fix what remains by hand. Both must pass before the task is done.
+- Ruff picks up the repo's own config (`pyproject.toml`, `ruff.toml`). With none, its defaults apply; do not add a config just to silence findings.
+- If `ruff` is not installed, run it as `uvx ruff …` or `pipx run ruff …`. Do not add it as a dependency without asking.
+- In a `keep` repo, format only the files you changed. Never reformat the whole repo as part of a task.
+- Before committing, run `ruff format --check .` and `ruff check .` on the repo and report any failure with its output.
+
 ## The coding rules
 These are the mistakes coding agents make most, from research on AI-written code: duplication, over-engineering, swallowed errors, missing input validation, invented packages. AGENTS.md carries the short version.
 

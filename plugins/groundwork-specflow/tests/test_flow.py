@@ -191,8 +191,11 @@ class Lifecycle(Base):
         rfc = Path(ca(self.ws, "new-rfc", "x").stdout.strip())
         fill(rfc)
         rfc.write_text(rfc.read_text(encoding="utf-8").replace("signoffs_required: 1", "signoffs_required: 2"), encoding="utf-8")
-        self.assertIn("in-review", ca(self.ws, "approve", str(rfc), "--as", "a").stdout)
+        out = ca(self.ws, "approve", str(rfc), "--as", "a").stdout
+        self.assertIn("in-review", out); self.assertIn("signoffs_required: 2", out)   # tells the user how to move on
         self.assertIn("in-review", ca(self.ws, "approve", str(rfc), "--as", "a").stdout)  # same person twice
+        out = ca(self.ws, "bypass", "solo", "owner").stdout
+        self.assertIn("does not approve", out); self.assertIn(f"Next step for {rfc.name}", out)
         self.assertIn("approved", ca(self.ws, "approve", str(rfc), "--as", "b").stdout)
 
     def test_bypass_is_logged_and_expires_into_gate(self):

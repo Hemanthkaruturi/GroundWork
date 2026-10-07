@@ -298,7 +298,16 @@ def cmd_approve(a) -> None:
     st = C.approve(p, ctx, a.who)
     print(f"{p.name}: {st.status} ({len(set(st.signers))}/{st.needed} sign-offs: {', '.join(st.signers)})")
     if st.status == "in-review":
-        print("More sign-offs are required; each signer runs /groundwork-specflow:approve.")
+        print(signoff_help(p, st))
+
+
+def signoff_help(p: Path, st: C.DocState) -> str:
+    """How the user moves a document that is waiting on sign-offs forward."""
+    left = st.needed - len(set(st.signers))
+    return (f"Next step for {p.name}: {left} more sign-off(s) needed. Either each remaining signer runs "
+            f"/groundwork-specflow:approve {p.name}, or, if you are the only reviewer, lower `signoffs_required: "
+            f"{st.needed}` to {len(set(st.signers)) or 1} in its front matter and run /groundwork-specflow:approve "
+            f"{p.name} again (existing sign-offs still count). A bypass does not replace sign-offs.")
 
 
 def cmd_bypass(a) -> None:
@@ -313,6 +322,13 @@ def cmd_bypass(a) -> None:
     with (root / ".groundwork" / "bypass.log").open("a", encoding="utf-8") as log:
         log.write(f"{time.strftime('%F %T')} {C.signer()} {a.minutes}min: {a.reason}\n")
     print(f"Gate bypassed for {a.minutes} minutes in {root}. Logged to .groundwork/bypass.log.")
+    print("This lifts the code-edit gate only: it does not approve RFCs or specs, and it ends after "
+          f"{a.minutes} minutes. Update the spec afterwards for any behaviour change.")
+    slug = C.active_slug(ctx)
+    spec = [C.doc_state(ctx.repo / "specs" / slug / "spec.md", ctx)] if slug else []
+    for st in C.rfcs(ctx) + spec:
+        if st.status == "in-review":
+            print(signoff_help(st.path, st))
 
 
 def _write(path: Path, text: str) -> None:

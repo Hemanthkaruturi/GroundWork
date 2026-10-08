@@ -22,6 +22,8 @@ GroundWork writes plain files inside your own project, under your control:
 
 These files live in your repository. You decide whether to commit or share them, and you can delete them at any time.
 
+If you turn on attention alerts (`groundwork.py alerts on`), two small files are kept outside any project, in `~/.groundwork/`: `settings.json` (alerts on or off, voice on or off) and `alert-state.json` (which document version was last announced, so the same one does not ring twice). A desktop notification and a spoken phrase are produced by your own operating system's tools. Nothing leaves your machine.
+
 ## What it sends
 
 Nothing. The plugin makes no network requests, runs no MCP servers or connectors, and never uses, stores or transmits credentials or tokens. The key check above only notices them, so you can remove them. Claude Code itself, and your use of Claude, are covered by [Anthropic's privacy policy](https://www.anthropic.com/legal/privacy). If you use it in Devin, Devin itself is covered by Cognition's privacy policy.

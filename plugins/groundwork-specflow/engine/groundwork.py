@@ -27,6 +27,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import groundwork_alert as A
 import groundwork_board as W
 import groundwork_brevity as V
 import groundwork_bugs as B
@@ -82,6 +83,7 @@ groundwork is active. These rules are enforced by hooks, not suggestions:
 18. CODE LAYOUT: each repo records ONE decision (code-layout skill). STANDARD: code goes in fixed role folders: core (business logic, no I/O), connectors/<system> (the ONLY code that talks to LLMs, databases, HTTP APIs, queues, email), entrypoints (thin http/cli/workers), config (the only env/secret reads), and a wiring file that plugs connectors into core; core never imports connectors; no utils/helpers/common folders. KEEP: the user chose to keep the repo's own structure, so put new code where similar code already lives, copy its patterns, and never create layout folders or move existing code. An existing repo with no decision yet: ASK the user (migrate or keep) before writing code; never migrate without being asked. EVERY repo has CODEMAP.md (where each kind of code lives): read it before searching the code; after adding, moving or removing a folder run `groundwork.py codemap` and describe new folders in its Holds column.
 19. CREDENTIALS: code reads secrets ONLY from environment variables - never write a key, token or password into a file. Locally they come from `.env`, which must be git-ignored and never committed; every variable name goes in `.env.example` with no real value. Load `.env` in ONE place (config/ or the wiring file): Python `load_dotenv()` from python-dotenv (`uv add python-dotenv`), Node `--env-file=.env` or `dotenv`, Go `godotenv`; never let it override variables the platform already set. Front-end code never holds secrets (it ships to the browser); libraries never load `.env`. In a repo that keeps its own structure, keep its existing way of loading settings - only the safety rules apply.
 20. CODE QUALITY: each repo records ONE toolchain decision (code-quality skill): GroundWork's standard tools, or KEEP its own. After every task run `groundwork.py verify` (format, lint, types, tests) and fix what fails before marking it done; never weaken a rule, add an ignore or skip a test to get green. The coding rules are in AGENTS.md -> Code quality. An existing repo with no decision: ASK before adding or changing any tool config - a new formatter rewrites every file.
+21. ALERTS: if the user asks to turn alerts on or off, run `groundwork.py alerts on` (or `off`); for just the spoken voice (sound and notification stay), run `groundwork.py alerts voice off` (or `on`). It is their own setting, kept for every project; never change it unasked.
 Use `python3 ${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py status` (or `board`) any time you are unsure where you are."""
 RULES = RULES.replace("BREVITY_TEXT", BREVITY)
 
@@ -314,6 +316,86 @@ def cmd_stop_brevity(_a) -> None:
                 "reason": V.SHORTEN.format(n=n, limit=limit, saved=saved),
             }
         )
+
+
+def awaiting_approval(ctx: C.Ctx) -> C.DocState | None:
+    """The finished document now waiting only on the person's /approve, if any."""
+    if ctx.level == "unknown":
+        return None
+    slug = C.active_slug(ctx) if ctx.level != "workspace" else None
+    if slug:
+        spec = C.doc_state(ctx.repo / "specs" / slug / "spec.md", ctx)
+        rfc = C.find_rfc(ctx, spec.meta.get("rfc", ""))
+        docs = ([C.doc_state(rfc, ctx)] if rfc else []) + [spec]
+    else:
+        docs = C.rfcs(ctx)
+    for d in docs:
+        if not d.approved:
+            return d if d.exists and not d.placeholders else None
+    return None
+
+
+def _alert_key(path: Path) -> str:
+    return f"{path.resolve()}:{C.body_hash(path.read_text(encoding='utf-8'))}"
+
+
+def cmd_alert_stop(_a) -> None:
+    """At the end of a turn, alert (once per document version) if the agent now waits at a gate."""
+    full = hook_input()
+    if not A.enabled():
+        return
+    ctx = C.detect(G.cwd(full))
+    where = (ctx.repo or ctx.workspace or ctx.root).name
+    doc = awaiting_approval(ctx)
+    if doc:
+        if A.first_time("decision", _alert_key(doc.path)):
+            A.notify(
+                "decision", f"[{where}] {doc.path.name} is ready for your approval."
+            )
+        return
+    slug = C.active_slug(ctx) if ctx.level != "workspace" else None
+    handover = ctx.repo / "specs" / slug / "handover.md" if slug else None
+    if handover and handover.is_file() and A.first_time("done", _alert_key(handover)):
+        A.notify("done", f"[{where}] {slug} is built. The handover is ready.")
+
+
+def cmd_alert_question(_a) -> None:
+    """The agent is about to ask the person something; it cannot go on until they answer."""
+    full = hook_input()
+    if A.enabled():
+        where = Path(G.cwd(full)).name
+        A.notify("question", f"[{where}] The agent is waiting for your answers.")
+
+
+def cmd_alerts(a) -> None:
+    if a.state == "voice":
+        if a.value not in ("on", "off"):
+            raise SystemExit("Usage: groundwork.py alerts voice on|off")
+        path = A.set_voice(a.value == "on")
+        note = (
+            ""
+            if A.enabled()
+            else " Alerts themselves are off; `alerts on` turns them on."
+        )
+        print(f"Voice is {a.value} for you in every project (saved in {path}).{note}")
+        return
+    voice = A.voice_enabled()
+    if a.state in ("on", "off"):
+        path = A.set_enabled(a.state == "on")
+        print(f"Alerts are {a.state} for you in every project (saved in {path}).")
+        if a.state == "on":
+            A.fire(A.plan("done", "Alerts are on.", voice=voice))
+            heard = "a sound and a voice" if voice else "a sound (voice is off)"
+            print(f"You should hear {heard} now; if not, run `alerts test`.")
+        return
+    if a.state == "test":
+        steps = A.plan("decision", "This is a test alert.", voice=voice)
+        print(f"Playing a test alert ({steps['backend']}).")
+        A.fire(steps, wait=True)
+        return
+    print(
+        f"Alerts are {'on' if A.enabled() else 'off'}, voice is {'on' if voice else 'off'}."
+    )
 
 
 def cmd_skill_notice(_a) -> None:
@@ -1185,6 +1267,8 @@ def main() -> None:
         ("gate-bash", cmd_gate_bash),
         ("skill-notice", cmd_skill_notice),
         ("stop-brevity", cmd_stop_brevity),
+        ("alert-stop", cmd_alert_stop),
+        ("alert-question", cmd_alert_question),
         ("scaffold", cmd_scaffold),
         ("mark-workspace", cmd_mark_workspace),
     ):
@@ -1376,6 +1460,12 @@ def main() -> None:
         "plan-sync", help="record that plan/tasks/evals match the current approved spec"
     )
     p.set_defaults(fn=cmd_plan_sync)
+    p = sub.add_parser(
+        "alerts", help="sound and voice when the agent waits for you (your own setting)"
+    )
+    p.add_argument("state", nargs="?", choices=["on", "off", "status", "test", "voice"])
+    p.add_argument("value", nargs="?", choices=["on", "off"], help="with `voice`")
+    p.set_defaults(fn=cmd_alerts)
     p = sub.add_parser("activate")
     p.add_argument("slug")
     p.set_defaults(fn=cmd_activate)

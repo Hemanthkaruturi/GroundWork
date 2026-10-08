@@ -11,12 +11,13 @@ GroundWork is a plugin for Claude Code (and Devin) that makes a coding agent wor
 
 ## What the hooks do
 
-All hooks run the explicit path `${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py` with one sub-command each (using `python3`, or `python` if `python3` isn't available) (`session-context`, `prompt-reminder`, `stop-brevity`, `gate`, `skill-notice`, `gate-bash`).
+All hooks run the explicit path `${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py` with one sub-command each (using `python3`, or `python` if `python3` isn't available) (`session-context`, `prompt-reminder`, `stop-brevity`, `alert-stop`, `gate`, `skill-notice`, `gate-bash`, `alert-question`).
 
 - **`gate`** (before Write, Edit, MultiEdit and NotebookEdit) and **`gate-bash`** (before Bash) can only **deny** a tool call, with a plain-language reason, when the project's approved documents don't yet allow code changes. They never return "allow", so they can't approve anything or widen permissions. If nothing needs blocking they print nothing and Claude Code's normal permission flow applies.
 - **`skill-notice`** (before the Skill tool) only adds a short reminder to Claude's context. It doesn't approve or deny.
 - **`session-context`** and **`prompt-reminder`** add context such as work in flight. They don't change permissions.
 - **`stop-brevity`** runs when Claude finishes a reply. Only in the optional strict brevity mode, if the reply is over the word limit, it asks Claude once to rewrite it shorter (the full original is saved under `.groundwork/replies/`). It doesn't touch permissions.
+- **`alert-stop`** (when Claude finishes a reply) and **`alert-question`** (before the AskUserQuestion tool) do nothing unless you turned alerts on. When on, they play a sound, show a desktop notification and speak a short phrase when the agent waits for you: a finished RFC or spec ready for approval, a question, or a handover. Each document version is announced once. They print nothing and don't touch permissions. Ask the agent to "turn alerts on" (or "turn off the voice", which keeps the sound and notification), or run `groundwork.py alerts on|off|status|test` and `groundwork.py alerts voice on|off`. The setting is yours, in `~/.groundwork/settings.json`, and applies to every project.
 - Devin (CLI and Desktop) loads this same `hooks/hooks.json`. The matchers also name Devin's tools: `write`, `edit`, `apply_patch` and `notebook_edit` go to `gate`, and `exec` goes to `gate-bash`. In Devin, `skill-notice` runs after the `skill` tool. The engine sees which tool is calling (Devin sets `DEVIN_PROJECT_DIR`) and answers in that tool's format. On Devin, a denial is `{"decision": "block"}`, and an edit whose target file can't be worked out is held rather than let through. Devin cloud sessions don't run plugin hooks.
 - Enforcement can be turned down per project (`warn` or `off` in `.groundwork/config.json`).
 
@@ -27,7 +28,8 @@ All hooks run the explicit path `${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py` wit
 - `groundwork.py verify` runs the repo's own recorded check commands (formatter, linter, type checker, tests), and only when a person, an agent or CI runs it. No hook ever runs project tools. `quality init --create` copies GroundWork's tool configs into the repo, and never overwrites one.
 - `groundwork check` looks for key-shaped text in files that can be committed, to catch credentials pasted into code. It reports only the file, the line and the kind of key, never the text, and it never opens `.env` files. `init` adds `.env` to `.gitignore` if it is missing, and says so.
 - Discovery and freshness scans skip common secret files (`.env*`, keys, credential files, Terraform variables/state) and file symlinks.
-- It reads and writes files inside your project: the documents it manages, plus a `.groundwork/` folder for approvals, notes and freshness records.
+- It reads and writes files inside your project: the documents it manages, plus a `.groundwork/` folder for approvals, notes and freshness records. Only if you turn alerts on does it also keep two small files in `~/.groundwork/`.
+- With alerts on, it starts your operating system's own notification, sound and speech tools (PowerShell on Windows and WSL; `osascript`, `afplay` and `say` on macOS; `notify-send`, a sound player and `spd-say` or `espeak` on Linux). Over SSH it only rings the terminal bell.
 - It runs `git` to read your repository and, to record who approved or owns something, your local git identity (`git config user.name` and `user.email`) or the `USER` variable. That identity stays in your project files. It is never sent anywhere.
 - It does not read Git remote URLs, which can contain embedded credentials. It makes no network requests. It has no MCP servers and no telemetry, and it never uses, stores or sends credentials or tokens.
 

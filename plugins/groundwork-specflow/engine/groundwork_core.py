@@ -280,6 +280,20 @@ def signer() -> str:
     return os.environ.get("USER", "unknown")
 
 
+def signoffs_needed(meta: dict) -> int | None:
+    """`signoffs_required` as a count, or None when malformed. A malformed count can never be
+    satisfied: the document stays unapproved (whatever record exists) until a person fixes it, and
+    `check` reports the value. It must never fall back to a smaller number."""
+    v = str(meta.get("signoffs_required", "1") or "1").strip()
+    return int(v) if v.isdigit() and int(v) > 0 else None
+
+
+def signoffs_label(st: DocState) -> str:
+    """'1/2' for display, or '1/? (signoffs_required invalid)'."""
+    n = len(set(st.signers))
+    return f"{n}/{st.needed}" if st.needed else f"{n}/? (signoffs_required invalid)"
+
+
 @dataclass
 class DocState:
     path: Path
@@ -301,19 +315,24 @@ def doc_state(path: Path, ctx: Ctx) -> DocState:
         return DocState(path, False, "missing", [], 1, 0, {})
     text = path.read_text(encoding="utf-8")
     meta, body = split_fm(text)
-    needed = int(meta.get("signoffs_required", "1") or 1)
+    needed = signoffs_needed(meta)
     root = owner_root(path, ctx)
     rel = str(path.resolve().relative_to(root.resolve()))
     rec = load_approvals(root).get(rel)
     signers = [s["who"] for s in rec["signers"]] if rec else []
     placeholders = len(PLACEHOLDER.findall(body))
     if rec and rec.get("hash") == body_hash(text):
-        status = "approved" if len(set(signers)) >= needed else "in-review"
+        # a malformed count (needed is None) is never satisfied, whatever the record holds
+        status = (
+            "approved"
+            if needed is not None and len(set(signers)) >= needed
+            else "in-review"
+        )
     elif rec:
         status, signers = "stale", []  # edited since it was approved
     else:
         status = "draft"
-    return DocState(path, True, status, signers, needed, placeholders, meta)
+    return DocState(path, True, status, signers, needed or 0, placeholders, meta)
 
 
 def changes_count(text: str) -> int:
@@ -332,6 +351,9 @@ def approve_preflight(path: Path, ctx: Ctx) -> str | None:
     meta, _ = split_fm(text)
     if not meta:
         return f"{path.name} has no front matter; it is not a governed document"
+    sr = str(meta.get("signoffs_required", "1") or "1").strip()
+    if not sr.isdigit() or int(sr) < 1:
+        return f"{path.name}: signoffs_required must be a whole number (now '{sr}')"
     st = doc_state(path, ctx)
     if st.placeholders:
         return (
@@ -390,8 +412,8 @@ def approve(path: Path, ctx: Ctx, who: str | None = None) -> DocState:
     f = _approvals_file(root)
     f.parent.mkdir(parents=True, exist_ok=True)
     f.write_text(json.dumps(store, indent=2) + "\n", encoding="utf-8")
-    needed = int(meta.get("signoffs_required", "1") or 1)
-    done = len({s["who"] for s in rec["signers"]}) >= needed
+    needed = signoffs_needed(meta)
+    done = needed is not None and len({s["who"] for s in rec["signers"]}) >= needed
     path.write_text(
         set_fm(
             text,
@@ -563,6 +585,13 @@ def reference_problem(rc: Ctx, fdir: Path) -> str | None:
             return "baseline edited after approval; it must be re-approved"
         if not st.approved:
             return f"baseline is {st.status}, not approved"
+        import groundwork_baseline as BL
+
+        problems = BL.approval_problems(
+            fdir, meta, (fdir / "spec.md").read_text(encoding="utf-8")
+        )
+        if problems:
+            return "baseline is invalid: " + "; ".join(problems)
     return None
 
 
@@ -706,7 +735,7 @@ def feature_steps(ctx: Ctx, slug: str) -> list[Step]:
                 r.approved,
                 f"{rfc_path.name} is {r.status}"
                 + (
-                    f" ({len(set(r.signers))}/{r.needed} sign-offs)"
+                    f" ({signoffs_label(r)} sign-offs)"
                     if r.status == "in-review"
                     else ""
                 ),

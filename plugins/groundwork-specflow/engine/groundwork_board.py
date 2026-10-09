@@ -125,7 +125,7 @@ def collect(ctx: C.Ctx, include_done: bool = False) -> list[Work]:
             state = (
                 "stale — edited after approval; needs re-approval"
                 if r.status == "stale"
-                else f"in review ({len(set(r.signers))}/{r.needed} sign-offs)"
+                else f"in review ({C.signoffs_label(r)} sign-offs)"
                 if r.status == "in-review"
                 else f"drafting — {n} interview answer(s) recorded, {r.placeholders} open marker(s)"
             )

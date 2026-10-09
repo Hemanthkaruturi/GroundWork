@@ -20,7 +20,9 @@ step it names; do not try to route around it (shell redirects, other tools) — 
 - If reality contradicts the spec or plan, **stop** and use the discovery protocol in the **write-plan** skill: state the evidence, ask the user which reading is right (picker), amend the upstream document with a dated `## Changes` line saying what changed and why, get it re-approved, re-verify the downstream documents, `groundwork.py plan-sync` — then continue. Never leave a spec doubt as a chat footnote and never decide it yourself.
   Behaviour change ⇒ spec change in the same change.
 - Update ARCHITECTURE.md / CONTRACTS/ / AGENTS.md in the same change if you altered what they describe, then run `groundwork.py confirm <doc>`.
-  Run `groundwork.py fresh` before you finish; if it reports stale documents, use the **refresh** skill.
+  Run `groundwork.py fresh` before you finish; if it reports stale documents, use the **refresh** skill. A feature that `amends` or
+  `extends` a baseline, or touches files a baseline's Evidence table cites, shows that baseline as REVIEW: update its Evidence rows
+  (and its requirements, re-approved, if behaviour changed), then `groundwork.py confirm --baseline <slug>`.
 - Before declaring done, run `python3 "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py" check --strict` and fix every finding: it verifies the documents
   conform to the standard and that every FR has a task and every AC an evaluation.
 - Any question for the user (a spec/plan contradiction, a choice) goes through `AskUserQuestion`, never as prose.

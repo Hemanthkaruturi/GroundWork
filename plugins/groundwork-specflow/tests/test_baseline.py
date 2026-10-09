@@ -3,8 +3,10 @@
 import json
 import re
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent))
 from test_check import CheckBase, check
@@ -110,6 +112,15 @@ def fm(path):
     return C.split_fm(Path(path).read_text(encoding="utf-8"))[0]
 
 
+def link_or_skip(case, link, target, directory=False):
+    try:
+        link.symlink_to(target, target_is_directory=directory)
+    except OSError as exc:
+        if getattr(exc, "winerror", None) == 1314:
+            case.skipTest("Windows requires permission to create symbolic links")
+        raise
+
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "engine"))
 
 
@@ -213,6 +224,101 @@ class Import(Base):
         self.assertIn("Widgets_Old: directory is not NNN-slug", out.stdout)
         self.assertTrue(d.is_dir())
 
+    def test_import_rejects_linked_specs_directories_and_companions(self):
+        for linked in ("spec.md", "plan.md", "feature", "specs", "capabilities"):
+            with self.subTest(linked=linked):
+                r = legacy_repo(self.root / linked)
+                fdir = r / "specs" / "001-clients-and-tenants"
+                external = self.root / (linked + "-external")
+                if linked == "feature":
+                    fdir.rename(external)
+                    link_or_skip(self, fdir, external, directory=True)
+                    target = external / "spec.md"
+                elif linked == "specs":
+                    (r / "specs").rename(external)
+                    link_or_skip(self, r / "specs", external, directory=True)
+                    target = external / fdir.name / "spec.md"
+                elif linked == "capabilities":
+                    (r / ".groundwork").mkdir()
+                    external.write_text("{}\n", encoding="utf-8")
+                    link_or_skip(
+                        self, r / ".groundwork" / "capabilities.json", external
+                    )
+                    target = external
+                else:
+                    (fdir / linked).rename(external)
+                    link_or_skip(self, fdir / linked, external)
+                    target = external
+                before = target.read_bytes()
+                preview = ca(r, "adopt-specs", "--dry-run")
+                if linked != "capabilities":
+                    self.assertIn("symlink", preview.stdout + preview.stderr)
+                result = ca(r, "adopt-specs")
+                self.assertIn("symlink", result.stdout + result.stderr)
+                self.assertEqual(target.read_bytes(), before)
+
+    def test_classification_dry_run_preserves_every_file(self):
+        r = legacy_repo(self.root)
+        ca(r, "adopt-specs")
+        before = {p: p.read_bytes() for p in r.rglob("*") if p.is_file()}
+        for kind in ("baseline", "planned", "archived"):
+            preview = ca(
+                r,
+                "adopt-specs",
+                "--dry-run",
+                "--classify",
+                kind,
+                "001-clients-and-tenants",
+                "--capability",
+                "identity",
+            )
+            self.assertEqual(preview.returncode, 0, preview.stderr)
+            self.assertIn("would classify as " + kind, preview.stdout)
+            self.assertEqual(
+                before, {p: p.read_bytes() for p in r.rglob("*") if p.is_file()}
+            )
+
+    def test_classification_links_selected_capability_additively(self):
+        r = legacy_repo(self.root)
+        other = r / "specs" / "002-authorization"
+        other.mkdir()
+        (other / "spec.md").write_text(
+            LEGACY_SPEC.format(status="Draft"), encoding="utf-8"
+        )
+        ca(r, "adopt-specs")
+        for kind, slug in (
+            ("baseline", "001-clients-and-tenants"),
+            ("planned", other.name),
+        ):
+            result = ca(
+                r, "adopt-specs", "--classify", kind, slug, "--capability", "identity"
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+        ca(r, "capability", "link", "identity", other.name)
+        records = json.loads((r / ".groundwork" / "capabilities.json").read_text())
+        self.assertEqual(
+            records["identity"]["specs"], ["001-clients-and-tenants", other.name]
+        )
+        self.assertIn("identity", (r / "specs" / "README.md").read_text())
+
+    def test_classification_rejects_linked_input_and_preflights_all_slugs(self):
+        r = legacy_repo(self.root)
+        ca(r, "adopt-specs")
+        sp = r / "specs" / "001-clients-and-tenants" / "spec.md"
+        before = sp.read_bytes()
+        result = ca(
+            r, "adopt-specs", "--classify", "baseline", sp.parent.name, "999-missing"
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(sp.read_bytes(), before)
+        external = self.root / "external-spec.md"
+        sp.rename(external)
+        link_or_skip(self, sp, external)
+        result = ca(r, "adopt-specs", "--classify", "baseline", sp.parent.name)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("symlink", result.stderr)
+        self.assertEqual(external.read_bytes(), before)
+
     def test_pending_import_is_a_reference_not_work(self):
         r = legacy_repo(self.root)
         ca(r, "scaffold")
@@ -296,7 +402,18 @@ class Import(Base):
 class BaselineRules(CheckBase):
     """CheckBase holds a workspace `ws`, a repo `api` with an approved planned feature 001-widgets."""
 
-    def baseline(self, slug="auth", finished=True, approve=True, adopted=False):
+    def baseline(
+        self, slug="auth", finished=True, approve=True, adopted=False, review=True
+    ):
+        # the evidence rows cite these two files; a reviewed baseline needs them to exist
+        for rel, body in (
+            ("src/auth.py", "def verify(): return True\n"),
+            ("tests/test_auth.py", "def test_ok(): pass\n"),
+        ):
+            f = self.api / rel
+            if not f.exists():
+                f.parent.mkdir(parents=True, exist_ok=True)
+                f.write_text(body, encoding="utf-8")
         out = ca(self.api, "new-baseline", slug, "--title", "Auth")
         self.assertEqual(out.returncode, 0, out.stderr)
         fdir = Path(out.stdout.splitlines()[0].strip())
@@ -318,6 +435,9 @@ class BaselineRules(CheckBase):
         if approve:
             a = ca(self.api, "approve", str(sp), "--as", "lead")
             self.assertEqual(a.returncode, 0, a.stderr)
+            if review:
+                c = ca(self.api, "confirm", "--baseline", fdir.name)
+                self.assertEqual(c.returncode, 0, c.stderr)
         return fdir
 
     def test_new_baseline_creates_spec_only_and_keeps_active_work(self):
@@ -348,8 +468,12 @@ class BaselineRules(CheckBase):
 
     def test_finished_approved_baseline_is_clean_and_not_in_flight(self):
         fdir = self.baseline()
-        code, ids, items = check(self.ws, "--strict")
-        self.assertEqual((code, ids), (0, set()), items)
+        ca(self.api, "codemap")
+        ca(self.api, "confirm")  # src/ and tests/ were added for the evidence rows
+        _, ids, items = check(self.ws, "--strict")
+        self.assertEqual(
+            ids - {"GW108"}, set(), items
+        )  # GW108: new folders not yet described
         board = ca(self.api, "board").stdout
         self.assertNotIn("002-auth", board)
         self.assertIn("[baseline] 002-auth", ca(self.api, "board", "--all").stdout)
@@ -509,6 +633,49 @@ class BaselineRules(CheckBase):
         self.assertIn("approved", ca(self.api, "status").stdout.lower())
         self.assertEqual(check(self.ws)[1] & {"GW026", "GW076"}, set())
 
+    def test_invalid_baseline_cannot_be_approved(self):
+        import groundwork_core as C
+
+        fdir = self.baseline(approve=False)
+        sp = fdir / "spec.md"
+        good = sp.read_text()
+        cases = [
+            (C.set_fm(good, {"id": "999-wrong"}), "GW021", "directory"),
+            (
+                good.replace("- **FR-1**:", "- **FR-1**: Duplicate.\n- **FR-1**:", 1),
+                "GW023",
+                "duplicate",
+            ),
+            (
+                good.replace("## 7. Failure behaviour", "## 7. Other"),
+                "GW022",
+                "Failure behaviour",
+            ),
+        ]
+        approvals = self.api / ".groundwork" / "approvals.json"
+        before = approvals.read_bytes()
+        for text, rule, reason in cases:
+            with self.subTest(rule=rule):
+                sp.write_text(text)
+                self.assertIn(rule, check(self.ws)[1])
+                result = ca(self.api, "approve", str(sp), "--as", "lead")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(reason, result.stderr)
+                self.assertEqual(approvals.read_bytes(), before)
+
+    def test_invalid_metadata_cannot_reuse_an_existing_approval(self):
+        import groundwork_core as C
+
+        fdir = self.baseline()
+        sp = fdir / "spec.md"
+        sp.write_text(C.set_fm(sp.read_text(), {"id": "999-wrong"}))
+        ctx = C.detect(self.api)
+        self.assertTrue(
+            C.doc_state(sp, ctx).approved
+        )  # metadata is outside the body hash
+        self.assertIn("invalid", C.reference_problem(ctx, fdir))
+        self.assertFalse(C.feature_implemented(ctx, fdir)[0])
+
     def test_relations_to_baselines(self):
         fdir = self.baseline(approve=False)
         import groundwork_core as C
@@ -622,6 +789,372 @@ class BaselineRules(CheckBase):
         self.assertEqual(check(self.ws)[1] & {"GW072", "GW076"}, set())
 
 
+class SourceReview(CheckBase):
+    """Slice 2: a baseline's cited sources are snapshotted on review; changes to them, and only them, flag it."""
+
+    def setUp(self):
+        super().setUp()
+        (self.api / "src").mkdir(exist_ok=True)
+        (self.api / "src" / "auth.py").write_text(
+            "def verify(): return True\n", encoding="utf-8"
+        )
+        (self.api / "tests").mkdir(exist_ok=True)
+        (self.api / "tests" / "test_auth.py").write_text(
+            "def test_ok(): pass\n", encoding="utf-8"
+        )
+        (self.api / "src" / "other.py").write_text("x = 1\n", encoding="utf-8")
+        ca(self.api, "codemap")
+        ca(self.api, "confirm")
+
+    def relevant(self, ids):
+        return ids & {"GW052", "GW041", "GW076", "GW077", "GW074", "GW029"}
+
+    def fresh(self, slug="002-auth"):
+        rows = json.loads(ca(self.api, "fresh", "--json").stdout)
+        return next(r for r in rows if r["doc"] == "baseline:" + slug)
+
+    def test_confirm_refuses_unfinished_and_evidence_free_baselines(self):
+        fdir = BaselineRules.baseline(self, finished=False, approve=False)
+        r = ca(self.api, "confirm", "--baseline", fdir.name)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("empty scaffold", r.stderr)
+        BaselineRules.baseline(self, slug="billing", approve=False)
+        sp = self.api / "specs" / "003-billing" / "spec.md"
+        self.edit(
+            sp,
+            lambda t: t.replace("src/auth.py", "src/nowhere.py").replace(
+                "tests/test_auth.py", "tests/none.py"
+            ),
+        )
+        r = ca(self.api, "confirm", "--baseline", "003-billing")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("names no file", r.stderr)
+        self.assertNotEqual(ca(self.api, "confirm", "--baseline").returncode, 0)
+        self.assertNotEqual(
+            ca(self.api, "confirm", "--baseline", "001-widgets").returncode, 0
+        )  # planned
+
+    def test_review_tracks_only_cited_sources(self):
+        fdir = BaselineRules.baseline(self, review=False)
+        self.assertEqual(self.fresh()["status"], "unreviewed")
+        self.assertIn("GW052", check(self.ws)[1])
+        before = json.loads(
+            (self.api / ".groundwork" / "approvals.json").read_text(encoding="utf-8")
+        )
+        r = ca(self.api, "confirm", "--baseline", fdir.name)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("not an approval", r.stdout)
+        rec = json.loads(
+            (self.api / ".groundwork" / "freshness.json").read_text(encoding="utf-8")
+        )["baseline:002-auth"]
+        self.assertEqual(
+            sorted(rec["snapshot"]["sources"]), ["src/auth.py", "tests/test_auth.py"]
+        )
+        self.assertEqual(
+            before,
+            json.loads(
+                (self.api / ".groundwork" / "approvals.json").read_text(
+                    encoding="utf-8"
+                )
+            ),
+        )
+        self.assertEqual(self.fresh()["status"], "current")
+        _, ids, items = check(self.ws, "--strict")
+        self.assertEqual(self.relevant(ids), set(), items)
+        self.assertIn(
+            "| current (",
+            (self.api / "specs" / "README.md").read_text(encoding="utf-8"),
+        )
+        # an unrelated file changes: still current
+        (self.api / "src" / "other.py").write_text("x = 2\n", encoding="utf-8")
+        (self.api / "src" / "new.py").write_text("y = 2\n", encoding="utf-8")
+        self.assertEqual(self.fresh()["status"], "current")
+        # a cited file changes: review needed, naming the file; the relation only warns
+        (self.api / "src" / "auth.py").write_text(
+            "def verify(): return False\n", encoding="utf-8"
+        )
+        f = self.fresh()
+        self.assertEqual(f["status"], "review")
+        self.assertIn("src/auth.py", " ".join(f["reasons"]))
+        _, ids, items = check(self.ws)
+        self.assertIn("GW052", ids)
+        ctx = ca(
+            self.api, "session-context", stdin=json.dumps({"cwd": str(self.api)})
+        ).stdout.split("Level:")[1]
+        self.assertIn("source review needed", ctx)
+        self.assertNotIn(
+            "002-auth", ctx.split("DOCUMENTATION REVIEW")[0]
+        )  # never in flight
+        d = json.loads(ca(self.api, "doctor", "--json").stdout)
+        self.assertTrue(
+            any("need source review" in i["label"] for i in d["items"]), d["items"]
+        )
+        # a cited file deleted: review needed too
+        (self.api / "tests" / "test_auth.py").unlink()
+        self.assertIn("tests/test_auth.py", " ".join(self.fresh()["reasons"]))
+        # review again (after reading the change): current, approval untouched
+        (self.api / "tests" / "test_auth.py").write_text(
+            "def test_ok(): pass\n", encoding="utf-8"
+        )
+        ca(self.api, "confirm", "--baseline", fdir.name)
+        self.assertEqual(self.fresh()["status"], "current")
+        self.assertNotIn("GW052", check(self.ws)[1])
+        self.assertIn("approved", ca(self.api, "board", "--all").stdout)
+
+    def test_relation_to_a_baseline_under_review_warns_but_does_not_block(self):
+        fdir = BaselineRules.baseline(self, review=False)
+        import groundwork_core as C
+
+        spec = self.fdir / "spec.md"
+        spec.write_text(
+            C.set_fm(spec.read_text(encoding="utf-8"), {"depends_on": "[002-auth]"}),
+            encoding="utf-8",
+        )
+        _, ids, _ = check(self.ws)
+        self.assertIn("GW077", ids)  # never reviewed
+        self.assertNotIn("GW076", ids)
+        ca(self.api, "confirm", "--baseline", fdir.name)
+        self.assertNotIn("GW077", check(self.ws)[1])
+        (self.api / "src" / "auth.py").write_text("changed\n", encoding="utf-8")
+        _, ids, _ = check(self.ws)
+        self.assertIn("GW077", ids)
+        self.assertNotIn("GW076", ids)
+        self.assertNotIn("GW074", ids)
+        self.assertFalse(
+            denied(self.api, self.api / "src" / "x.py")[0]
+        )  # dependency still satisfied
+
+    def test_source_review_cannot_approve_changed_requirements(self):
+        fdir = BaselineRules.baseline(self)
+        ca(self.api, "confirm", "--baseline", fdir.name)
+        self.edit(
+            fdir / "spec.md",
+            lambda t: t.replace("- **FR-1**: filled", "- **FR-1**: something new"),
+        )
+        r = ca(self.api, "confirm", "--baseline", fdir.name)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn(
+            "stale", ca(self.api, "board", "--all").stdout
+        )  # edited after approval
+        self.assertIn("re-approve", ca(self.api, "board").stdout)
+
+    def test_directory_evidence_expands_to_files(self):
+        fdir = BaselineRules.baseline(self, review=False)
+        self.edit(fdir / "spec.md", lambda t: t.replace("src/auth.py", "src/"))
+        ca(self.api, "approve", str(fdir / "spec.md"), "--as", "lead")
+        ca(self.api, "confirm", "--baseline", fdir.name)
+        rec = json.loads(
+            (self.api / ".groundwork" / "freshness.json").read_text(encoding="utf-8")
+        )["baseline:002-auth"]
+        self.assertIn("src/other.py", rec["snapshot"]["sources"])
+        (self.api / "src" / "added.py").write_text("z = 1\n", encoding="utf-8")
+        self.assertIn("sources added: src/added.py", " ".join(self.fresh()["reasons"]))
+
+    def test_missing_evidence_remains_visible_after_confirmation(self):
+        fdir = BaselineRules.baseline(self, approve=False, review=False)
+        self.edit(
+            fdir / "spec.md",
+            lambda t: t.replace("tests/test_auth.py", "tests/missing.py"),
+        )
+        result = ca(self.api, "approve", str(fdir / "spec.md"), "--as", "lead")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        result = ca(self.api, "confirm", "--baseline", fdir.name)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("review still needed", result.stdout)
+        self.assertEqual(self.fresh()["status"], "review")
+        self.assertIn("tests/missing.py", " ".join(self.fresh()["reasons"]))
+        self.assertIn("GW052", check(self.ws)[1])
+        self.assertIn("source review needed", ca(self.api, "status").stdout)
+        (self.api / "tests" / "missing.py").write_text("def test_ok(): pass\n")
+        self.assertEqual(self.fresh()["status"], "review")
+        result = ca(self.api, "confirm", "--baseline", fdir.name)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.fresh()["status"], "current")
+        self.assertNotIn("GW052", check(self.ws)[1])
+
+    def test_reapproval_does_not_replace_source_review(self):
+        fdir = BaselineRules.baseline(self)
+        sp = fdir / "spec.md"
+        self.edit(
+            sp,
+            lambda t: t.replace(
+                "- **FR-1**: filled", "- **FR-1**: A different guarantee"
+            ).replace(
+                "## Changes\n_None yet._",
+                "## Changes\n- 2026-10-09: FR-1 changed after the user clarified the guarantee.",
+            ),
+        )
+        result = ca(self.api, "approve", str(sp), "--as", "lead")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.fresh()["status"], "review")
+        self.assertIn("body changed", " ".join(self.fresh()["reasons"]))
+        self.assertIn("GW052", check(self.ws)[1])
+        self.assertIn("source review needed", ca(self.api, "board").stdout)
+        approvals = self.api / ".groundwork" / "approvals.json"
+        before = approvals.read_bytes()
+        result = ca(self.api, "confirm", "--baseline", fdir.name)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.fresh()["status"], "current")
+        self.assertEqual(approvals.read_bytes(), before)
+
+
+class SnapshotSafety(unittest.TestCase):
+    """Exercise scan bounds and unsafe paths without git or repository discovery."""
+
+    def setUp(self):
+        import groundwork_core as C
+
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.repo = self.root / "repo"
+        self.repo.mkdir()
+        self.ctx = C.Ctx("standalone", self.repo, repo=self.repo)
+        self.sp = self.repo / "specs" / "001-example" / "spec.md"
+        self.sp.parent.mkdir(parents=True)
+        self.sp.write_text(self.document("src/app.py"))
+        source = self.repo / "src" / "app.py"
+        source.parent.mkdir()
+        source.write_text("original\n")
+
+    def document(self, implementation, tests=""):
+        return (
+            "---\norigin: baseline\n---\n# Example\n\n## Evidence\n"
+            "| Requirement | Implementation | Tests |\n| --- | --- | --- |\n"
+            f"| FR-1 | {implementation} | {tests} |\n"
+        )
+
+    def test_explicit_paths_obey_exclusions_before_hashing(self):
+        import groundwork_fresh as F
+
+        excluded = [
+            ".env",
+            "config/.env",
+            "config/key.pem",
+            "config/key.key",
+            "config/secrets.yaml",
+            "config/credentials.json",
+            "config/local.tfvars",
+            "node_modules/vendor.js",
+            "node_modules/",
+            ".groundwork/record.json",
+            "specs/private.py",
+            ".venv/lib.py",
+            "dist/output.js",
+        ]
+        for rel in excluded:
+            if rel.endswith("/"):
+                continue
+            path = self.repo / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("synthetic fixture only\n")
+        workflow = self.repo / ".github" / "workflows" / "build.yml"
+        workflow.parent.mkdir(parents=True)
+        workflow.write_text("name: build\n")
+        text = self.document(
+            "src/app.py " + " ".join(excluded), ".github/workflows/build.yml"
+        )
+        with patch.object(F, "_file_hash", wraps=F._file_hash) as hash_file:
+            snap = F.baseline_snapshot(self.repo, text)
+        self.assertEqual(
+            set(snap["sources"]), {"src/app.py", ".github/workflows/build.yml"}
+        )
+        self.assertEqual(set(snap["skipped"]), {p.rstrip("/") for p in excluded})
+        self.assertEqual(
+            {
+                call.args[0].relative_to(self.repo).as_posix()
+                for call in hash_file.call_args_list
+            },
+            set(snap["sources"]),
+        )
+        self.sp.write_text(text)
+        F.confirm_baseline(self.ctx, ["001-example"], who="reviewer")
+        self.assertEqual(F.baseline_review(self.ctx, "001-example").status, "review")
+
+    def test_truncated_directory_requires_narrower_evidence(self):
+        import groundwork_fresh as F
+
+        self.sp.write_text(self.document("src/"))
+        F.confirm_baseline(self.ctx, ["001-example"], who="reviewer")
+        freshness = self.repo / ".groundwork" / "freshness.json"
+        before = freshness.read_bytes()
+        for i in range(F.MAX_EVIDENCE_FILES + 1):
+            (self.repo / "src" / f"file{i:03}.py").write_text("original\n")
+        tail = self.repo / "src" / f"file{F.MAX_EVIDENCE_FILES:03}.py"
+        tail.write_text("changed\n")
+        snap = F.baseline_snapshot(self.repo, self.sp.read_text())
+        self.assertEqual(len(snap["sources"]), F.MAX_EVIDENCE_FILES)
+        self.assertNotIn(tail.relative_to(self.repo).as_posix(), snap["sources"])
+        self.assertEqual(snap["truncated"], ["src"])
+        review = F.baseline_review(self.ctx, "001-example")
+        self.assertEqual(review.status, "review")
+        self.assertIn("cite narrower paths", " ".join(review.reasons))
+        with self.assertRaisesRegex(SystemExit, "cite narrower paths"):
+            F.confirm_baseline(self.ctx, ["001-example"], who="reviewer")
+        self.assertEqual(freshness.read_bytes(), before)
+        self.sp.write_text(self.document(tail.relative_to(self.repo).as_posix()))
+        F.confirm_baseline(self.ctx, ["001-example"], who="reviewer")
+        self.assertEqual(F.baseline_review(self.ctx, "001-example").status, "current")
+        tail.write_text("changed again\n")
+        self.assertEqual(F.baseline_review(self.ctx, "001-example").status, "review")
+
+    def test_confirmation_rejects_linked_spec_and_freshness_paths(self):
+        import groundwork_fresh as F
+
+        F.confirm_baseline(self.ctx, ["001-example"], who="reviewer")
+        external = self.root / "external"
+        external.mkdir()
+        for target in (
+            self.sp,
+            self.sp.parent,
+            self.repo / ".groundwork" / "freshness.json",
+            self.repo / ".groundwork",
+        ):
+            with self.subTest(path=target.relative_to(self.repo)):
+                moved = external / target.name
+                target.rename(moved)
+                link_or_skip(self, target, moved, directory=moved.is_dir())
+                originals = {
+                    p: p.read_bytes() for p in external.rglob("*") if p.is_file()
+                }
+                try:
+                    with self.assertRaisesRegex(SystemExit, "symlinked path"):
+                        F.confirm_baseline(self.ctx, ["001-example"], who="reviewer")
+                    self.assertEqual(
+                        originals,
+                        {p: p.read_bytes() for p in external.rglob("*") if p.is_file()},
+                    )
+                finally:
+                    target.unlink()
+                    moved.rename(target)
+        for slug in ("../../external", str(external)):
+            with (
+                self.subTest(slug=slug),
+                self.assertRaisesRegex(SystemExit, "invalid baseline slug"),
+            ):
+                F.confirm_baseline(self.ctx, [slug], who="reviewer")
+
+    def test_evidence_does_not_follow_linked_parent_or_escape_repo(self):
+        import groundwork_fresh as F
+
+        external = self.root / "outside"
+        external.mkdir()
+        (external / "private.py").write_text("synthetic fixture\n")
+        link_or_skip(self, self.repo / "linked", external, directory=True)
+        link_or_skip(self, self.repo / "alias", self.repo / "src", directory=True)
+        paths = [
+            "linked/private.py",
+            "alias/app.py",
+            "../outside/private.py",
+            (external / "private.py").as_posix(),
+        ]
+        with patch.object(F, "_file_hash", wraps=F._file_hash) as hash_file:
+            snap = F.baseline_snapshot(self.repo, self.document(" ".join(paths)))
+        hash_file.assert_not_called()
+        self.assertEqual(snap["sources"], {})
+        self.assertEqual(set(snap["skipped"]), set(paths))
+
+
 class MultiApprove(CheckBase):
     def test_all_or_nothing(self):
         a = ca(self.api, "new-baseline", "auth", "--title", "Auth")
@@ -699,6 +1232,41 @@ class MultiApprove(CheckBase):
 
 
 class Capabilities(CheckBase):
+    def test_interview_notes_round_trip_and_resume_without_replacing_answers(self):
+        first = {
+            "question": "Why?",
+            "answer": "Cost, latency",
+            "source": "Lead Person",
+            "effect": "Confirmed",
+        }
+        second = {
+            "question": "Keep this?",
+            "answer": "Yes",
+            "source": "Lead Person",
+            "effect": "Confirmed",
+        }
+        for notes in ([first], [first, second]):
+            result = ca(
+                self.api,
+                "capability",
+                "set",
+                "search",
+                "interview_notes=" + json.dumps(notes),
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+        records_path = self.api / ".groundwork" / "capabilities.json"
+        self.assertEqual(
+            json.loads(records_path.read_text())["search"]["interview_notes"],
+            [first, second],
+        )
+        before = records_path.read_bytes()
+        for bad in ("not JSON", "{}", '[{"question": "Why?"}]'):
+            result = ca(
+                self.api, "capability", "set", "search", "interview_notes=" + bad
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(records_path.read_bytes(), before)
+
     def test_records_table_and_links(self):
         ca(
             self.api,

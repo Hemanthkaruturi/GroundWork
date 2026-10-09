@@ -5,7 +5,7 @@ description: Write the handover for a finished or paused feature so the next eng
 
 # Hand over the system, not the code
 
-First run the **refresh** skill: the foundation documents must match what you are handing over.
+First run the **refresh** skill: the foundation documents must match what you are handing over, and any baseline whose sources this work changed must be reviewed (`groundwork.py confirm --baseline <slug>`).
 
 ## Where it goes (never a repo-root file)
 One root file fits one piece of work and collides with the next. Use two places, each with one job:

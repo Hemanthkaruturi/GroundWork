@@ -14,7 +14,8 @@ Every question to the user goes through the `AskUserQuestion` tool (load it with
 0. In a repo, run `python3 "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py" codemap --check`. If `CODEMAP.md` is outdated, run `groundwork.py codemap` (your Holds descriptions and Notes are kept) and describe any new folder.
 1. Run `python3 "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py" fresh`. It lists each document as FRESH, STALE, UNCONFIRMED or EDITED, with the reasons
    (e.g. "signals changed: package.json", "repos added: billing", "repo_arch changed: api", "not reviewed for 120 days").
-   In a repo it also shows the workspace's documents, because work in this repo can make them stale.
+   In a repo it also shows the workspace's documents, because work in this repo can make them stale, and each **baseline** spec as
+   CURRENT, REVIEW ("sources changed: src/auth.py") or UNREVIEWED: only the files its Evidence table cites are watched.
 2. For each stale/unconfirmed document, find **what actually changed** — read the named files and their diffs (`git log -p`/`git diff` on them;
    a snapshot has no history, so compare with the document's claims). Don't rewrite from scratch: edit only the sections the change touches,
    keep the standard's headings and order (STANDARD.md §4), and keep the document short.
@@ -25,6 +26,11 @@ Every question to the user goes through the `AskUserQuestion` tool (load it with
    - **workspace `PROJECT.md`** — repos list, who works on what, scope; you cannot see people or business changes in code, so **ask the user**
      ("Anyone joined/left/changed ownership?", "Scope changed?" — options: No change / Yes, let me tell you).
    - **`CONSTITUTION.md`** — never edit on your own; if reality violates a principle, tell the user and propose an amendment.
+   - **baseline specs** (REVIEW or UNREVIEWED) — read the changed files against the FR/AC. Drift is a signal, not proof the
+     requirement changed. Behaviour unchanged → update the Evidence rows where needed; body edits also need a dated `## Changes` line and human re-approval. Then run `groundwork.py confirm --baseline <slug>`.
+     Behaviour changed → amend the spec (dated `## Changes` line), ask the user to re-approve, then `confirm --baseline`.
+     A scan over 300 files requires narrower citations. Missing or excluded citations stay REVIEW after confirmation; resolve them or record an accepted gap without citing a nonexistent file.
+     `confirm --baseline` never approves anything.
 4. Unknowns stay as `[NEEDS CLARIFICATION: …]` — but a document carrying markers cannot be confirmed, so resolve them by asking.
 5. Run `python3 "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py" confirm <doc> [<doc> …]` for each document you brought up to date. This records the new baseline
    (commit the change to `.groundwork/freshness.json` with the doc). Only confirm what you have actually verified.

@@ -35,8 +35,16 @@ CAP_FIELDS = (
     "sources",
     "rationale_ref",
     "next_action",
+    "interview_notes",
 )
 LIST_FIELDS = {"sources", "specs", "interview_notes"}
+INTERVIEW_EFFECTS = {
+    "Confirmed",
+    "Tension",
+    "Open decision",
+    "Doc update",
+    "Out of scope",
+}
 STAMP = re.compile(r"<!-- groundwork:capabilities facts=([0-9a-f]{12}) -->")
 BLOCK = re.compile(
     r"<!-- groundwork:capabilities start -->.*?<!-- groundwork:capabilities end -->\n?",
@@ -62,6 +70,54 @@ def _repos(ctx: C.Ctx) -> list[C.Ctx]:
 
 def today() -> str:
     return time.strftime("%F")
+
+
+def path_problem(rc: C.Ctx, path: Path) -> str | None:
+    """Check the whole path before reading it, including linked parent directories."""
+    return path_problem_under((rc.repo or rc.root).resolve(), path)
+
+
+def path_problem_under(root: Path, path: Path) -> str | None:
+    root = root.resolve()
+    try:
+        relative = path.relative_to(root)
+    except ValueError:
+        return f"{path}: outside the repository"
+    current = root
+    for part in relative.parts:
+        current /= part
+        if current.is_symlink():
+            return f"{path}: symlinked path ({current}); review it manually"
+    if not path.resolve().is_relative_to(root):
+        return f"{path}: resolves outside the repository"
+    return None
+
+
+def _require_safe_paths(rc: C.Ctx, *paths: Path) -> None:
+    for path in paths:
+        problem = path_problem(rc, path)
+        if problem:
+            raise SystemExit(problem)
+
+
+def _blocked_candidate(fdir: Path, problem: str) -> dict:
+    return {
+        "slug": fdir.name,
+        "path": fdir / "spec.md",
+        "name_ok": bool(DIR_RE.fullmatch(fdir.name)),
+        "title": fdir.name,
+        "original_status": "",
+        "created": "",
+        "owner": "",
+        "has_fm": False,
+        "foreign_keys": [],
+        "problem": problem,
+        "companions": [],
+        "headings": [],
+        "missing_sections": [],
+        "markers": 0,
+        "tasks": [0, 0],
+    }
 
 
 # --- front matter editing (byte-preserving for the body) -------------------------------
@@ -97,10 +153,19 @@ def _add_fm(text: str, fields: dict) -> str:
 def candidate_info(rc: C.Ctx, fdir: Path) -> dict | None:
     """Facts about a spec directory that has no GroundWork lineage (no `origin`, no `rfc`)."""
     sp = fdir / "spec.md"
+    for path in (fdir, sp, *(fdir / n for n in ("plan.md", "tasks.md", "evals.md"))):
+        problem = path_problem(rc, path)
+        if problem:
+            return _blocked_candidate(fdir, problem)
     if not sp.is_file():
         return None
     raw = sp.read_bytes()
-    text = raw.decode("utf-8", errors="replace")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return _blocked_candidate(
+            fdir, "spec.md is not UTF-8; import would change its bytes"
+        )
     meta, body = C.split_fm(text)
     if "origin" in meta or "rfc" in meta:
         return None  # already a GroundWork document
@@ -141,6 +206,9 @@ def candidate_info(rc: C.Ctx, fdir: Path) -> dict | None:
 
 
 def candidates(rc: C.Ctx) -> list[dict]:
+    problem = path_problem(rc, rc.repo / "specs")
+    if problem:
+        return [_blocked_candidate(rc.repo / "specs", problem)]
     out = []
     for fdir in C.feature_dirs(rc):
         info = candidate_info(rc, fdir)
@@ -162,17 +230,19 @@ def import_specs(rc: C.Ctx, slugs: list[str] | None, dry: bool) -> dict:
     found = {c["slug"] for c in cands}
     rep["not_found"] = sorted(wanted - found)
     provenance = "spec-kit" if (rc.repo / ".specify").is_dir() else "unknown"
+    if not dry:
+        _require_safe_paths(rc, caps_file(rc), index_path(rc))
     for c in cands:
         if wanted and c["slug"] not in wanted:
-            continue
-        if not c["name_ok"]:
-            rep["review"].append(
-                f"{c['slug']}: directory is not NNN-slug (lowercase, hyphens); rename it by hand, then rerun"
-            )
             continue
         if c["problem"]:
             rep["review"].append(
                 f"{c['slug']}: {c['problem']}; fix it by hand, then rerun"
+            )
+            continue
+        if not c["name_ok"]:
+            rep["review"].append(
+                f"{c['slug']}: directory is not NNN-slug (lowercase, hyphens); rename it by hand, then rerun"
             )
             continue
         fields: dict[str, str] = {
@@ -208,8 +278,9 @@ def import_specs(rc: C.Ctx, slugs: list[str] | None, dry: bool) -> dict:
         if dry:
             continue
         p: Path = c["path"]
+        _require_safe_paths(rc, p)
         raw = p.read_bytes()
-        text = raw.decode("utf-8", errors="replace")
+        text = raw.decode("utf-8")
         new = _add_fm(text, fields)
         p.write_text(new, encoding="utf-8")
         cap_link(rc, cap_slug_for(c["slug"]), c["slug"], title=c["title"], create=True)
@@ -227,18 +298,31 @@ def cap_slug_for(spec_slug: str) -> str:
     return re.sub(r"^\d{3}-", "", spec_slug)
 
 
-def classify(rc: C.Ctx, kind: str, slugs: list[str]) -> list[str]:
+def classify(
+    rc: C.Ctx,
+    kind: str,
+    slugs: list[str],
+    *,
+    dry: bool = False,
+    capability: str | None = None,
+) -> list[str]:
     if kind not in CLASSIFICATIONS:
         raise SystemExit(f"--classify must be one of {CLASSIFICATIONS}")
     if not slugs:
         raise SystemExit("name the spec directories to classify (NNN-slug …)")
-    out = []
+    if capability is not None and not C.slugify(capability):
+        raise SystemExit("give a capability slug (letters, digits, hyphens)")
+    _require_safe_paths(rc, caps_file(rc), index_path(rc))
+    changes = []
     for slug in slugs:
+        if not DIR_RE.fullmatch(slug):
+            raise SystemExit(f"invalid spec directory '{slug}': expected NNN-slug")
         fdir = rc.repo / "specs" / slug
         sp = fdir / "spec.md"
+        _require_safe_paths(rc, sp)
         if not sp.is_file():
             raise SystemExit(f"specs/{slug}/spec.md does not exist")
-        text = sp.read_text(encoding="utf-8")
+        text = sp.read_bytes().decode("utf-8")
         meta, _ = C.split_fm(text)
         if not C.is_imported(meta) and not (kind == "archived" and C.is_baseline(meta)):
             raise SystemExit(
@@ -260,10 +344,17 @@ def classify(rc: C.Ctx, kind: str, slugs: list[str]) -> list[str]:
         else:
             text = C.set_fm(text, {"origin": "imported", "adoption_state": "archived"})
             nxt = "archived reference; nothing to do"
-        sp.write_text(text, encoding="utf-8")
-        cap_set(rc, cap_slug_for(slug), next_action=nxt)
-        out.append(f"{slug}: {kind}")
-    write_index(rc)
+        changes.append((slug, sp, text, nxt))
+    out = []
+    for slug, sp, text, nxt in changes:
+        if not dry:
+            sp.write_text(text, encoding="utf-8")
+            cap = capability or cap_slug_for(slug)
+            cap_link(rc, cap, slug, create=True)
+            cap_set(rc, cap, next_action=nxt)
+        out.append(f"{slug}: {'would classify as ' if dry else ''}{kind}")
+    if not dry:
+        write_index(rc)
     return out
 
 
@@ -335,31 +426,27 @@ def evidence_gaps(text: str) -> list[str]:
     return [i for i in dict.fromkeys(ids) if not re.search(rf"\b{i}\b", ev)]
 
 
-def citation_problems(text: str) -> list[str]:
-    """Every AC must cite a requirement that exists (the same facts GW023 reports)."""
-    known = set(re.findall(r"^- \*\*(N?FR-\d+)\*\*", text, re.MULTILINE))
-    bad = []
-    for m in re.finditer(r"^- \*\*(AC-\d+)\*\*(.*)$", text, re.MULTILINE):
-        refs = set(re.findall(r"\b(N?FR-\d+)\b", m.group(2)))
-        if not refs:
-            bad.append(
-                f"{m.group(1)} does not cite the requirement it proves (add '(covers FR-n)')"
-            )
-        for x in sorted(refs - known):
-            bad.append(f"{m.group(1)} cites unknown {x}")
-    return bad
-
-
 def approval_problems(fdir: Path, meta: dict, text: str) -> list[str]:
+    from groundwork_check import (
+        SPEC_SECTIONS,
+        Report,
+        _requirement_ids,
+        missing_sections,
+    )
+
     bad = metadata_problems(fdir, meta)
+    if meta.get("id") != fdir.name:
+        bad.append(f"front matter id '{meta.get('id')}' != directory '{fdir.name}'")
     if not str(meta.get("owner", "")).strip():
         bad.append("owner is empty (a confirmed human must own the baseline)")
     bad += content_problems(meta, text)
-    if not re.search(r"^- \*\*FR-\d+\*\*", text, re.MULTILINE):
-        bad.append("no numbered functional requirements (**FR-1**)")
-    if not re.search(r"^- \*\*AC-\d+\*\*", text, re.MULTILINE):
-        bad.append("no numbered acceptance criteria (**AC-1**)")
-    bad += citation_problems(text)[:5]
+    if not meta.get("adopted_from"):
+        missing = missing_sections(text, SPEC_SECTIONS, numbered=True)
+        if missing:
+            bad.append("missing/misordered section(s): " + "; ".join(missing))
+    report = Report(fdir)
+    _requirement_ids(report, fdir, text)
+    bad += [finding.message for finding in report.errors]
     return bad
 
 
@@ -370,6 +457,7 @@ def new_baseline(
     rc: C.Ctx, slug: str, title: str | None, capability: str | None
 ) -> Path:
     specs = rc.repo / "specs"
+    _require_safe_paths(rc, specs, caps_file(rc), index_path(rc))
     specs.mkdir(exist_ok=True)
     clean = C.slugify(slug)
     if not clean:
@@ -413,6 +501,7 @@ def caps_file(rc: C.Ctx) -> Path:
 
 
 def load_caps(rc: C.Ctx) -> dict:
+    _require_safe_paths(rc, caps_file(rc))
     try:
         d = json.loads(caps_file(rc).read_text(encoding="utf-8"))
         return d if isinstance(d, dict) else {}
@@ -422,6 +511,7 @@ def load_caps(rc: C.Ctx) -> dict:
 
 def save_caps(rc: C.Ctx, data: dict) -> None:
     f = caps_file(rc)
+    _require_safe_paths(rc, f)
     f.parent.mkdir(parents=True, exist_ok=True)
     f.write_text(
         json.dumps(dict(sorted(data.items())), indent=2) + "\n", encoding="utf-8"
@@ -464,6 +554,30 @@ def cap_set(rc: C.Ctx, cap: str, create: bool = True, **fields) -> dict:
             rec["lifecycle_confirmed"] = {"by": C.signer(), "at": today()}
         elif k == "lifecycle_confirmed_by":
             rec["lifecycle_confirmed"] = {"by": v, "at": today()}
+        elif k == "interview_notes":
+            try:
+                notes = json.loads(v) if isinstance(v, str) else v
+            except ValueError as exc:
+                raise SystemExit(
+                    "interview_notes must be a JSON array of interview entries"
+                ) from exc
+            if not isinstance(notes, list) or any(
+                not isinstance(note, dict)
+                or any(
+                    not isinstance(note.get(field), str)
+                    for field in ("question", "answer", "source", "effect")
+                )
+                or not note["question"].strip()
+                or note["effect"] not in INTERVIEW_EFFECTS
+                for note in notes
+            ):
+                raise SystemExit(
+                    "interview_notes entries need question, answer, source and a valid effect"
+                )
+            stored = rec.setdefault("interview_notes", [])
+            for note in notes:
+                if note not in stored:
+                    stored.append(note)
         elif k in LIST_FIELDS:
             items = (
                 v
@@ -557,7 +671,9 @@ def rows(rc: C.Ctx) -> list[dict]:
                 "coverage": coverage(rc, specs),
                 "specs": [f"{s} ({spec_state(rc, s)[0]})" for s in specs],
                 "approval": ", ".join(spec_state(rc, s)[1] for s in specs) or "—",
-                "review": "not tracked",
+                "review": ", ".join(review_label(rc, s)[0] for s in specs) or "—",
+                "review_detail": ", ".join(review_label(rc, s)[1] for s in specs)
+                or "—",
                 "sources": rec.get("sources", []),
                 "rationale": rec.get("rationale_ref", ""),
                 "next": rec.get("next_action", ""),
@@ -566,8 +682,27 @@ def rows(rc: C.Ctx) -> list[dict]:
     return out
 
 
+def review_label(rc: C.Ctx, slug: str) -> tuple[str, str]:
+    """(status word, cell text) for a linked spec's source-review state."""
+    fdir = rc.repo / "specs" / slug
+    if not (fdir / "spec.md").is_file() or not C.is_baseline(C.spec_meta(fdir)):
+        return "—", "—"
+    import groundwork_fresh as F
+
+    rv = F.baseline_review(rc, slug)
+    if rv.status == "current":
+        return "current", f"current ({rv.at[:10]})"
+    if rv.status == "review":
+        return "review", f"review needed ({len(rv.reasons)} reason(s))"
+    if rv.status == "unreviewed":
+        return "unreviewed", "never reviewed"
+    return rv.status, rv.status
+
+
 def fingerprint(rs: list[dict]) -> str:
-    return hashlib.sha256(json.dumps(rs, sort_keys=True).encode()).hexdigest()[:12]
+    # review details (counts, dates) change without the table being wrong; the status word is enough
+    key = [{k: v for k, v in r.items() if k != "review_detail"} for r in rs]
+    return hashlib.sha256(json.dumps(key, sort_keys=True).encode()).hexdigest()[:12]
 
 
 def _kept_notes(text: str) -> dict[str, str]:
@@ -606,7 +741,7 @@ def render_block(rc: C.Ctx, previous: str = "") -> str:
                     r["coverage"],
                     ", ".join(r["specs"]) or "—",
                     r["approval"],
-                    r["review"],
+                    r["review_detail"],
                     ", ".join(f"`{s}`" for s in r["sources"][:4]) or "—",
                     r["rationale"] or "—",
                     r["next"] or "—",
@@ -627,6 +762,7 @@ def index_path(rc: C.Ctx) -> Path:
 
 def write_index(rc: C.Ctx) -> Path:
     p = index_path(rc)
+    _require_safe_paths(rc, p)
     prev = p.read_text(encoding="utf-8") if p.is_file() else ""
     block = render_block(rc, prev)
     if BLOCK.search(prev):
@@ -685,11 +821,44 @@ def review_items(ctx: C.Ctx) -> list[tuple[str, str]]:
                             "baseline — edited after approval; re-approve",
                         )
                     )
-                elif not d.approved:
-                    out.append((name + fdir.name, "baseline — awaiting approval"))
+                    continue
+                import groundwork_fresh as F
+
+                rv = F.baseline_review(rc, fdir.name)
+                if not d.approved:
+                    out.append(
+                        (
+                            name + fdir.name,
+                            "baseline — awaiting approval"
+                            + (
+                                " (sources never reviewed)"
+                                if rv.status == "unreviewed"
+                                else ""
+                            ),
+                        )
+                    )
+                elif rv.status == "review":
+                    out.append(
+                        (
+                            name + fdir.name,
+                            "baseline — source review needed: "
+                            + "; ".join(rv.reasons[:2]),
+                        )
+                    )
+                elif rv.status == "unreviewed":
+                    out.append((name + fdir.name, "baseline — sources never reviewed"))
         for cap, rec in sorted(load_caps(rc).items()):
             if not rec.get("specs") and rec.get("lifecycle") in ("active", "uncertain"):
                 out.append((name + cap, "capability deferred — no spec yet"))
+    import groundwork_contracts as CT
+
+    if ctx.level in ("workspace", "standalone"):
+        out += CT.review_items(ctx)
+    elif ctx.level == "repo" and ctx.workspace:
+        out += [
+            ("workspace/" + label, state)
+            for label, state in CT.review_items(C.detect(ctx.workspace))
+        ]
     return out
 
 
@@ -699,17 +868,27 @@ def review_summary(ctx: C.Ctx) -> str:
         return ""
     counts: dict[str, int] = {}
     for _, state in items:
-        key = state.split(" — ")[0] + (
-            " awaiting classification"
-            if "classification" in state
-            else " awaiting approval"
-            if "awaiting approval" in state
-            else " stale"
-            if "re-approve" in state
-            else " deferred"
-            if "deferred" in state
-            else " unfinished"
-        )
+        kind = state.split(" — ")[0]
+        if "classification" in state:
+            key = kind + " awaiting classification"
+        elif "awaiting approval" in state:
+            key = kind + " awaiting approval"
+        elif "re-approve" in state:
+            key = kind + " stale"
+        elif "deferred" in state:
+            key = kind + " deferred"
+        elif "awaiting sign-off" in state:
+            key = kind + " awaiting sign-off"
+        elif "reviewers incomplete" in state:
+            key = kind + " with reviewers incomplete"
+        elif "named reviewer" in state:
+            key = kind + " missing a named reviewer's sign-off"
+        elif "source review needed" in state:
+            key = kind + " needing source review"
+        elif "never reviewed" in state:
+            key = kind + " never source-reviewed"
+        else:
+            key = kind + " unfinished"
         counts[key] = counts.get(key, 0) + 1
     return ", ".join(f"{n} {k}" for k, n in counts.items())
 

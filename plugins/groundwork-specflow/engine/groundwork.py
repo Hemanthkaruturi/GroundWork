@@ -3,12 +3,13 @@
 Hooks:      groundwork.py session-context | prompt-reminder | gate | gate-bash     (JSON on stdin; Claude Code or Devin)
 Onboarding:  groundwork.py init [--as repo|workspace] [--retrofit] [--dry-run] | doctor [--json]
 Anyone/CI:  groundwork.py check [--strict] [--json] | fresh [--json] | hooks install|uninstall|status
-Agents:     groundwork.py confirm [doc ...]   (after updating docs to match reality)
+Agents:     groundwork.py confirm [doc ...]   (after updating docs to match reality) | confirm --baseline <slug ...>
 Humans:     groundwork.py status | approve <doc> | bypass <reason>
 People:     groundwork.py who <feature|RFC|bug> | who --person NAME | who --all | record <event> --ref R ...
 Resume:     groundwork.py board [--all] [--json] | note <text> | deps <feature|RFC> | new-bug <slug> | activate-bug <slug>
 Agents:     groundwork.py scaffold | new-rfc <slug> | new-feature <slug> --rfc N | activate <slug>
 Baselines:  groundwork.py adopt-specs [--dry-run] [slug ...] | adopt-specs --classify baseline|planned|archived <slug ...>
+Contracts:  groundwork.py new-contract <provider-topic> [--title T] [--provider P] [--consumers a,b] [--as-built]
             groundwork.py new-baseline <slug> [--title T] [--capability C] | capability set|link|unlink ... | capabilities
 Quality:    groundwork.py verify [--fix] [--step S] | quality [show|init [--create]|keep|set step=CMD]
 Code:       groundwork.py codemap [--check] | layout [--json] | layout init --profile P [--root R] [--create] | layout keep | layout map role=path [--legacy P]
@@ -36,6 +37,7 @@ import groundwork_brevity as V
 import groundwork_bugs as B
 import groundwork_check as K
 import groundwork_codemap as M
+import groundwork_contracts as CT
 import groundwork_core as C
 import groundwork_discover as D
 import groundwork_doctor as X
@@ -495,7 +497,7 @@ def cmd_approve(a) -> None:
         st = C.approve(p, ctx, a.who)
         print(
             f"{p.name if len(paths) == 1 else p.parent.name + '/' + p.name}: {st.status} "
-            f"({len(set(st.signers))}/{st.needed} sign-offs: {', '.join(st.signers)})"
+            f"({C.signoffs_label(st)} sign-offs: {', '.join(st.signers)})"
         )
         if st.status == "in-review":
             print(signoff_help(p, st))
@@ -503,6 +505,11 @@ def cmd_approve(a) -> None:
 
 def signoff_help(p: Path, st: C.DocState) -> str:
     """How the user moves a document that is waiting on sign-offs forward."""
+    if not st.needed:
+        return (
+            f"Next step for {p.name}: its `signoffs_required` is not a whole number, so no count of sign-offs "
+            "can satisfy it. Set it to the number of reviewers (1 or more) and approve again."
+        )
     left = st.needed - len(set(st.signers))
     return (
         f"Next step for {p.name}: {left} more sign-off(s) needed. Either each remaining signer runs "
@@ -729,12 +736,6 @@ def cmd_init(a) -> None:
                 f"[{base.name}] evidence gathered{'' if a.dry_run else ' → .groundwork/discovery.json'}:"
             )
             print(D.summarize(d))
-            legacy = BL.candidates(t)
-            if legacy:
-                print(
-                    f"  legacy specs: {len(legacy)} spec director{'y' if len(legacy) == 1 else 'ies'} without GroundWork "
-                    "metadata — run `groundwork.py adopt-specs --dry-run`, then `adopt-specs` to bring them in as references"
-                )
         if t.level == "repo" and t.workspace:
             gaps = C._gaps_at("workspace", t.workspace, "")[0]
             if gaps:
@@ -1139,26 +1140,41 @@ def cmd_hooks(a) -> None:
 def cmd_fresh(a) -> None:
     ctx = C.detect(Path(a.path or Path.cwd()))
     rows = F.assess_with_parent(ctx)
+    bases = F.assess_baselines(ctx) if ctx.level in ("repo", "standalone") else []
     if a.json:
         print(
             json.dumps(
-                [
-                    {"doc": d.doc, "status": d.status, "reasons": d.reasons}
-                    for d in rows
+                [{"doc": d.doc, "status": d.status, "reasons": d.reasons} for d in rows]
+                + [
+                    {
+                        "doc": "baseline:" + b.slug,
+                        "status": b.status,
+                        "reasons": b.reasons,
+                    }
+                    for b in bases
                 ],
                 indent=2,
             )
         )
         return
-    if not rows:
+    if not rows and not bases:
         print("Nothing to assess at this level.")
     for d in rows:
         print(f"{d.status.upper():<11} {d.doc}")
         for why in d.reasons:
             print(f"            - {why}")
+    for b in bases:
+        print(f"{b.status.upper():<11} baseline specs/{b.slug}")
+        for why in b.reasons:
+            print(f"            - {why}")
     if any(d.status in ("stale", "unconfirmed") for d in rows):
         print(
             "\nUpdate what changed (refresh skill), then run: groundwork.py confirm <doc>"
+        )
+    if any(b.status in ("review", "unreviewed") for b in bases):
+        print(
+            "\nBaselines: read the changed files against the requirements (refresh skill); amend and re-approve "
+            "if behaviour changed; then run: groundwork.py confirm --baseline <slug>"
         )
 
 
@@ -1166,6 +1182,26 @@ def cmd_confirm(a) -> None:
     ctx = C.detect(Path.cwd())
     if ctx.level == "unknown":
         raise SystemExit("Not in a repo or workspace.")
+    if a.baseline:
+        if not a.docs:
+            raise SystemExit(
+                "confirm --baseline needs the baseline slug(s): NNN-slug …"
+            )
+        rc = _repo_only("a baseline source review")
+        done = F.confirm_baseline(rc, a.docs)
+        if BL.load_caps(rc):
+            BL.write_index(rc)
+        print(
+            "Source review recorded for: "
+            + ", ".join(done)
+            + "\nThis records that the baseline was compared with the files its Evidence table names. "
+            "It is not an approval: if requirements changed, the user must /groundwork-specflow:approve again."
+        )
+        for slug in done:
+            review = F.baseline_review(rc, slug)
+            if review.status == "review":
+                print(f"{slug}: review still needed — " + "; ".join(review.reasons))
+        return
     done = F.confirm(ctx, a.docs or None)
     print("Confirmed as matching reality: " + ", ".join(done))
 
@@ -1189,13 +1225,24 @@ def cmd_adopt_specs(a) -> None:
         raise SystemExit("Not in a repo or workspace.")
     if a.classify:
         rc = _repo_only("classification")
-        for line in BL.classify(rc, a.classify, a.slugs):
+        for line in BL.classify(
+            rc, a.classify, a.slugs, dry=a.dry_run, capability=a.capability
+        ):
             print(line)
         print(
-            "Classification changes metadata only. A baseline still needs the user's review and "
+            (
+                "Dry run: nothing changed. "
+                if a.dry_run
+                else "Classification changes metadata and capability links only. "
+            )
+            + "A baseline still needs the user's review and "
             "/groundwork-specflow:approve; planned work needs its RFC, plan, tasks and evals."
         )
         return
+    if a.capability:
+        raise SystemExit(
+            "--capability requires --classify; import first, then link the classified spec"
+        )
     targets = (
         [C.detect(k, ctx.workspace) for k in C.child_repos(ctx.workspace)]
         if ctx.level == "workspace"
@@ -1236,6 +1283,25 @@ def cmd_adopt_specs(a) -> None:
         "\nImported documents are `origin: imported`, `adoption_state: pending`: references, not approved "
         "requirements. Next: the baseline skill investigates each, then "
         "`groundwork.py adopt-specs --classify baseline|planned|archived <slug>`."
+    )
+
+
+def cmd_new_contract(a) -> None:
+    ctx = C.detect(Path.cwd())
+    if ctx.level == "repo":
+        print(
+            f"note: contracts are product-level; writing it in the workspace's CONTRACTS/ ({ctx.workspace})"
+        )
+    consumers = [c.strip() for c in (a.consumers or "").split(",") if c.strip()]
+    p = CT.new_contract(ctx, a.slug, a.title, a.provider, consumers, a.as_built)
+    print(
+        f"{p}\n"
+        + (
+            "As-built contract (origin: baseline): fill it from the provider's code and docs, cite the evidence, "
+            "name provider_reviewer and consumer_reviewers, then each reviewer approves it."
+            if a.as_built
+            else "Planned contract: fill it from the api RFC's §8, name the reviewers, then each reviewer approves it."
+        )
     )
 
 
@@ -1446,7 +1512,21 @@ def main() -> None:
     )
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--classify", choices=BL.CLASSIFICATIONS)
+    p.add_argument(
+        "--capability",
+        help="capability to link when classifying (existing links are kept)",
+    )
     p.set_defaults(fn=cmd_adopt_specs)
+    p = sub.add_parser(
+        "new-contract",
+        help="a contract in CONTRACTS/ with named provider/consumer reviewers (--as-built: observed, not designed)",
+    )
+    p.add_argument("slug", help="<provider>-<topic>")
+    p.add_argument("--title")
+    p.add_argument("--provider")
+    p.add_argument("--consumers", help="comma-separated repo or system names")
+    p.add_argument("--as-built", dest="as_built", action="store_true")
+    p.set_defaults(fn=cmd_new_contract)
     p = sub.add_parser(
         "new-baseline", help="a spec for behaviour that already exists (spec.md only)"
     )
@@ -1595,7 +1675,14 @@ def main() -> None:
     p.add_argument("--json", action="store_true")
     p.set_defaults(fn=cmd_fresh)
     p = sub.add_parser("confirm")
-    p.add_argument("docs", nargs="*")
+    p.add_argument(
+        "docs", nargs="*", help="foundation docs, or baseline slugs with --baseline"
+    )
+    p.add_argument(
+        "--baseline",
+        action="store_true",
+        help="record a source review of the named baseline(s): snapshots the files their Evidence tables cite",
+    )
     p.set_defaults(fn=cmd_confirm)
     p = sub.add_parser("board", help="everything in flight, for resuming")
     p.add_argument("path", nargs="?")

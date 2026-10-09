@@ -25,5 +25,14 @@ new version, never a silent change).
 Consumers pin it: the repo records `contract.lock` with the version it honours. A shipped contract is never
 edited in place in a breaking way — add a version.
 
+## Creating one
+`python3 "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py" new-contract <provider>-<topic> --title "…" --provider <repo> --consumers <a,b>` writes `CONTRACTS/<provider>-<topic>.md` in the workspace (a standalone repo gets its own `CONTRACTS/`). Its front matter carries `version` (semver; the date never goes in it), `signoffs_required: 2`, and the humans who review it: `provider_reviewer` and `consumer_reviewers`. Fill them with the picker from PROJECT.md's people table.
+
+## As-built contracts (a surface others already consume)
+Add `--as-built`: the contract gets `origin: baseline` and `observed_at`, and describes the surface **as it is**, not as designed. Read any existing contract or integration doc first (`discovery.json` → `surface.api_docs`, `surface.schemas`). Draft only the consumed surface: operations with shapes and real examples, errors, retries and idempotency, timeouts, auth and tenancy, compatibility rules. Compare the provider's code with the consumer's code or tests when they are in the workspace; when they are not, write that limit down. An example copied from a doc is *unverified* until you ran it. Fill `## 7. Evidence` (claim · provider evidence · consumer evidence · verification · date). Preserve an existing version number; propose `1.0.0` only when none exists.
+
+## Review and sign-off
+Approval counts distinct signers (`signoffs_required`) and knows nothing about roles. Whether the provider and the consumer both reviewed is a **human procedure**: ask each named reviewer to run `/groundwork-specflow:approve CONTRACTS/<file>` themselves. `check` warns (GW047) while a named reviewer has not signed, and the session context lists the contract under DOCUMENTATION REVIEW; until then say it is *pending* and never present it as a mutual commitment. Future changes go through an `api` RFC, a new version and the same sign-offs.
+
 ## Write for the reader
 Replies and documents are short, plain and decision-first: answer/decision in the first line, about 150 words, short sentences, everyday words, no bare IDs or jargon (say what they mean), no re-telling of steps. See the **plain-writing** skill.

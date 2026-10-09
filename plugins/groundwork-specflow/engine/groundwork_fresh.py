@@ -14,6 +14,7 @@ import fnmatch
 import hashlib
 import json
 import os
+import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -104,36 +105,42 @@ def _matches(rel: str, names: set[str], globs: list[str]) -> bool:
     return Path(rel).name in names or any(fnmatch.fnmatch(rel, g) for g in globs)
 
 
+def _excluded_dir(name: str) -> bool:
+    return (
+        name in C.SKIP_DIRS
+        or name in {".groundwork", "specs"}
+        or (name.startswith(".") and name != ".github")
+    )
+
+
+def _excluded_file(name: str) -> bool:
+    return (name.startswith(".") and name != ".gitlab-ci.yml") or any(
+        fnmatch.fnmatch(name.lower(), pattern)
+        for pattern in (
+            "*.pem",
+            "*.key",
+            "*.p12",
+            "*.pfx",
+            "*.tfvars",
+            "*.tfvars.json",
+            "*.tfstate",
+            "*.tfstate.*",
+            "credentials*",
+            "secrets*",
+        )
+    )
+
+
 def _walk(root: Path, max_files: int = 3000):
     n = 0
     for d, dirs, files in os.walk(root):
         dirs[:] = sorted(
-            x
-            for x in dirs
-            if x not in C.SKIP_DIRS
-            and x not in {".groundwork", "specs"}
-            and not (x.startswith(".") and x != ".github")
+            x for x in dirs if not _excluded_dir(x) and not Path(d, x).is_symlink()
         )
         for f in sorted(files):
             # Infrastructure directories can contain local secrets alongside manifests.
             # Never open those files or follow file links out of the project.
-            if (f.startswith(".") and f != ".gitlab-ci.yml") or Path(d, f).is_symlink():
-                continue
-            if any(
-                fnmatch.fnmatch(f.lower(), pattern)
-                for pattern in (
-                    "*.pem",
-                    "*.key",
-                    "*.p12",
-                    "*.pfx",
-                    "*.tfvars",
-                    "*.tfvars.json",
-                    "*.tfstate",
-                    "*.tfstate.*",
-                    "credentials*",
-                    "secrets*",
-                )
-            ):
+            if _excluded_file(f) or Path(d, f).is_symlink():
                 continue
             n += 1
             if n > max_files:
@@ -246,6 +253,9 @@ def _base(ctx: C.Ctx) -> Path:
 
 
 def load(ctx: C.Ctx) -> dict:
+    import groundwork_baseline as BL
+
+    BL._require_safe_paths(ctx, _base(ctx) / ".groundwork" / "freshness.json")
     try:
         return json.loads(
             (_base(ctx) / ".groundwork" / "freshness.json").read_text(encoding="utf-8")
@@ -255,7 +265,10 @@ def load(ctx: C.Ctx) -> dict:
 
 
 def _save(ctx: C.Ctx, data: dict) -> None:
+    import groundwork_baseline as BL
+
     f = _base(ctx) / ".groundwork" / "freshness.json"
+    BL._require_safe_paths(ctx, f)
     f.parent.mkdir(parents=True, exist_ok=True)
     f.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
@@ -376,3 +389,218 @@ def stale_lines(ctx: C.Ctx) -> list[str]:
         for d in assess_with_parent(ctx)
         if d.status in ("stale", "unconfirmed")
     ]
+
+
+# --- baseline source review (STANDARD.md §5j) --------------------------------------------
+# A baseline cites the files it was observed from (its Evidence table). Those files, and only
+# those, are snapshotted when a person reviews the baseline against its sources. A later change
+# to one of them is a *review signal*: the baseline may still be right, but someone must look.
+# Approval is a separate record (approvals.json) and is never touched here.
+
+BASELINE_NS = "baseline:"
+MAX_EVIDENCE_FILES = 300
+_PATH_TOKEN = re.compile(r"(?:[A-Za-z]:)?[A-Za-z0-9_./-]+")
+
+
+def evidence_tokens(text: str) -> list[str]:
+    """Path-like tokens from the Evidence table's implementation and test columns."""
+    m = re.search(
+        r"^## Evidence\b[^\n]*\n(.*?)(?=^## |\Z)", text, re.MULTILINE | re.DOTALL
+    )
+    if not m:
+        return []
+    out: list[str] = []
+    for ln in m.group(1).splitlines():
+        if not ln.strip().startswith("|"):
+            continue
+        cells = [c.strip() for c in ln.strip().strip("|").split("|")]
+        if len(cells) < 3 or cells[0].startswith("---") or cells[0] == "Requirement":
+            continue
+        for cell in cells[1:3]:
+            for tok in _PATH_TOKEN.findall(cell.replace("`", " ")):
+                tok = tok.rstrip(".")
+                is_dir_hint = tok.endswith("/")
+                tok = tok.rstrip("/")
+                looks_like_path = (
+                    is_dir_hint or "/" in tok or re.search(r"\.[A-Za-z0-9]{1,6}$", tok)
+                )
+                if (
+                    looks_like_path
+                    and tok
+                    and tok not in out
+                    and not tok.startswith("http")
+                ):
+                    out.append(tok)
+    return out
+
+
+def baseline_snapshot(repo: Path, text: str) -> dict:
+    """Bounded source hashes and explicit gaps; excluded files and links are never read."""
+    import groundwork_baseline as BL
+
+    files: dict[str, str] = {}
+    missing: list[str] = []
+    skipped: list[str] = []
+    truncated: list[str] = []
+    root = repo.resolve()
+    ctx = C.Ctx("standalone", root, repo=root)
+    for tok in evidence_tokens(text):
+        p = root / tok
+        if BL.path_problem(ctx, p):
+            skipped.append(tok)
+            continue
+        parts = p.relative_to(root).parts
+        directory = p.is_dir()
+        if any(
+            _excluded_dir(part) for part in (parts if directory else parts[:-1])
+        ) or (not directory and _excluded_file(p.name)):
+            skipped.append(tok)
+            continue
+        if p.is_file():
+            rel = p.relative_to(root).as_posix()
+            if rel not in files and len(files) >= MAX_EVIDENCE_FILES:
+                truncated.append(tok)
+            else:
+                files[rel] = _file_hash(p)
+        elif directory:
+            n = 0
+            for _, f in _walk(p, MAX_EVIDENCE_FILES + 1):
+                n += 1
+                rel = f.relative_to(root).as_posix()
+                if rel not in files and len(files) >= MAX_EVIDENCE_FILES:
+                    truncated.append(tok)
+                    break
+                files[rel] = _file_hash(f)
+            if n == 0:
+                missing.append(tok)
+        else:
+            missing.append(tok)
+    return {
+        "sources": files,
+        "missing": sorted(set(missing)),
+        "skipped": sorted(set(skipped)),
+        "truncated": sorted(set(truncated)),
+    }
+
+
+def _evidence_problems(snap: dict) -> list[str]:
+    reasons = []
+    for key, label in (
+        ("missing", "unresolved evidence paths"),
+        ("skipped", "excluded or unsafe evidence paths (not read)"),
+        (
+            "truncated",
+            f"evidence scan exceeds {MAX_EVIDENCE_FILES} files; cite narrower paths",
+        ),
+    ):
+        if snap.get(key):
+            reasons.append(label + ": " + ", ".join(snap[key][:5]))
+    return reasons
+
+
+def confirm_baseline(ctx: C.Ctx, slugs: list[str], who: str | None = None) -> list[str]:
+    """Record that a person compared the baseline with its cited sources. Not an approval."""
+    if not ctx.repo:
+        raise SystemExit("baselines live in a repo; cd into one")
+    import groundwork_baseline as BL
+
+    data, done = load(ctx), []
+    for slug in slugs:
+        if not BL.DIR_RE.fullmatch(slug):
+            raise SystemExit(f"invalid baseline slug '{slug}': expected NNN-slug")
+        fdir = ctx.repo / "specs" / slug
+        sp = fdir / "spec.md"
+        BL._require_safe_paths(ctx, sp)
+        if not sp.is_file():
+            raise SystemExit(f"specs/{slug}/spec.md does not exist")
+        text = sp.read_text(encoding="utf-8")
+        meta, _ = C.split_fm(text)
+        if not C.is_baseline(meta):
+            raise SystemExit(
+                f"{slug} is not a baseline (origin '{C.origin(meta) or 'planned'}')"
+            )
+        if C.PLACEHOLDER.search(text):
+            raise SystemExit(
+                f"{slug} still has [TODO]/[NEEDS CLARIFICATION] markers; an empty scaffold cannot confirm its sources"
+            )
+        snap = baseline_snapshot(ctx.repo, text)
+        if snap["truncated"]:
+            raise SystemExit(f"{slug}: " + "; ".join(_evidence_problems(snap)))
+        if not snap["sources"]:
+            raise SystemExit(
+                f"{slug}: the Evidence table names no file that exists in this repo; fill it before reviewing"
+                + (
+                    f" (unresolved: {', '.join(snap['missing'][:4])})"
+                    if snap["missing"]
+                    else ""
+                )
+            )
+        data[BASELINE_NS + slug] = {
+            "at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            "epoch": int(time.time()),
+            "by": who or C.signer(),
+            "spec_hash": C.body_hash(text),
+            "snapshot": snap,
+        }
+        done.append(slug)
+    _save(ctx, data)
+    return done
+
+
+@dataclass
+class BaselineReview:
+    slug: str
+    status: str  # current | review | unreviewed | unfinished | no-evidence
+    reasons: list[str] = field(default_factory=list)
+    at: str = ""
+
+
+def baseline_review(ctx: C.Ctx, slug: str) -> BaselineReview:
+    import groundwork_baseline as BL
+
+    fdir = ctx.repo / "specs" / slug
+    BL._require_safe_paths(ctx, fdir / "spec.md")
+    text = (fdir / "spec.md").read_text(encoding="utf-8")
+    if C.PLACEHOLDER.search(text):
+        return BaselineReview(slug, "unfinished")
+    rec = load(ctx).get(BASELINE_NS + slug)
+    now = baseline_snapshot(ctx.repo, text)
+    gaps = _evidence_problems(now)
+    if gaps and not rec:
+        return BaselineReview(slug, "review", ["sources never reviewed", *gaps])
+    if not rec:
+        if not now["sources"]:
+            return BaselineReview(
+                slug, "no-evidence", ["the Evidence table names no existing file"]
+            )
+        return BaselineReview(
+            slug,
+            "unreviewed",
+            [
+                "sources never reviewed (run: groundwork.py confirm --baseline "
+                + slug
+                + ")"
+            ],
+        )
+    old = rec.get("snapshot", {})
+    reasons = diff_snapshots(
+        {"sources": old.get("sources", {})}, {"sources": now["sources"]}
+    )
+    if rec.get("spec_hash") != C.body_hash(text):
+        reasons.append(
+            "baseline body changed since source review; compare its requirements with the sources again"
+        )
+    reasons.extend(gaps)
+    if reasons:
+        return BaselineReview(slug, "review", reasons, rec.get("at", ""))
+    return BaselineReview(slug, "current", [], rec.get("at", ""))
+
+
+def assess_baselines(ctx: C.Ctx) -> list[BaselineReview]:
+    if not ctx.repo:
+        return []
+    out = []
+    for fdir in C.feature_dirs(ctx):
+        if C.is_baseline(C.spec_meta(fdir)):
+            out.append(baseline_review(ctx, fdir.name))
+    return out

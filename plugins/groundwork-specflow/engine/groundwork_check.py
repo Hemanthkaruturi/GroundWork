@@ -19,6 +19,7 @@ import groundwork_baseline as BL
 import groundwork_brevity as V
 import groundwork_bugs as B
 import groundwork_codemap as M
+import groundwork_contracts as CT
 import groundwork_core as C
 import groundwork_fresh as F
 import groundwork_layout as L
@@ -490,6 +491,27 @@ def _baseline(ctx: C.Ctx, r: Report, fdir: Path, spec: C.DocState) -> None:
             "add a row per requirement: implementation, tests or observations, verification state, date",
         )
     _requirement_ids(r, fdir, stext)
+    rv = F.baseline_review(ctx, fdir.name)
+    if rv.status == "unreviewed":
+        r.warn(
+            "GW052",
+            fdir / "spec.md",
+            "evidence sources never reviewed",
+            f"compare the baseline with the files its Evidence table names, then: groundwork.py confirm --baseline {fdir.name}",
+        )
+    elif rv.status == "review":
+        r.warn(
+            "GW052",
+            fdir / "spec.md",
+            "baseline needs source review — " + "; ".join(rv.reasons[:3]),
+            f"read the changed files against the requirements (refresh skill); amend and re-approve if behaviour changed; then: groundwork.py confirm --baseline {fdir.name}",
+        )
+    elif rv.status == "no-evidence":
+        r.warn(
+            "GW052",
+            fdir / "spec.md",
+            "the Evidence table names no file that exists in this repo",
+        )
     # optional governed companions (not historical): held to the normal shape and pinned to the spec
     hist = BL.historical(meta)
     shash = C.body_hash(stext)
@@ -747,6 +769,20 @@ def check_relations(ctx: C.Ctx, r: Report, workspace_wide: bool) -> None:
                     f"{e.kind}: {e.raw} — {why}",
                     "approve the baseline (or classify the import) before relating work to it",
                 )
+            elif C.is_baseline(C.spec_meta(trc.repo / "specs" / e.dst[1])):
+                rv = F.baseline_review(trc, e.dst[1])
+                if rv.status in ("review", "unreviewed"):
+                    r.warn(
+                        "GW077",
+                        sdir / "spec.md",
+                        f"{e.kind}: {e.raw} — "
+                        + (
+                            "its sources changed since the last review"
+                            if rv.status == "review"
+                            else "its sources were never reviewed"
+                        ),
+                        f"review the baseline against its sources first: groundwork.py confirm --baseline {e.dst[1]}",
+                    )
             for w in (
                 C.dependency_warnings(rc, src_spec)
                 if e.kind in ("depends_on", "builds_against")
@@ -960,6 +996,52 @@ def check_quality(ctx: C.Ctx, r: Report) -> None:
         )
 
 
+def check_contracts(ctx: C.Ctx, r: Report) -> None:
+    """GW045–GW047: GroundWork-created contracts (front matter with an id). Hand-written ones are left alone."""
+    for p in CT.paths(ctx):
+        meta = CT.governed(p)
+        if not meta:
+            continue
+        for b in CT.metadata_problems(p, meta):
+            r.err("GW045", p, b)
+        st = C.doc_state(p, ctx)
+        _approval_claims(r, st, "GW045")
+        if st.placeholders:
+            r.warn(
+                "GW046",
+                p,
+                f"contract is unfinished ({st.placeholders} unresolved marker(s))",
+            )
+            continue
+        text = p.read_text(encoding="utf-8")
+        miss = missing_sections(text, CT.SECTIONS, numbered=True)
+        if miss:
+            r.err("GW046", p, "missing/misordered section(s): " + "; ".join(miss))
+        if C.is_baseline(meta) and not strip_comments(section_body(text, 7)).strip():
+            r.err(
+                "GW046", p, "an as-built contract needs a filled '7. Evidence' section"
+            )
+        unsigned, why = CT.reviewer_gaps(ctx, p, meta)
+        gaps = CT.assignment_gaps(meta)
+        if gaps:
+            r.warn(
+                "GW047",
+                p,
+                "reviewers incomplete: no "
+                + " / ".join(gaps)
+                + " named"
+                + ("; approved by count only" if st.approved else ""),
+                "name provider_reviewer and consumer_reviewers in the front matter; the count alone does not show both sides reviewed",
+            )
+        elif unsigned and st.signers:
+            r.warn(
+                "GW047",
+                p,
+                f"{why}; named reviewer(s) not yet signed: {', '.join(unsigned)}",
+                "each named reviewer runs /groundwork-specflow:approve on it; the count alone does not show both sides reviewed",
+            )
+
+
 def check_approval_records(ctx: C.Ctx, r: Report) -> None:
     for root in {ctx.repo, ctx.workspace} - {None}:
         for rel in C.load_approvals(root):
@@ -994,12 +1076,17 @@ def check_ctx(ctx: C.Ctx, r: Report, seen: set[Path]) -> None:
     check_approval_records(ctx, r)
     if ctx.level == "workspace":
         check_rfcs(ctx, r)
+        check_contracts(ctx, r)
         check_relations(ctx, r, True)
         for kid in C.child_repos(ctx.workspace):
             check_ctx(C.detect(kid, ctx.workspace), r, seen)
     else:
         if ctx.level == "standalone":
             check_rfcs(ctx, r)
+            check_contracts(ctx, r)
+        elif ctx.workspace and ctx.workspace.resolve() not in seen:
+            # a repo reads upward: the workspace's contracts bind it, so their findings show here too
+            check_contracts(C.detect(ctx.workspace), r)
         check_features(ctx, r)
         check_bugs(ctx, r)
         check_layout(ctx, r)

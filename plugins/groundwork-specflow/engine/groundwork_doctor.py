@@ -208,6 +208,18 @@ def diagnose_ctx(ctx: C.Ctx, ws_children: bool = True) -> Diagnosis:
             "; ".join(f"{a}: {b}" for a, b in review[:3]),
             "baseline skill: classify imports, review and approve baselines, decide deferred capabilities",
         )
+    if ctx.level != "workspace":
+        import groundwork_fresh as F
+
+        drift = [b for b in F.assess_baselines(ctx) if b.status == "review"]
+        if drift:
+            add(
+                "Documentation",
+                "warn",
+                f"{len(drift)} baseline(s) need source review",
+                "; ".join(f"{b.slug}: {b.reasons[0]}" for b in drift[:3]),
+                "refresh skill: compare the changed files with the requirements, then groundwork.py confirm --baseline <slug>",
+            )
     ist, iwhy = BL.index_state(ctx) if ctx.level != "workspace" else ("none", "")
     if ist in ("missing", "outdated"):
         add(

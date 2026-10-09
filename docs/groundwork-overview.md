@@ -12,8 +12,8 @@ GroundWork is a plugin for Claude Code and Devin. It makes the agent follow a sh
 | --- | --- |
 | 19 skills | one for each step of the path, plus resume, refresh, bugs, ownership, code layout, code quality, baseline and plain writing |
 | 6 hooks | the gate before edits and shell commands, session awareness, reminders, reply length |
-| 71 numbered rules | checked with no AI and no network, on a laptop, in a git hook and in CI |
-| 237 automated tests | the whole lifecycle, and every rule has a test that breaks exactly that rule |
+| 76 numbered rules | checked with no AI and no network, on a laptop, in a git hook and in CI |
+| 267 automated tests | the whole lifecycle, and every rule has a test that breaks exactly that rule |
 | 2 coding agents | Claude Code, and Devin (CLI and Desktop), from the same plugin |
 | 3 platforms | Linux, macOS and Windows, tested on Python 3.10 and 3.12 |
 | 0 network calls | it runs on your machine, collects nothing and sends nothing |
@@ -47,7 +47,8 @@ Every feature, in one line, with where to see it.
 | **Credentials** | Secrets come only from environment variables (locally `.env`, git-ignored); a committed `.env` or a pasted key is caught | 5.32 |
 | **Code quality** | One recorded toolchain per repo (formatter, linter, types, tests), run by `verify`, plus ten coding rules every agent reads in AGENTS.md | 5.33 |
 | **Onboarding existing projects** | `init` gathers evidence, `doctor` shows how far the project is from the standard | 5.14, 5.18 |
-| **Baselines for existing behaviour** | What the code already does becomes approved specs; legacy specs are imported and classified, never rewritten; later features extend or amend them and bugs can cite them | 5.34 |
+| **As-built contracts and evidence-led bootstrap** | Discovery finds routes, commands, schemas, API docs and rule-shaped lines; a surface others consume becomes a contract with named provider and consumer reviewers | 5.34 |
+| **Baselines for existing behaviour** | What the code already does becomes approved specs; legacy specs are imported and classified, never rewritten; later features extend or amend them and bugs can cite them; the files a baseline cites are watched for drift | 5.34 |
 | **Enforcement dial and emergency bypass** | Block, warn or off, and a logged 60-minute bypass for real emergencies | 5.27 |
 | **Git hook and CI** | The same check on every commit and every pull request | 5.2, 5.13, 5.28 |
 | **Short, plain replies** | Answer first, about 150 words, nothing important lost | 5.15 |
@@ -104,7 +105,7 @@ Fix *where* things live, *what* each document contains, and *who* approves. Leav
 ### Structure everyone shares
 - **Two levels, plus standalone.** A *workspace* holds the product-level truth (project brief, architecture, rules, contracts, decisions). Each *repo* holds its own code, specs and internals. A single repo with no workspace above it is *standalone* and carries both sets of documents. The agent always knows which level it is on, and a directory that is neither is *unknown*: nothing may be built there.
 - **Standard documents:** `PROJECT`, `ARCHITECTURE`, `CONSTITUTION` (the non-negotiable rules), `AGENTS`, RFCs, contracts, specs, plans, tasks, evals, bug records, handovers.
-- **A written standard** (`STANDARD.md`) with 71 numbered rules. `groundwork check` verifies them with no AI and no network, so it runs the same on a laptop, in a git hook and in CI.
+- **A written standard** (`STANDARD.md`) with 76 numbered rules. `groundwork check` verifies them with no AI and no network, so it runs the same on a laptop, in a git hook and in CI.
 
 ### Every repo looks the same inside
 - **A standard code layout.** Business logic lives in `core/`. Code that talks to an outside system (an LLM, a database, an HTTP API, a queue, email) lives in `connectors/`, one folder per system. Routes, commands and workers live in `entrypoints/`, and settings are read only in `config/`. A small wiring file plugs connectors into core. There are profiles for services, command-line tools, web front ends and libraries.
@@ -920,6 +921,22 @@ A repo with no specs gets a **capability inventory** instead: the agent proposes
 002-case-search/spec.md: approved (1/1 sign-offs: meena@example.com)
 003-billing/spec.md: approved (1/1 sign-offs: meena@example.com)
 ```
+A baseline also says which files it was observed from. `groundwork.py confirm --baseline 002-case-search` records that a person compared it with exactly those files; when one of them later changes, `fresh` flags the baseline for review, with the file named *(real output)*:
+```
+REVIEW      baseline specs/002-auth
+            - sources changed: src/auth.py
+```
+Changing any other file does nothing. The review is separate from approval: if the behaviour really changed, the spec is amended and approved again; if not, the evidence is updated and the review recorded.
+
+Discovery feeds all of this. On an existing repo `init` now also reports what the code serves and what the docs already say *(real output on a copy of the gateway repo)*:
+```
+  surface:      40 HTTP route(s) in 17 file(s), prefixes /, /calls, /runs, /tenants, /clients; 19 CLI command(s); API docs: docs/api.md, docs/integrations/researchtrail.md
+  surface note: routes are also registered dynamically or mounted under prefixes; paths may combine at mount time
+  rules:        19 candidate rule(s) from README.md, AGENTS.md, .specify/memory/constitution.md, docs/README.md; 6 CI gate command(s)
+  capabilities: 25 candidate(s) from routes, commands and workers (unconfirmed)
+  legacy specs: 14 spec directories without GroundWork metadata (adopt-specs --dry-run)
+```
+Each line is evidence with its limits stated, never a decision: the bootstrap offers the rule candidates and CI gates as picker options for the constitution, and the capability candidates as the starting list for baselines. A surface that another repo already calls becomes an **as-built contract** (`new-contract … --as-built`) with named provider and consumer reviewers. Approval counts signers; `check` warns while a named reviewer has not signed, because two signatures do not prove both sides looked.
 
 ## 6. How it helps
 
@@ -996,7 +1013,7 @@ The step-by-step version is in `docs/manual-testing.md`.
 | `quality`, `quality init`, `quality keep`, `quality set`, `verify` | record the repo's code quality toolchain; run format, lint, types and tests |
 | `codemap`, `codemap --check` | write `CODEMAP.md` (where each kind of code lives) from the code; check it is current |
 
-**Quality:** 237 automated tests cover the whole lifecycle, on Linux, macOS and Windows, on Python 3.10 and 3.12. Every numbered rule has a test that breaks exactly that rule.
+**Quality:** 267 automated tests cover the whole lifecycle, on Linux, macOS and Windows, on Python 3.10 and 3.12. Every numbered rule has a test that breaks exactly that rule.
 
 **Privacy:** it runs locally, makes no network requests, has no telemetry, and never uses, stores or sends credentials. The key check reports only where a key is, never the key itself, and never opens `.env`. See `PRIVACY.md`.
 

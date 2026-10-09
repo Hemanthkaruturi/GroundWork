@@ -46,6 +46,7 @@ have special meaning (glossary). If the user says "you decide", propose a draft 
 ## CONSTITUTION.md — few rules, checkable
 Draft 3–7 principles and the guardrails ("never…") *from what the user has told you*; propose, don't impose.
 Each rule must be something a reviewer could check in a diff.
+**Existing code: start from evidence.** `discovery.json` → `rules.candidates` lists rule-shaped lines harvested from the README, AGENTS.md, CLAUDE.md, CONTRIBUTING, an existing constitution and docs (each with its source and line), `rules.ci_gates` the commands CI already runs, and `rules.conflicts` pairs that look contradictory. Offer them with `AskUserQuestion` (multi-select, grouped: principles · guardrails · quality gates), the CI gates as the default quality gates, and ask which should govern future work and why. Classify what the user keeps: an accepted constraint goes in; a temporary workaround or a preference does not. An incidental coding pattern is not a rule because it exists. Keep the original constitution file; say what was narrowed or replaced. In a repo inside a workspace, the workspace's CONSTITUTION owns the cross-repo rules.
 
 ## Code layout (once per repo)
 Use the **code-layout** skill. `discovery.json` → `layout` shows whether the repo already has code, a guessed profile and root.
@@ -64,6 +65,9 @@ An existing repo has behaviour nobody specified. This is a normal bootstrap step
 - **No specs:** propose a capability inventory from `discovery.json`, `CODEMAP.md`, the README and docs (business capabilities, current vs legacy surfaces), record it with `groundwork.py capability set …`, and ask which to baseline **now** (recommend core workflows and paths where failure costs money, loses data or breaks a consumer). "None for now" is allowed; the deferred ones stay visible in `specs/README.md`.
 - For each selected capability: investigate, interview, draft the baseline (`new-baseline`), read it back, and ask the user to approve (several paths in one `/groundwork-specflow:approve`). Never canonise a defect: a confirmed guarantee the code breaks is a *Known discrepancy* with a bug reference.
 - End with `groundwork.py capabilities` and say plainly what is baselined, what is deferred and what is still pending classification. Confirming the foundation docs does not approve any baseline.
+
+## Contracts another repo already depends on (existing code only)
+`discovery.json` → `surface.http` (route files, prefixes, mounted routers), `surface.schemas` (OpenAPI, proto, GraphQL) and `surface.api_docs` (API or integration docs) show what this repo *serves*. A route is not a consumer: only when the workspace ARCHITECTURE.md, an integration doc or a sibling repo's code names a consumer is there a boundary to write down. Then use the **write-contract** skill in as-built mode (`groundwork.py new-contract <provider>-<topic> --as-built --provider <repo> --consumers <a,b>`), draft only the consumed surface from the provider's code and docs, cite the evidence, name `provider_reviewer` and `consumer_reviewers`, and ask each to approve. Until every named reviewer has signed, say the contract is pending; never present it as a mutual commitment.
 
 ## AGENTS.md
 **Python projects use `uv`, never pip.** Write the commands as `uv sync`, `uv run pytest` etc. (verify each by running it). If `discovery.json` shows

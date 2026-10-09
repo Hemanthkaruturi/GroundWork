@@ -7,6 +7,7 @@ where a fact came from is always recorded, and nothing is presented as a decisio
 
 from __future__ import annotations
 
+import fnmatch
 import json
 import re
 import subprocess
@@ -14,6 +15,8 @@ from collections import Counter
 from pathlib import Path
 
 import groundwork_fresh as F
+from groundwork_core import PLACEHOLDER as C_PLACEHOLDER
+from groundwork_core import SKIP_DIRS as C_SKIP
 
 LANGS = {
     ".py": "Python",
@@ -104,6 +107,14 @@ def _git(repo: Path, *args: str) -> str:
         return ""
 
 
+def _safe(repo: Path, rel: str) -> bool:
+    """A regular file under the repo, with no symlink anywhere on its path."""
+    import groundwork_baseline as BL
+
+    p = repo / rel
+    return p.is_file() and BL.path_problem_under(repo, p) is None
+
+
 def _read(p: Path, limit: int = 200_000) -> str:
     if p.is_symlink():
         return ""
@@ -180,6 +191,372 @@ def _manifest_facts(repo: Path, rel: str) -> dict:
     return {}
 
 
+# --- surfaces, rules and capability candidates (STANDARD.md §5j; evidence only) ----------
+# Regex detection of common frameworks. It finds what it can and SAYS what it cannot see
+# (dynamic registration, mounted routers): a starting signal for the baseline interview, never
+# proof of a consumer or of complete coverage.
+
+CODE_EXT = {
+    ".py",
+    ".js",
+    ".mjs",
+    ".cjs",
+    ".ts",
+    ".tsx",
+    ".go",
+    ".java",
+    ".kt",
+    ".rb",
+    ".php",
+    ".cs",
+}
+ROUTE_PATTERNS = [
+    # decorator-style (FastAPI, Flask, Sanic, Litestar): @router.get("/path")
+    r'@[\w.]+\.(get|post|put|patch|delete|route|api_route|websocket)\(\s*["\']([^"\']+)',
+    # Express / Koa / Hono / Fastify: app.get("/path", …) router.post('/path'
+    r'(?<![@.\w])(?:app|router|server|fastify)\.(get|post|put|patch|delete|all)\(\s*["\'`]([^"\'`]+)',
+    # Go net/http, chi, gin, echo: HandleFunc("/path", …) r.GET("/path", …)
+    r'\.(HandleFunc|Handle|GET|POST|PUT|PATCH|DELETE|Get|Post|Put|Patch|Delete)\(\s*"([^"]+)"',
+    # Spring: @GetMapping("/path") @RequestMapping(value = "/path")
+    r'@(Get|Post|Put|Patch|Delete|Request)Mapping\(\s*(?:value\s*=\s*)?"([^"]+)"',
+    # NestJS: @Get('path')
+    r"@(Get|Post|Put|Patch|Delete)\(\s*['\"]([^'\"]*)",
+    # Rails routes.rb: get 'path', resources :things
+    r"^\s*(get|post|put|patch|delete|resources|resource|namespace)\s+['\":]([\w/:-]+)",
+]
+MOUNT_PATTERNS = [
+    r'APIRouter\(\s*prefix\s*=\s*["\']([^"\']+)',
+    r'include_router\([^)]*prefix\s*=\s*["\']([^"\']+)',
+    r'Blueprint\([^)]*url_prefix\s*=\s*["\']([^"\']+)',
+    r'register_blueprint\([^)]*url_prefix\s*=\s*["\']([^"\']+)',
+    r'\bapp\.use\(\s*["\'`]([^"\'`]+)["\'`]\s*,',
+    r'\.(?:Mount|Route|Group)\(\s*"([^"]+)"',
+]
+DYNAMIC_PATTERNS = [
+    r"add_api_route\(",
+    r"add_url_rule\(",
+    r"\.add_route\(",
+    r"routes\.MapRoute",
+    r"\binclude_router\([^)]*\)",
+    r"\bapp\.use\(\s*[A-Za-z_]",
+]
+CLI_PATTERNS = [
+    r'@[\w.]+\.command\(\s*(?:name\s*=\s*)?["\']([\w:-]+)["\']',  # typer/click with a name
+    r"@[\w.]+\.command\(\s*\)\s*\n\s*(?:async\s+)?def\s+(\w+)",  # typer/click, function name
+    r'add_parser\(\s*["\']([\w:-]+)',  # argparse subcommands
+    r'Use:\s*"([\w:-]+)',  # cobra
+    r'\.command\(\s*["\']([\w:-]+)',  # commander / yargs
+]
+SCHEMA_GLOBS = [
+    "openapi.*",
+    "swagger.*",
+    "*/openapi.*",
+    "*/swagger.*",
+    "*.proto",
+    "*/*.proto",
+    "*/*/*.proto",
+    "*.graphql",
+    "*.graphqls",
+    "*/*.graphql",
+    "*/*/*.graphql",
+    "asyncapi.*",
+    "*/asyncapi.*",
+    "*.avsc",
+    "*/*.avsc",
+    "schemas/*",
+    "schema/*",
+]
+API_DOC_GLOBS = [
+    "API.md",
+    "docs/api*.md",
+    "docs/*/api*.md",
+    "docs/integrations/*",
+    "docs/integration/*",
+    "docs/*contract*",
+    "docs/*/*contract*",
+    "CONTRACTS/*.md",
+]
+RULE_SOURCES = [
+    "README.md",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "CONTRIBUTING.md",
+    ".cursorrules",
+    "CONSTITUTION.md",
+    ".specify/memory/constitution.md",
+]
+NEGATIVE = re.compile(r"\b(never|not|don't|no)\b", re.IGNORECASE)
+GATE_TOOLS = re.compile(
+    r"\b(make|npm|pnpm|yarn|pytest|ruff|mypy|pyright|go (?:test|vet)|golangci-lint|cargo|eslint|tsc|prettier|black|flake8|phpunit|rspec|bundle exec|dotnet test|mvn|gradle|uv run)\b"
+)
+WORKER_DIRS = {
+    "workers",
+    "worker",
+    "jobs",
+    "job",
+    "tasks",
+    "consumers",
+    "cron",
+    "schedulers",
+}
+MAX_CODE_FILES = 1500
+MAX_RULE_FILES = 40
+TEST_FILE = r"(^|/)(tests?|__tests__|spec|e2e|cypress)/|(^|/)(test_[^/]+\.py|[^/]+_test\.(py|go)|[^/]+\.(test|spec)\.[jt]sx?)$"
+RULE_BULLET = re.compile(
+    r"^\s*(?:[-*]\s+|\d+[.)]\s+)(?:\*\*)?(never|always|do not|don't|must not|must|no |only )",
+    re.IGNORECASE,
+)
+RULE_SENTENCE = re.compile(r"^\s*(?:\*\*)?(Never|Always|Do not|Don't|Must not)\b")
+
+
+def _path_prefix(path: str) -> str:
+    segs = [s for s in path.split("/") if s and not s.startswith(("{", ":", "<", "*"))]
+    if not segs:
+        return "/"
+    if re.fullmatch(r"(v\d+|api|rest)", segs[0], re.IGNORECASE) and len(segs) > 1:
+        return "/" + "/".join(segs[:2])
+    return "/" + segs[0]
+
+
+def _surface(repo: Path, files: list) -> dict:
+    http_files, cli_files, limits = [], [], set()
+    prefixes: Counter = Counter()
+    scanned = 0
+    for rel, p in files:
+        if Path(rel).suffix.lower() not in CODE_EXT and Path(rel).name != "routes.rb":
+            continue
+        if re.search(TEST_FILE, rel):
+            continue  # a test's HTTP calls are not the provider's routes
+        scanned += 1
+        if scanned > MAX_CODE_FILES:
+            limits.add(f"code scan stopped after {MAX_CODE_FILES} files")
+            break
+        text = _read(p, 300_000)
+        if not text:
+            continue
+        paths: list[str] = []
+        ops = 0
+        seen_at: set[int] = set()
+        for pat in ROUTE_PATTERNS:
+            for m in re.finditer(pat, text, re.MULTILINE):
+                if m.start() in seen_at:
+                    continue  # two patterns matched the same declaration
+                seen_at.add(m.start())
+                ops += 1
+                route = m.group(2) if m.lastindex and m.lastindex >= 2 else m.group(1)
+                if len(paths) < 12 and route not in paths:
+                    paths.append(route)
+        mounts = [m.group(1) for pat in MOUNT_PATTERNS for m in re.finditer(pat, text)]
+        if mounts or any(re.search(pat, text) for pat in DYNAMIC_PATTERNS):
+            limits.add(
+                "routes are also registered dynamically or mounted under prefixes; paths may combine at mount time"
+            )
+        if ops or mounts:
+            http_files.append(
+                {
+                    "file": rel,
+                    "operations": ops,
+                    "paths": paths,
+                    "mounts": sorted(set(mounts))[:6],
+                }
+            )
+            for route in paths:
+                prefixes[_path_prefix(route)] += 1
+        cmds: list[str] = []
+        for pat in CLI_PATTERNS:
+            cmds += [m.group(1) for m in re.finditer(pat, text, re.MULTILINE)]
+        cmds = [c for c in dict.fromkeys(cmds) if c not in ("main", "cli", "app")]
+        if cmds:
+            cli_files.append({"file": rel, "commands": cmds[:20]})
+    http_files.sort(key=lambda x: -x["operations"])
+    schemas = sorted(
+        rel for rel, _ in files if any(fnmatch.fnmatch(rel, g) for g in SCHEMA_GLOBS)
+    )[:20]
+    api_docs = sorted(
+        rel for rel, _ in files if any(fnmatch.fnmatch(rel, g) for g in API_DOC_GLOBS)
+    )[:20]
+    return {
+        "http": {
+            "files": http_files[:30],
+            "prefixes": dict(prefixes.most_common(20)),
+            "limits": sorted(limits),
+        },
+        "cli": {
+            "files": cli_files[:20],
+            "commands": sorted({c for f in cli_files for c in f["commands"]})[:40],
+        },
+        "schemas": schemas,
+        "api_docs": api_docs,
+    }
+
+
+def _rules(repo: Path, files: list) -> dict:
+    sources = [s for s in RULE_SOURCES if _safe(repo, s)]
+    sources += [
+        rel
+        for rel, _ in files
+        if rel.startswith("docs/") and rel.endswith(".md") and rel not in sources
+    ][:MAX_RULE_FILES]
+    cands: list[dict] = []
+    seen: set[str] = set()
+    for rel in sources:
+        for i, ln in enumerate(_read(repo / rel, 200_000).splitlines(), 1):
+            if not (RULE_BULLET.match(ln) or RULE_SENTENCE.match(ln)):
+                continue
+            if C_PLACEHOLDER.search(ln):
+                continue  # a template's own example, not a rule the project wrote
+            text = re.sub(r"[*`_>]", "", ln).strip(" -*0123456789.)")
+            text = re.sub(r"\s+", " ", text)[:200]
+            key = re.sub(r"[^a-z0-9 ]", "", text.lower())
+            if len(key) < 12 or key in seen:
+                continue
+            seen.add(key)
+            cands.append({"text": text, "source": rel, "line": i})
+            if len(cands) >= 40:
+                break
+        if len(cands) >= 40:
+            break
+    # possible conflicts: nearly the same words, opposite polarity
+    conflicts = []
+
+    def words(c):
+        return {
+            w
+            for w in re.findall(r"[a-z]{4,}", c["text"].lower())
+            if w not in {"never", "always", "must", "only", "dont"}
+        }
+
+    for i, a in enumerate(cands):
+        for b in cands[i + 1 :]:
+            wa, wb = words(a), words(b)
+            if not wa or not wb:
+                continue
+            j = len(wa & wb) / len(wa | wb)
+            if j >= 0.5 and bool(NEGATIVE.search(a["text"])) != bool(
+                NEGATIVE.search(b["text"])
+            ):
+                conflicts.append(
+                    {
+                        "a": f"{a['source']}:{a['line']}",
+                        "b": f"{b['source']}:{b['line']}",
+                    }
+                )
+    gates: list[dict] = []
+    ci_files = [
+        rel
+        for rel, _ in files
+        if rel.startswith(".github/workflows/")
+        or Path(rel).name in (".gitlab-ci.yml", "Jenkinsfile")
+    ]
+    for rel in ci_files[:10]:
+        block_indent = (
+            None  # inside a `run: |` block scalar: every indented line is a command
+        )
+        for ln in _read(repo / rel, 100_000).splitlines():
+            indent = len(ln) - len(ln.lstrip())
+            if block_indent is not None:
+                if ln.strip() and indent > block_indent:
+                    if GATE_TOOLS.search(ln) and len(gates) < 20:
+                        gates.append({"file": rel, "command": ln.strip()[:120]})
+                    continue
+                block_indent = None
+            m = re.match(r"\s*(?:-\s*)?run:\s*(.*)$", ln)
+            if not m:
+                continue
+            cmd = m.group(1).strip()
+            if cmd in ("|", ">", "|-", ">-", ""):
+                block_indent = indent
+            elif GATE_TOOLS.search(cmd) and len(gates) < 20:
+                gates.append({"file": rel, "command": cmd[:120]})
+    return {
+        "candidates": cands,
+        "sources": sources[:12],
+        "conflicts": conflicts[:10],
+        "ci_gates": gates,
+    }
+
+
+def _capability_candidates(repo: Path, surface: dict, files: list) -> list[dict]:
+    out: list[dict] = []
+    http = surface["http"]
+    for prefix, n in http["prefixes"].items():
+        slug = re.sub(r"[^a-z0-9]+", "-", prefix.lower()).strip("-") or "root"
+        evidence = sorted(
+            {
+                f["file"]
+                for f in http["files"]
+                if any(_path_prefix(x) == prefix for x in f["paths"])
+            }
+        )[:5]
+        legacy = bool(re.search(r"(legacy|old|deprecated|v0)", prefix, re.IGNORECASE))
+        out.append(
+            {
+                "slug": slug,
+                "title": prefix,
+                "kind": "http",
+                "evidence": evidence,
+                "operations": n,
+                "suggested_lifecycle": "legacy" if legacy else "active",
+                "uncertainty": "derived from a route prefix; business boundary and consumers unconfirmed",
+            }
+        )
+    for f in surface["cli"]["files"]:
+        slug = "cli-" + re.sub(r"[^a-z0-9]+", "-", Path(f["file"]).stem.lower()).strip(
+            "-"
+        )
+        out.append(
+            {
+                "slug": slug,
+                "title": f"CLI: {', '.join(f['commands'][:5])}"
+                + (" …" if len(f["commands"]) > 5 else ""),
+                "kind": "cli",
+                "evidence": [f["file"]],
+                "operations": len(f["commands"]),
+                "suggested_lifecycle": "active",
+                "uncertainty": "derived from command definitions; grouping unconfirmed",
+            }
+        )
+    seen_workers: set[str] = set()
+    for rel, _ in files:
+        parts = Path(rel).parts
+        if (
+            len(parts) >= 2
+            and Path(rel).suffix.lower() in CODE_EXT
+            and any(d in WORKER_DIRS for d in parts[:-1])
+        ):
+            stem = Path(rel).stem
+            if stem.startswith(("__", "test")) or stem in seen_workers:
+                continue
+            seen_workers.add(stem)
+            out.append(
+                {
+                    "slug": "worker-"
+                    + re.sub(r"[^a-z0-9]+", "-", stem.lower()).strip("-"),
+                    "title": f"Background work: {stem}",
+                    "kind": "worker",
+                    "evidence": [rel],
+                    "operations": 1,
+                    "suggested_lifecycle": "uncertain",
+                    "uncertainty": "a file in a worker/job folder; may be scheduled, queued or dead code",
+                }
+            )
+    return out[:25]
+
+
+def _legacy_specs(repo: Path) -> list[dict]:
+    import groundwork_baseline as BL
+    import groundwork_core as C
+
+    try:
+        cands = BL.candidates(C.Ctx("standalone", repo, repo=repo))
+    except SystemExit:
+        return []
+    return [
+        {k: (str(v) if k == "path" else v) for k, v in c.items() if k != "foreign_keys"}
+        for c in cands
+    ][:40]
+
+
 def discover(repo: Path) -> dict:
     repo = repo.resolve()
     files = list(F._walk(repo))
@@ -218,7 +595,7 @@ def discover(repo: Path) -> dict:
                 "constitution.md",
                 "CONSTITUTION.md",
             )
-            if (repo / c).is_file()
+            if _safe(repo, c)
         ),
         None,
     )
@@ -231,7 +608,7 @@ def discover(repo: Path) -> dict:
         "requirements.txt": "pip",
     }
     has_py = "Python" in ext
-    pyproj = _read(repo / "pyproject.toml")
+    pyproj = _read(repo / "pyproject.toml") if _safe(repo, "pyproject.toml") else ""
     uses_uv = (repo / "uv.lock").exists() or "[tool.uv" in pyproj
     other = sorted(
         {m for f, m in py_signals.items() if m != "uv" and (repo / f).exists()}
@@ -245,6 +622,14 @@ def discover(repo: Path) -> dict:
     readme = next(
         (d for d in ("README.md", "README.rst", "README") if (repo / d).is_file()), None
     )
+    surface = _surface(repo, files)
+    rules = _rules(repo, files)
+    legacy = _legacy_specs(repo)
+    subjects = [
+        s
+        for s in _git(repo, "log", "--no-merges", "--format=%s", "-30").splitlines()
+        if s
+    ]
     return {
         "path": str(repo),
         "name": repo.name,
@@ -263,11 +648,14 @@ def discover(repo: Path) -> dict:
         },
         "tests": {"dirs": tests, "test_files": test_files},
         "existing_docs": docs,
-        "readme_head": _read(repo / readme, 1500).strip() if readme else "",
+        "readme_head": _read(repo / readme, 1500).strip()
+        if readme and _safe(repo, readme)
+        else "",
         "adoptable": {
             "adr_dir": adr,
             "constitution": constitution,
             "specs_dir": bool(specs.is_dir() and any(specs.iterdir())),
+            "specs": legacy,
             "agent_instructions": [
                 f
                 for f in ("CLAUDE.md", ".cursorrules", "AGENTS.md")
@@ -282,6 +670,21 @@ def discover(repo: Path) -> dict:
             or None,
             "last_commit": _git(repo, "log", "-1", "--format=%as") or None,
             "top_authors": authors,
+            "recent_subjects": subjects,
+        },
+        "surface": surface,
+        "rules": rules,
+        "capability_candidates": _capability_candidates(repo, surface, files),
+        "scan": {
+            "max_files": 3000,
+            "files_seen": len(files),
+            "truncated": len(files) >= 3000,
+            "excluded": sorted(C_SKIP)
+            + ["dot-files", "secret-shaped files", "symlinks"],
+            "unsupported": surface["http"]["limits"]
+            + [
+                "regex detection: no semantic analysis; unlisted frameworks are not seen"
+            ],
         },
     }
 
@@ -332,6 +735,49 @@ def summarize(d: dict) -> str:
     if a["agent_instructions"]:
         lines.append(
             f"  adoptable:    existing agent instructions: {', '.join(a['agent_instructions'])}"
+        )
+    sf = d.get("surface") or {}
+    if sf:
+        http, cli = sf.get("http", {}), sf.get("cli", {})
+        ops = sum(f["operations"] for f in http.get("files", []))
+        bits = []
+        if ops:
+            bits.append(
+                f"{ops} HTTP route(s) in {len(http['files'])} file(s), prefixes "
+                + ", ".join(list(http.get("prefixes", {}))[:5])
+            )
+        if cli.get("commands"):
+            bits.append(f"{len(cli['commands'])} CLI command(s)")
+        if sf.get("schemas"):
+            bits.append("schemas: " + ", ".join(sf["schemas"][:3]))
+        if sf.get("api_docs"):
+            bits.append("API docs: " + ", ".join(sf["api_docs"][:3]))
+        if bits:
+            lines.append("  surface:      " + "; ".join(bits))
+        if http.get("limits"):
+            lines.append("  surface note: " + "; ".join(http["limits"]))
+    rl = d.get("rules") or {}
+    if rl.get("candidates"):
+        lines.append(
+            f"  rules:        {len(rl['candidates'])} candidate rule(s) from {', '.join(rl['sources'][:4])}"
+            + (
+                f"; {len(rl['ci_gates'])} CI gate command(s)"
+                if rl.get("ci_gates")
+                else ""
+            )
+            + (
+                f"; {len(rl['conflicts'])} possible conflict(s)"
+                if rl.get("conflicts")
+                else ""
+            )
+        )
+    if d.get("capability_candidates"):
+        lines.append(
+            f"  capabilities: {len(d['capability_candidates'])} candidate(s) from routes, commands and workers (unconfirmed)"
+        )
+    if (d.get("adoptable") or {}).get("specs"):
+        lines.append(
+            f"  legacy specs: {len(d['adoptable']['specs'])} spec director{'y' if len(d['adoptable']['specs']) == 1 else 'ies'} without GroundWork metadata (adopt-specs --dry-run)"
         )
     lay = d.get("layout") or {}
     if lay.get("decided"):

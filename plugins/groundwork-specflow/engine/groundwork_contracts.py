@@ -173,7 +173,7 @@ def metadata_problems(path: Path, meta: dict) -> list[str]:
         bad.append(
             f"origin '{o}' is not valid for a contract (as-built contracts use 'baseline')"
         )
-    sr = str(meta.get("signoffs_required", "2") or "2").strip()
+    sr = str(meta.get("signoffs_required", "2") or "").strip()
     if not sr.isdigit() or int(sr) < 2:
         bad.append(
             f"signoffs_required must be a whole number of at least 2 (now '{sr}')"

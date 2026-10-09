@@ -543,6 +543,68 @@ def _capability_candidates(repo: Path, surface: dict, files: list) -> list[dict]
     return out[:25]
 
 
+DECISION_DOC = re.compile(
+    r"(decision|adr|rationale|research|findings|benchmark|architecture|design|why)",
+    re.IGNORECASE,
+)
+RATIONALE_COMMENT = re.compile(
+    r"(?:#|//|/\*|\*|<!--)\s*(.*\b(?:because|we chose|chosen|rationale|decided|deliberately|instead of|rather than|trade-?off|on purpose)\b.*)",
+    re.IGNORECASE,
+)
+DECISION_SUBJECT = re.compile(
+    r"^(move|switch|replace|adopt|drop|remove|migrate|use|pin|choose|stop|introduce|put|settle|prefer)\b.*",
+    re.IGNORECASE,
+)
+
+
+def _decision_leads(repo: Path, files: list) -> dict:
+    """Topic leads for retrospective ADRs. A lead is a place to look, never a decision: only a
+    document or a person can supply the reason; a commit subject proves neither reason nor date."""
+    docs = sorted(
+        rel
+        for rel, _ in files
+        if rel.lower().endswith((".md", ".rst", ".txt"))
+        and (rel.startswith(("docs/", "doc/")) or "/" not in rel)
+        and DECISION_DOC.search(Path(rel).stem)
+        and Path(rel).name.upper()
+        not in (
+            "README.MD",
+            "ARCHITECTURE.MD",
+            "PROJECT.MD",
+            "AGENTS.MD",
+            "CONSTITUTION.MD",
+            "CODEMAP.MD",
+        )
+    )[:20]
+    comments: list[dict] = []
+    scanned = 0
+    for rel, p in files:
+        if Path(rel).suffix.lower() not in CODE_EXT or re.search(TEST_FILE, rel):
+            continue
+        scanned += 1
+        if scanned > MAX_CODE_FILES:
+            break
+        for i, ln in enumerate(_read(p, 300_000).splitlines(), 1):
+            m = RATIONALE_COMMENT.search(ln)
+            if m and len(comments) < 20:
+                comments.append(
+                    {"file": rel, "line": i, "text": m.group(1).strip(" *-/#")[:160]}
+                )
+        if len(comments) >= 20:
+            break
+    commits = []
+    for ln in _git(repo, "log", "--no-merges", "--format=%as\t%s", "-60").splitlines():
+        date, _, subject = ln.partition("\t")
+        if DECISION_SUBJECT.match(subject) and len(commits) < 15:
+            commits.append({"date": date, "subject": subject[:120]})
+    return {
+        "docs": docs,
+        "comments": comments,
+        "commits": commits,
+        "note": "leads suggest a topic; the reason comes only from a document or a person, and a commit date is not a decision date",
+    }
+
+
 def _legacy_specs(repo: Path) -> list[dict]:
     import groundwork_baseline as BL
     import groundwork_core as C
@@ -675,6 +737,7 @@ def discover(repo: Path) -> dict:
         "surface": surface,
         "rules": rules,
         "capability_candidates": _capability_candidates(repo, surface, files),
+        "decision_leads": _decision_leads(repo, files),
         "scan": {
             "max_files": 3000,
             "files_seen": len(files),
@@ -770,6 +833,12 @@ def summarize(d: dict) -> str:
                 if rl.get("conflicts")
                 else ""
             )
+        )
+    dl = d.get("decision_leads") or {}
+    if dl.get("docs") or dl.get("comments") or dl.get("commits"):
+        lines.append(
+            f"  decisions:    leads only — {len(dl.get('docs', []))} doc(s), {len(dl.get('comments', []))} code comment(s), "
+            f"{len(dl.get('commits', []))} commit subject(s); a reason needs a document or a person"
         )
     if d.get("capability_candidates"):
         lines.append(

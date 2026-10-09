@@ -284,7 +284,11 @@ def signoffs_needed(meta: dict) -> int | None:
     """`signoffs_required` as a count, or None when malformed. A malformed count can never be
     satisfied: the document stays unapproved (whatever record exists) until a person fixes it, and
     `check` reports the value. It must never fall back to a smaller number."""
-    v = str(meta.get("signoffs_required", "1") or "1").strip()
+    if "signoffs_required" not in meta:
+        return 1
+    v = str(
+        meta.get("signoffs_required") or ""
+    ).strip()  # present but blank: invalid, never 1
     return int(v) if v.isdigit() and int(v) > 0 else None
 
 
@@ -351,9 +355,11 @@ def approve_preflight(path: Path, ctx: Ctx) -> str | None:
     meta, _ = split_fm(text)
     if not meta:
         return f"{path.name} has no front matter; it is not a governed document"
-    sr = str(meta.get("signoffs_required", "1") or "1").strip()
-    if not sr.isdigit() or int(sr) < 1:
-        return f"{path.name}: signoffs_required must be a whole number (now '{sr}')"
+    if signoffs_needed(meta) is None:
+        return (
+            f"{path.name}: signoffs_required must be a whole number "
+            f"(now '{str(meta.get('signoffs_required') or '').strip()}')"
+        )
     st = doc_state(path, ctx)
     if st.placeholders:
         return (

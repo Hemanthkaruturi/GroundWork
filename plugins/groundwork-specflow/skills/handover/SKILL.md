@@ -18,7 +18,7 @@ One root file fits one piece of work and collides with the next. Use two places,
 Rules:
 - **One owner per fact.** Rationale, rejected alternatives and deploy order live only in the RFC handover (or the RFC). A spec handover links to it; it never restates it. If the two disagree, the RFC handover wins — fix the other.
 - **Internal RFC (one repo):** only the spec handover; set its *Cross-repo handover* line to "none".
-- **Lasting facts go elsewhere.** Architecture → ARCHITECTURE.md; shapes and examples → `CONTRACTS/`; decisions → the RFC record (turn approved RFCs into ADR notes if built). Link, don't copy.
+- **Lasting facts go elsewhere.** Architecture → ARCHITECTURE.md; shapes and examples → `CONTRACTS/`; decisions → the RFC record, and once built, an ADR: `groundwork.py new-adr <slug> --title "…" --rfc RFC-000N` records the outcome (the RFC keeps the interview and alternatives; `**Source:** documented in DECISIONS/RFC-000N-….md`). Link, don't copy.
 - **Part of done.** The handover is committed in the same PR as the last task, so it merges with the work and is not stranded on a branch.
 - **Lifecycle.** When the work is deployed everywhere, fold what is durable into the homes above, then set `Status: closed` (or delete the file). A stale handover is worse than none.
 - **Legacy.** If a repo-root `HANDOVER.md` already exists, move it into the right spec folder; do not add a second root file.

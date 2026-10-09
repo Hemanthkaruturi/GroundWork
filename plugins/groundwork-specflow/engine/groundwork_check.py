@@ -21,6 +21,7 @@ import groundwork_bugs as B
 import groundwork_codemap as M
 import groundwork_contracts as CT
 import groundwork_core as C
+import groundwork_decisions as AD
 import groundwork_fresh as F
 import groundwork_layout as L
 import groundwork_people as PP
@@ -304,8 +305,8 @@ def check_rfcs(ctx: C.Ctx, r: Report) -> None:
             for ref in C.list_of(meta, key):
                 if C.find_rfc(ctx, ref) is None:
                     r.err("GW015", p, f"{key}: {ref} does not exist")
-        if meta["id"] not in index:
-            r.warn("GW014", p, "not listed in DECISIONS/README.md")
+        if not AD.indexed(index, meta["id"]):
+            r.warn("GW014", p, "not listed in DECISIONS/README.md (needs a table row)")
         if st.placeholders:
             continue
         miss = missing_sections(text, RFC_SECTIONS, numbered=True)
@@ -996,6 +997,34 @@ def check_quality(ctx: C.Ctx, r: Report) -> None:
         )
 
 
+def check_adrs(ctx: C.Ctx, r: Report) -> None:
+    """GW017–GW019: ADRs with front matter. A hand-written ADR without front matter is left alone."""
+    index_file = AD.home(ctx) / "README.md"
+    index = index_file.read_text(encoding="utf-8") if index_file.is_file() else ""
+    for p in AD.paths(ctx):
+        text = p.read_text(encoding="utf-8")
+        meta, _ = C.split_fm(text)
+        if not meta:
+            continue
+        for b in AD.metadata_problems(ctx, p, meta):
+            r.err("GW017", p, b)
+        if meta.get("id") and not AD.indexed(index, meta["id"]):
+            r.warn("GW018", p, "not listed in DECISIONS/README.md (needs a table row)")
+        if C.PLACEHOLDER.search(text):
+            r.warn("GW018", p, "ADR is unfinished (unresolved markers)")
+            continue
+        miss = missing_sections(text, AD.SECTIONS, numbered=True)
+        if miss:
+            r.err("GW019", p, "missing/misordered section(s): " + "; ".join(miss))
+        for b in AD.rationale_problems(meta, text):
+            r.err(
+                "GW019",
+                p,
+                b,
+                "say where the reason comes from; never present a lead as the reason",
+            )
+
+
 def check_contracts(ctx: C.Ctx, r: Report) -> None:
     """GW045–GW047: GroundWork-created contracts (front matter with an id). Hand-written ones are left alone."""
     for p in CT.paths(ctx):
@@ -1076,6 +1105,7 @@ def check_ctx(ctx: C.Ctx, r: Report, seen: set[Path]) -> None:
     check_approval_records(ctx, r)
     if ctx.level == "workspace":
         check_rfcs(ctx, r)
+        check_adrs(ctx, r)
         check_contracts(ctx, r)
         check_relations(ctx, r, True)
         for kid in C.child_repos(ctx.workspace):
@@ -1083,10 +1113,13 @@ def check_ctx(ctx: C.Ctx, r: Report, seen: set[Path]) -> None:
     else:
         if ctx.level == "standalone":
             check_rfcs(ctx, r)
+            check_adrs(ctx, r)
             check_contracts(ctx, r)
         elif ctx.workspace and ctx.workspace.resolve() not in seen:
-            # a repo reads upward: the workspace's contracts bind it, so their findings show here too
-            check_contracts(C.detect(ctx.workspace), r)
+            # a repo reads upward: the workspace's contracts and decisions bind it, so their findings show here too
+            ws = C.detect(ctx.workspace)
+            check_contracts(ws, r)
+            check_adrs(ws, r)
         check_features(ctx, r)
         check_bugs(ctx, r)
         check_layout(ctx, r)

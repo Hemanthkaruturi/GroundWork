@@ -46,7 +46,7 @@ Read the code, tests and docs for the capability first. Then present a short evi
 | Topic | Settle | Goes to |
 | --- | --- | --- |
 | Purpose | whose problem, what outcome matters | §1–2 (and PROJECT.md if broader) |
-| Rationale | why this approach; which cost, latency, operational or integration constraints mattered | Intent and rationale (ARCHITECTURE or an ADR when broader) |
+| Rationale | why this approach; which cost, latency, operational or integration constraints mattered | Intent and rationale (ARCHITECTURE, or a retrospective ADR via `new-adr --retrospective` when the choice is broader than one capability) |
 | Intent | is this behaviour deliberate, temporary, a workaround or a defect | FR/AC or Known discrepancies |
 | Preservation | what future changes must keep working, including failures and isolation | FR/NFR/AC |
 | Direction | which limitations are accepted; which belong to future work | §9 Out of scope; capability lifecycle |

@@ -1,6 +1,6 @@
 # Plan: baseline existing repositories with evidence and an interview
 
-**Status:** development proposal · **Author:** Hemanth Karuturi, drafted with Claude, revised with Codex, review points folded in by Claude · **Date:** 2026-10-09
+**Status:** implemented (slices 1–5 on `main`; see *Delivery status* at the end) · **Author:** Hemanth Karuturi, drafted with Claude, revised with Codex, review points folded in by Claude · **Date:** 2026-10-09
 
 ## Decisions taken in this revision
 
@@ -637,3 +637,15 @@ All five steps are slice 1.
 - **Slice 3:** discovery candidates improve step 1, and a shared contract receives explicit human
   provider/consumer review with the engine warning on missing named reviewers (step 4).
 - **Overall:** future work updates the references it relies on.
+
+## 13. Delivery status
+
+| Slice | Shipped as | What landed |
+| --- | --- | --- |
+| 1 | `9001c9e` | `origin: baseline` / `imported`, `adopt-specs` with `--classify`, `new-baseline`, capability records and the generated table, multi-path approve, GW027–029, GW041, GW075–076, the baseline skill |
+| 2 | `3bfa0e4` | `confirm --baseline` source review with scoped snapshots, `fresh` for baselines, GW052, GW077 |
+| 3 | `3bfa0e4` | discovery `surface`, `rules`, `capability_candidates`, `adoptable.specs`, `scan`; `new-contract --as-built` with named reviewers, GW045–047; an invalid `signoffs_required` can never be satisfied |
+| 4 | (this commit) | `decision_leads` in discovery, `new-adr` (RFC-backed or retrospective), honest `**Source:**` labels, GW017–019 |
+| 5 | (this commit) | standard layout and counts aligned, docs and sandbox examples, suite validated on Python 3.10 and 3.12 |
+
+Every slice went through a second-person review; each finding has a regression test. Deferred from the plan: nothing in scope. Ideas noted for later: a `contract.lock` pin written by consumers, and age-based review for baselines (only cited-file changes trigger review today).

@@ -39,9 +39,10 @@ then built in each repo against it. A change that needs another repo is never a 
   PROJECT.md                        ARCHITECTURE.md
   ARCHITECTURE.md                   AGENTS.md, CODEMAP.md (generated, §5g)
   CONSTITUTION.md                   specs/NNN-slug/{spec,plan,tasks,evals,handover}.md  (+ log.md, append-only notes)
-  AGENTS.md                         bugs/NNN-slug.md   (one record per defect)
-  CONTRACTS/
-  DECISIONS/RFC-NNNN-slug.md        .groundwork/       (approvals.json, freshness.json, config.json)
+  AGENTS.md                         specs/NNN-slug/spec.md only, for a baseline (§5j)
+  CONTRACTS/<provider>-<topic>.md   specs/README.md    (capability table, generated, §5j)
+  DECISIONS/RFC-NNNN-slug.md        bugs/NNN-slug.md   (one record per defect)
+  DECISIONS/ADR-NNNN-slug.md        .groundwork/       (approvals.json, freshness.json, capabilities.json, config.json)
   DECISIONS/README.md  (index)
   DECISIONS/handovers/RFC-NNNN.md  (cross-repo handover)
   .groundwork/  (approvals.json, freshness.json, config.json)
@@ -83,6 +84,8 @@ An `api` RFC (one that crosses a repository boundary) MUST fill §8 and MUST req
 **Tasks** (`tasks.md`) — closing tasks `T900+` include T903, the docs-refresh check. Each task `- [ ] **T001** — title` followed by `**Files:**`, `**Done when:**`, `**Covers:** FR-n`. Verification tasks are numbered `T900+` and need no `Covers`.
 
 **Evals** (`evals.md`) — written *before* the code: scenarios with input, expected result, the requirement covered, how it is checked.
+
+**ADR** (`DECISIONS/ADR-NNNN-slug.md`) — the outcome of a decision. Front matter: `id`, `title`, `status` (`proposed · accepted · superseded`, or `recorded` for a retrospective one), `created`, `rationale_source` (`documented · retrospective · unknown`, required) with `source`, optional `rfc`, `decided_at` (`unknown` unless a document states it), `recorded_by`, `supersedes`, `related`; a **retrospective** ADR (a choice found in existing code, no RFC) carries `origin: baseline`. Numbered sections: *1 Context · 2 Decision · 3 Rationale · 4 Consequences · 5 Evidence*, then `## Changes`. §3 MUST begin, as its first content line, with `**Source:**` followed by the complete label: *documented in <path or commit>* · *retrospective explanation by <person>, <YYYY-MM-DD>* · *historical rationale unknown*, matching `rationale_source`. An ADR made with `--rfc` needs an approved RFC; `decided_at` is `unknown` unless a document states the date. A commit subject or a folder name is a lead to a topic, never the reason, the approver or the date. ADRs are not approved documents; they are records a person chose to write, one at a time, never in bulk. A hand-written ADR without front matter is not checked.
 
 **Contracts** (`CONTRACTS/*.md`) — provider, consumers, semver version, every operation with shapes and a real example, failure semantics, compatibility rules. A shipped contract is never changed in a breaking way in place. A contract created by `groundwork.py new-contract` carries front matter: `id` (= file name), `title`, `provider`, `consumers`, `version` (semver; a date never goes in it), `status`, `signoffs_required` (2 or more), the named reviewers `provider_reviewer` and `consumer_reviewers`, and, for an **as-built** contract, `origin: baseline` with `observed_at`. Numbered sections: *1 Provider and consumers · 2 Version and changelog · 3 Operations · 4 Errors and failure semantics · 5 Auth and tenancy · 6 Compatibility rules · 7 Evidence* (as-built: required), then `## Changes`. Approval counts distinct signers (§7); it knows nothing about roles, so `check` only warns (GW047) when a named reviewer has not signed, and whether both sides reviewed stays a human procedure. A hand-written contract without front matter is not checked. A repo inside a workspace reads upward: the workspace's contracts and their findings show in the repo's `check`, board and session context too.
 
@@ -219,6 +222,8 @@ A repo adopted with code already in it has behaviour nobody specified. Later fea
 
 **Approval of a baseline** follows §7, plus: behavioural content is judged from the body only (the body is what the approval hashes), and the front matter must carry a valid `origin`, no `adoption_state`, an `owner` and an `id` matching the directory. The body must have numbered FR and AC, a non-empty *Manual test*, and non-empty *Intent and rationale*, *Known discrepancies* and *Evidence* sections. A requirement with no Evidence row is a warning; unknown expected behaviour is a marker and blocks.
 
+**Retrospective decisions.** `groundwork.py init` lists `decision_leads` (documents whose names suggest a decision or research, code comments that state a reason, commit subjects with a decision verb). A person picks at most a few; `groundwork.py new-adr <slug> --retrospective [--source <path>]` records each with its rationale source labelled honestly. Nothing is generated in bulk and no reason is invented.
+
 **As-built contracts.** A surface that another repo already consumes is written down the same way: `groundwork.py new-contract <provider>-<topic> --as-built` creates a contract with `origin: baseline`, observed from the provider's code and docs, with an Evidence section stating what was compared with consumer code and what was not. It is pending until every named reviewer has signed; a route found by discovery is evidence of a surface, never of a consumer.
 
 **The capability index.** `.groundwork/capabilities.json` (committed) records what the repo does — one record per capability slug with `title`, `lifecycle` (`active · legacy · retired · planned · uncertain`, authoritative only once a person confirmed it), `sources`, `rationale_ref`, `specs` (zero or more linked `NNN-slug`; links are additive and idempotent), `next_action` and `interview_notes`. `groundwork.py capabilities` renders it into `specs/README.md` as a generated table (engine columns rewritten, the *Notes* column kept); coverage per row is derived from the linked specs (`baselined` only when every link is an approved baseline, else `partial (…)`, `import-review`, `uncovered (…)` or `deferred`), approval from the approval records and never from front matter. A table older than the records is GW041.
@@ -295,7 +300,7 @@ An existing repo is asked before any tool config is added, because a new formatt
 
 - Approval is a **human act**, recorded in `.groundwork/approvals.json` as a hash of the document body plus the signers.
 - A document's approval is valid only while its body is unchanged. Editing it makes the approval **stale** and it must be given again. The `status:` line in the front matter is a courtesy display; the record is the truth.
-- A document with `signoffs_required: N` is approved when N distinct people have approved the same body. A `signoffs_required` that is not a whole number can never be satisfied: the document stays unapproved whatever record exists, `approve` refuses it, and `check` reports it (GW010, GW026, GW045).
+- A document with `signoffs_required: N` is approved when N distinct people have approved the same body. A `signoffs_required` that is present but not a whole number (including blank) can never be satisfied: the document stays unapproved whatever record exists, `approve` refuses it, and `check` reports it (GW010, GW026, GW045).
 - `approve` MAY take several documents at once. Every one is checked first (exists, has front matter, no markers, baseline requirements, not an unclassified import); if any fails, **none** is recorded. Each approval is still hashed and recorded against its own document.
 - A document MUST NOT be approved while unfinished.
 - An agent MUST NOT create, edit or run anything that produces an approval record.
@@ -341,7 +346,10 @@ sections; they never invalidate a conforming project.
 | GW011 | E | A finished RFC lacks a required numbered section, or they are out of order |
 | GW012 | E | An `api` RFC lacks a §8 contract or requires fewer than 2 sign-offs |
 | GW013 | E | An RFC claims `approved` but its approval is invalid (stale or forged) |
-| GW014 | W | An RFC is not listed in `DECISIONS/README.md` |
+| GW014 | W | An RFC has no table row in `DECISIONS/README.md` |
+| GW017 | E | An ADR's front matter is missing or blank a field, its id mismatches the file name, its status, origin or rationale_source is not a recognised value or they contradict each other (a retrospective ADR with an `rfc`), or its rfc/supersedes does not exist |
+| GW018 | W | An ADR has no table row in `DECISIONS/README.md` (a mention in prose does not count), or is unfinished |
+| GW019 | E | A finished ADR lacks a required section, or §3 does not begin with a complete `**Source:**` label (a retrospective explanation names the person and a date), or the label contradicts `rationale_source` |
 | GW020 | E | A feature directory is not `NNN-slug` or lacks one of spec/plan/tasks/evals (a baseline needs only spec.md) |
 | GW021 | E | A spec's `rfc` does not exist, its `id` mismatches the directory, or it is approved under an unapproved RFC (a baseline needs no RFC) |
 | GW022 | E/W | A finished spec lacks a required section (E; W for a reconciled import that keeps legacy headings) |
@@ -430,6 +438,7 @@ python3 <plugin>/engine/groundwork.py check --json     # machine-readable
   `--retrofit` additively appends missing required sections to existing documents. In a workspace it covers every repo under it.
 - `groundwork.py adopt-specs [--dry-run] [slug …]` imports legacy spec directories as `origin: imported` (§5j); `adopt-specs --classify baseline|planned|archived <slug …> [--capability C] [--dry-run]` classifies them. Classification links are additive; its dry run writes nothing. Import and classification reject symlinked paths. `groundwork.py new-baseline <slug> [--title T] [--capability C]` creates a baseline (spec.md only; active work unchanged). `groundwork.py confirm --baseline <slug …>` records a source review (§5j); `groundwork.py fresh` lists each baseline as current, review or unreviewed. `groundwork.py capability set|link|unlink` edits capability records and `groundwork.py capabilities` regenerates the table. `capability set <cap> interview_notes='<JSON array>'` persists interview rounds with `question`, `answer`, `source` and `effect`; entries append without duplicating or replacing previous answers. Approval-critical answers must be copied into the spec body before approval.
 - `groundwork.py init` also records, in `.groundwork/discovery.json`: `surface` (HTTP route files, prefixes and mounts, CLI commands, schema files, API docs, with the scan's limits), `rules` (rule-shaped lines from the README, AGENTS, CLAUDE, CONTRIBUTING, constitutions and docs, with sources, possible conflicts and the CI gate commands), `capability_candidates` (clusters from routes, commands and workers, with suggested lifecycle and what is unconfirmed), `adoptable.specs` (legacy spec directories with their original status, companions, headings and task counts), `git.recent_subjects` and `scan` (limits, exclusions, unsupported patterns). All of it is evidence from bounded regex scans, never a decision, and never a claim of complete coverage.
+- `groundwork.py new-adr <slug> [--title T] [--rfc RFC-000N | --retrospective [--source PATH] [--decided-at DATE]]` creates an ADR in `DECISIONS/` and lists it in the index.
 - `groundwork.py new-contract <provider>-<topic> [--title T] [--provider P] [--consumers a,b] [--as-built]` creates a contract in the workspace's `CONTRACTS/` (a standalone repo's own).
 - `groundwork.py doctor [--json]` is read-only. It places the project on a ladder — **0 Not started** (required docs missing) ·
   **1 Scaffolded** (unfinished, or non-conforming) · **2 Documented** (finished, conforming) · **3 Current** (confirmed, not stale) ·

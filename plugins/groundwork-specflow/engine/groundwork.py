@@ -9,6 +9,7 @@ People:     groundwork.py who <feature|RFC|bug> | who --person NAME | who --all 
 Resume:     groundwork.py board [--all] [--json] | note <text> | deps <feature|RFC> | new-bug <slug> | activate-bug <slug>
 Agents:     groundwork.py scaffold | new-rfc <slug> | new-feature <slug> --rfc N | activate <slug>
 Baselines:  groundwork.py adopt-specs [--dry-run] [slug ...] | adopt-specs --classify baseline|planned|archived <slug ...>
+Decisions:  groundwork.py new-adr <slug> [--title T] [--rfc RFC-000N | --retrospective [--source PATH] [--decided-at DATE]]
 Contracts:  groundwork.py new-contract <provider-topic> [--title T] [--provider P] [--consumers a,b] [--as-built]
             groundwork.py new-baseline <slug> [--title T] [--capability C] | capability set|link|unlink ... | capabilities
 Quality:    groundwork.py verify [--fix] [--step S] | quality [show|init [--create]|keep|set step=CMD]
@@ -39,6 +40,7 @@ import groundwork_check as K
 import groundwork_codemap as M
 import groundwork_contracts as CT
 import groundwork_core as C
+import groundwork_decisions as AD
 import groundwork_discover as D
 import groundwork_doctor as X
 import groundwork_fresh as F
@@ -1286,6 +1288,20 @@ def cmd_adopt_specs(a) -> None:
     )
 
 
+def cmd_new_adr(a) -> None:
+    ctx = C.detect(Path.cwd())
+    p = AD.new_adr(ctx, a.slug, a.title, a.retrospective, a.rfc, a.source, a.decided_at)
+    print(
+        f"{p}\n"
+        + (
+            "Retrospective ADR (status recorded): fill §1–5 only as far as the evidence supports; §3 starts with "
+            "'**Source:** documented in …' / 'retrospective explanation by …, <date>' / 'historical rationale unknown'."
+            if a.retrospective
+            else "ADR from an approved RFC: record the outcome; the RFC keeps the interview and alternatives."
+        )
+    )
+
+
 def cmd_new_contract(a) -> None:
     ctx = C.detect(Path.cwd())
     if ctx.level == "repo":
@@ -1517,6 +1533,26 @@ def main() -> None:
         help="capability to link when classifying (existing links are kept)",
     )
     p.set_defaults(fn=cmd_adopt_specs)
+    p = sub.add_parser(
+        "new-adr",
+        help="an ADR in DECISIONS/: after a built RFC (--rfc), or retrospective for a choice found in existing code",
+    )
+    p.add_argument("slug")
+    p.add_argument("--title")
+    p.add_argument("--rfc", help="the approved RFC this records the outcome of")
+    p.add_argument(
+        "--retrospective",
+        action="store_true",
+        help="a decision found in the codebase, no RFC",
+    )
+    p.add_argument(
+        "--source",
+        help="document or commit that states the reason (sets rationale_source: documented)",
+    )
+    p.add_argument(
+        "--decided-at", dest="decided_at", help="date, only when a document states it"
+    )
+    p.set_defaults(fn=cmd_new_adr)
     p = sub.add_parser(
         "new-contract",
         help="a contract in CONTRACTS/ with named provider/consumer reviewers (--as-built: observed, not designed)",

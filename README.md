@@ -74,7 +74,7 @@ GroundWork notices when the code or architecture moves on and flags the document
 The agent is told to answer first, in plain words, and keep it short, without dropping the caveats, risks or next steps you need.
 
 **Works with what you already have.**
-Point it at an existing project and it reads the code, drafts the documents from facts, and only asks what the code can't tell it. Adopt it gradually, one repo at a time.
+Point it at an existing project and it reads the code, drafts the documents from facts, and only asks what the code can't tell it. Adopt it gradually, one repo at a time. Behaviour that already exists gets **baseline specs**, written from the code and confirmed by you, so the next feature knows what it extends and the next bug has a requirement to cite. Specs you wrote with another tool are imported as references and classified, never rewritten or silently approved.
 
 ## Who it's for
 

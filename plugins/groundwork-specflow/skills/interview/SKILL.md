@@ -25,7 +25,7 @@ Do **not** start designing, writing an RFC or touching code until the interview 
 ## Persist as you go (so a closed session loses nothing)
 After the **first** round of answers, create the RFC (`groundwork.py new-rfc <slug>`) and record every question and answer in its §3 table immediately after each round, each with its **effect** label (below).
 The RFC draft *is* the interview's memory: a new session resumes from it (the **resume** skill reads it).
-**While interviewing, the only file you change is the RFC draft.** Do not edit code, specs or the foundation documents (PROJECT, ARCHITECTURE, CONSTITUTION). If an answer means one of them must change, note it in the read-back as a doc to update, and do it after the RFC is approved.
+**While interviewing, the only file you change is the RFC draft.** Do not edit code, specs or the foundation documents (PROJECT, ARCHITECTURE, CONSTITUTION). If an answer means one of them must change, note it in the read-back as a doc to update, and do it after the RFC is approved. One exception: a **bounded baseline substep** (below) may edit that baseline spec and the capability index; write the pause/resume point in the RFC's §3 before and after it.
 
 ## Label every answer
 Give each row of §3 exactly one effect, so the reader sees what is settled and what is not:
@@ -57,6 +57,7 @@ Search the existing specs and RFCs first (`groundwork.py board --all`, `groundwo
 - **Depends on** feature X — cannot be built until X is implemented; or **builds against** X — can proceed in parallel once X's spec is approved and its plan finished (an agreed contract).
 - **Supersedes** an earlier RFC — the decision itself is being replaced.
 Record the answer in RFC §7 (Impact) and it becomes the spec's front matter (`extends`, `amends`, `depends_on`, `builds_against`).
+**Existing behaviour with no usable spec.** Check `specs/README.md` (the capability table) and the session's DOCUMENTATION REVIEW list before choosing *Independent*. If the change touches active behaviour that has no approved baseline (deferred capability, or an import still pending), say so and offer (picker): **Write a bounded baseline first (Recommended)** — the **baseline** skill, for that capability only, approved by the user, then this feature `extends` or `amends` it · **Proceed as independent** — only if the user confirms the behaviour really is untouched. Never relate work to an unapproved baseline or an unclassified import; the engine refuses it (GW076).
 
 ## What to probe (skip only what is truly irrelevant)
 - **Who / why:** which user, what they do today, what pain, why now, what happens if we do nothing.

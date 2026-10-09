@@ -87,7 +87,7 @@ class Init(Base):
             json.loads(
                 (self.root / ".groundwork" / "config.json").read_text(encoding="utf-8")
             )["standard"],
-            "0.7.0",
+            "0.8.0",
         )
 
     def test_as_workspace_marks_it(self):

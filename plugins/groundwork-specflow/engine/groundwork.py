@@ -8,6 +8,8 @@ Humans:     groundwork.py status | approve <doc> | bypass <reason>
 People:     groundwork.py who <feature|RFC|bug> | who --person NAME | who --all | record <event> --ref R ...
 Resume:     groundwork.py board [--all] [--json] | note <text> | deps <feature|RFC> | new-bug <slug> | activate-bug <slug>
 Agents:     groundwork.py scaffold | new-rfc <slug> | new-feature <slug> --rfc N | activate <slug>
+Baselines:  groundwork.py adopt-specs [--dry-run] [slug ...] | adopt-specs --classify baseline|planned|archived <slug ...>
+            groundwork.py new-baseline <slug> [--title T] [--capability C] | capability set|link|unlink ... | capabilities
 Quality:    groundwork.py verify [--fix] [--step S] | quality [show|init [--create]|keep|set step=CMD]
 Code:       groundwork.py codemap [--check] | layout [--json] | layout init --profile P [--root R] [--create] | layout keep | layout map role=path [--legacy P]
 """
@@ -28,6 +30,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import groundwork_alert as A
+import groundwork_baseline as BL
 import groundwork_board as W
 import groundwork_brevity as V
 import groundwork_bugs as B
@@ -84,6 +87,7 @@ groundwork is active. These rules are enforced by hooks, not suggestions:
 19. CREDENTIALS: code reads secrets ONLY from environment variables - never write a key, token or password into a file. Locally they come from `.env`, which must be git-ignored and never committed; every variable name goes in `.env.example` with no real value. Load `.env` in ONE place (config/ or the wiring file): Python `load_dotenv()` from python-dotenv (`uv add python-dotenv`), Node `--env-file=.env` or `dotenv`, Go `godotenv`; never let it override variables the platform already set. Front-end code never holds secrets (it ships to the browser); libraries never load `.env`. In a repo that keeps its own structure, keep its existing way of loading settings - only the safety rules apply.
 20. CODE QUALITY: each repo records ONE toolchain decision (code-quality skill): GroundWork's standard tools, or KEEP its own. After every task run `groundwork.py verify` (format, lint, types, tests) and fix what fails before marking it done; never weaken a rule, add an ignore or skip a test to get green. The coding rules are in AGENTS.md -> Code quality. An existing repo with no decision: ASK before adding or changing any tool config - a new formatter rewrites every file.
 21. ALERTS: if the user asks to turn alerts on or off, run `groundwork.py alerts on` (or `off`); for just the spoken voice (sound and notification stay), run `groundwork.py alerts voice off` (or `on`). It is their own setting, kept for every project; never change it unasked.
+22. EXISTING BEHAVIOUR: a spec with `origin: baseline` documents what already exists (baseline skill) — history, not work: no RFC, no tasks, never in flight. A feature that changes existing behaviour `extends`/`amends` the baseline; a bug with no requirement to cite gets a bounded baseline first. `origin: imported` is a legacy document awaiting classification — a reference, never an approved requirement. If the context lists DOCUMENTATION REVIEW items, they wait for a person, not for code.
 Use `python3 ${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py status` (or `board`) any time you are unsure where you are."""
 RULES = RULES.replace("BREVITY_TEXT", BREVITY)
 
@@ -176,6 +180,7 @@ def describe(ctx: C.Ctx) -> str:
                 + (f"; blocked by {'; '.join(w.blocked_by)}" if w.blocked_by else "")
                 + (f"; last note: {w.note}" if w.note else "")
             )
+    lines += BL.review_lines(ctx) if ctx.level != "unknown" else []
     stale = F.stale_lines(ctx) if ctx.level != "unknown" else []
     if stale:
         lines.append("DOCS MAY BE STALE (use the refresh skill): " + " | ".join(stale))
@@ -212,14 +217,14 @@ def run_human_action(name: str, argstr: str, cwd: str) -> str:
             if name == "approve":
                 if not args:
                     raise SystemExit(
-                        "Usage: /groundwork-specflow:approve <path to document | RFC-NNNN>"
+                        "Usage: /groundwork-specflow:approve <path to document | RFC-NNNN> [more paths …]"
                     )
                 who = None
                 if "--as" in args:
                     i = args.index("--as")
                     who = args[i + 1]
                     del args[i : i + 2]
-                cmd_approve(argparse.Namespace(doc=args[0], who=who))
+                cmd_approve(argparse.Namespace(docs=args, who=who))
             else:
                 cmd_bypass(argparse.Namespace(reason=" ".join(args), minutes=60))
         return buf.getvalue().strip()
@@ -452,20 +457,48 @@ def cmd_status(a) -> None:
         print(f"  tasks: {d}/{t} done")
 
 
-def cmd_approve(a) -> None:
-    p = Path(a.doc).expanduser()
+def _resolve_doc(ref: str) -> Path:
+    p = Path(ref).expanduser()
     if not p.is_absolute():
         p = Path.cwd() / p
-    if not p.is_file() and a.doc.upper().startswith("RFC"):
+    if not p.is_file() and ref.upper().startswith("RFC"):
         ctx0 = C.detect(Path.cwd())
-        p = C.find_rfc(ctx0, a.doc) or p
-    ctx = C.detect(p)
-    st = C.approve(p, ctx, a.who)
-    print(
-        f"{p.name}: {st.status} ({len(set(st.signers))}/{st.needed} sign-offs: {', '.join(st.signers)})"
-    )
-    if st.status == "in-review":
-        print(signoff_help(p, st))
+        p = C.find_rfc(ctx0, ref) or p
+    return p
+
+
+def cmd_approve(a) -> None:
+    """One or several documents. Every one is preflighted first; if any fails, none is recorded —
+    each approval is still hashed and recorded on its own document."""
+    refs = list(getattr(a, "docs", None) or [a.doc])
+    paths, seen, problems = [], set(), []
+    for ref in refs:
+        p = _resolve_doc(ref)
+        try:
+            key = p.resolve()
+        except OSError:
+            key = p
+        if key in seen:
+            problems.append(f"{ref}: given twice")
+            continue
+        seen.add(key)
+        paths.append(p)
+        why = C.approve_preflight(p, C.detect(p))
+        if why:
+            problems.append(f"{p.name if p.is_file() else ref}: {why}")
+    if problems:
+        raise SystemExit(
+            ("nothing approved — " if len(refs) > 1 else "") + "\n".join(problems)
+        )
+    for p in paths:
+        ctx = C.detect(p)
+        st = C.approve(p, ctx, a.who)
+        print(
+            f"{p.name if len(paths) == 1 else p.parent.name + '/' + p.name}: {st.status} "
+            f"({len(set(st.signers))}/{st.needed} sign-offs: {', '.join(st.signers)})"
+        )
+        if st.status == "in-review":
+            print(signoff_help(p, st))
 
 
 def signoff_help(p: Path, st: C.DocState) -> str:
@@ -696,6 +729,12 @@ def cmd_init(a) -> None:
                 f"[{base.name}] evidence gathered{'' if a.dry_run else ' → .groundwork/discovery.json'}:"
             )
             print(D.summarize(d))
+            legacy = BL.candidates(t)
+            if legacy:
+                print(
+                    f"  legacy specs: {len(legacy)} spec director{'y' if len(legacy) == 1 else 'ies'} without GroundWork "
+                    "metadata — run `groundwork.py adopt-specs --dry-run`, then `adopt-specs` to bring them in as references"
+                )
         if t.level == "repo" and t.workspace:
             gaps = C._gaps_at("workspace", t.workspace, "")[0]
             if gaps:
@@ -1134,7 +1173,113 @@ def cmd_confirm(a) -> None:
 def cmd_board(a) -> None:
     ctx = C.detect(Path(a.path or Path.cwd()))
     items = W.collect(ctx, include_done=a.all)
-    print(W.to_json(items) if a.json else W.render(items))
+    print(W.to_json(items) if a.json else W.render(items, BL.review_lines(ctx)))
+
+
+def _repo_only(what: str) -> C.Ctx:
+    ctx = C.detect(Path.cwd())
+    if ctx.level not in ("repo", "standalone"):
+        raise SystemExit(f"{what} happens inside a repo. cd into one.")
+    return ctx
+
+
+def cmd_adopt_specs(a) -> None:
+    ctx = C.detect(Path.cwd())
+    if ctx.level == "unknown":
+        raise SystemExit("Not in a repo or workspace.")
+    if a.classify:
+        rc = _repo_only("classification")
+        for line in BL.classify(rc, a.classify, a.slugs):
+            print(line)
+        print(
+            "Classification changes metadata only. A baseline still needs the user's review and "
+            "/groundwork-specflow:approve; planned work needs its RFC, plan, tasks and evals."
+        )
+        return
+    targets = (
+        [C.detect(k, ctx.workspace) for k in C.child_repos(ctx.workspace)]
+        if ctx.level == "workspace"
+        else [ctx]
+    )
+    verb = "would import" if a.dry_run else "imported"
+    for rc in targets:
+        rep = BL.import_specs(rc, a.slugs or None, a.dry_run)
+        print(
+            f"[{rc.repo.name}] {verb}: "
+            + (
+                ", ".join(rep["imported"])
+                or "nothing (no legacy specs without GroundWork metadata)"
+            )
+        )
+        if a.dry_run:
+            for c in BL.candidates(rc):
+                if a.slugs and c["slug"] not in a.slugs:
+                    continue
+                print(
+                    f"  - {c['slug']}: '{c['title']}' status={c['original_status'] or '?'} "
+                    f"companions={','.join(c['companions']) or 'none'} tasks={c['tasks'][0]}/{c['tasks'][1]} "
+                    f"markers={c['markers']} sections differing from the standard={len(c['missing_sections'])}"
+                    + (f" PROBLEM: {c['problem']}" if c["problem"] else "")
+                    + ("" if c["name_ok"] else " PROBLEM: directory is not NNN-slug")
+                )
+        for line in rep["review"]:
+            print(f"  needs a person: {line}")
+        for s in rep["not_found"]:
+            print(f"  not found (or already governed): {s}")
+        if rep["unfinished"]:
+            print(
+                "  not marked finished in the original — history or work in flight? the user decides:"
+            )
+            for line in rep["unfinished"]:
+                print(f"    - {line}")
+    print(
+        "\nImported documents are `origin: imported`, `adoption_state: pending`: references, not approved "
+        "requirements. Next: the baseline skill investigates each, then "
+        "`groundwork.py adopt-specs --classify baseline|planned|archived <slug>`."
+    )
+
+
+def cmd_new_baseline(a) -> None:
+    rc = _repo_only("a baseline")
+    fdir = BL.new_baseline(rc, a.slug, a.title, a.capability)
+    P.auto_created(rc, "feature", fdir / "spec.md", None)
+    print(
+        f"{fdir}\nBaseline created (spec.md only). Owner: {C.signer()}. Active work unchanged: a baseline "
+        "is documentation of existing behaviour, not an implementation target."
+    )
+
+
+def cmd_capability(a) -> None:
+    rc = _repo_only("capabilities")
+    if a.action == "set":
+        fields = {}
+        for item in a.args:
+            if "=" not in item:
+                raise SystemExit(f"set takes field=value pairs, not '{item}'")
+            k, v = item.split("=", 1)
+            fields[k.strip()] = v.strip()
+        rec = BL.cap_set(rc, a.cap, **fields)
+    elif a.action == "link":
+        if len(a.args) != 1:
+            raise SystemExit("usage: capability link <cap> <NNN-slug>")
+        if not (rc.repo / "specs" / a.args[0] / "spec.md").is_file():
+            raise SystemExit(f"specs/{a.args[0]}/spec.md does not exist")
+        rec = BL.cap_link(rc, a.cap, a.args[0], create=True)
+    else:
+        if len(a.args) != 1:
+            raise SystemExit("usage: capability unlink <cap> <NNN-slug>")
+        rec = BL.cap_unlink(rc, a.cap, a.args[0])
+    BL.write_index(rc)
+    print(json.dumps({C.slugify(a.cap): rec}, indent=2))
+
+
+def cmd_capabilities(a) -> None:
+    rc = _repo_only("the capability table")
+    p = BL.write_index(rc)
+    st, _ = BL.index_state(rc)
+    print(
+        f"{p} ({st}); {len(BL.load_caps(rc))} capabilit{'y' if len(BL.load_caps(rc)) == 1 else 'ies'}"
+    )
 
 
 def cmd_note(a) -> None:
@@ -1244,6 +1389,14 @@ def cmd_activate(a) -> None:
         raise SystemExit("Not in a repo.")
     if not (ctx.repo / "specs" / a.slug).is_dir():
         raise SystemExit(f"specs/{a.slug} does not exist")
+    meta = C.spec_meta(ctx.repo / "specs" / a.slug)
+    if C.origin(meta):
+        st = C.feature_steps(ctx, a.slug)[0]
+        raise SystemExit(
+            f"specs/{a.slug} is {'a baseline' if C.is_baseline(meta) else 'an imported legacy spec'}: "
+            f"{st.detail}. It cannot be the active implementation target. "
+            + C.INSTRUCTIONS.get(st.key if not st.ok else "baseline", "")
+        )
     _write(ctx.repo / ".groundwork" / "active", a.slug + "\n")
     print(f"Active feature: {a.slug}")
 
@@ -1277,9 +1430,45 @@ def main() -> None:
     p.add_argument("path", nargs="?")
     p.set_defaults(fn=cmd_status)
     p = sub.add_parser("approve")
-    p.add_argument("doc")
+    p.add_argument(
+        "docs",
+        nargs="+",
+        help="one or more documents; all are checked before any is recorded",
+    )
     p.add_argument("--as", dest="who")
     p.set_defaults(fn=cmd_approve)
+    p = sub.add_parser(
+        "adopt-specs",
+        help="bring legacy spec directories under GroundWork metadata (origin: imported), or classify them",
+    )
+    p.add_argument(
+        "slugs", nargs="*", help="NNN-slug directories (default: every candidate)"
+    )
+    p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--classify", choices=BL.CLASSIFICATIONS)
+    p.set_defaults(fn=cmd_adopt_specs)
+    p = sub.add_parser(
+        "new-baseline", help="a spec for behaviour that already exists (spec.md only)"
+    )
+    p.add_argument("slug")
+    p.add_argument("--title")
+    p.add_argument(
+        "--capability", help="capability slug to link (default: the spec's own slug)"
+    )
+    p.set_defaults(fn=cmd_new_baseline)
+    p = sub.add_parser(
+        "capability",
+        help="capability records: set field=value …, link <spec>, unlink <spec>",
+    )
+    p.add_argument("action", choices=["set", "link", "unlink"])
+    p.add_argument("cap")
+    p.add_argument("args", nargs="*")
+    p.set_defaults(fn=cmd_capability)
+    p = sub.add_parser(
+        "capabilities",
+        help="regenerate the capability table in specs/README.md (Notes kept)",
+    )
+    p.set_defaults(fn=cmd_capabilities)
     p = sub.add_parser("bypass")
     p.add_argument("reason", nargs="+")
     p.add_argument("--minutes", type=int, default=60)

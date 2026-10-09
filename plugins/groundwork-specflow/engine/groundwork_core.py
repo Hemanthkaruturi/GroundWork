@@ -16,7 +16,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-STANDARD_VERSION = "0.7.0"  # the version of STANDARD.md this code implements
+STANDARD_VERSION = "0.8.0"  # the version of STANDARD.md this code implements
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 TEMPLATES = PLUGIN_ROOT / "templates"
@@ -322,39 +322,65 @@ def changes_count(text: str) -> int:
     return len(re.findall(r"^\s*[-*] ", m.group(1), re.MULTILINE)) if m else 0
 
 
-def approve(path: Path, ctx: Ctx, who: str | None = None) -> DocState:
+def approve_preflight(path: Path, ctx: Ctx) -> str | None:
+    """Why ``path`` cannot be approved right now, or None. Behavioural content is judged from the
+    body only; the front matter supplies the metadata that belongs there (origin, owner, id)."""
     path = Path(path).resolve()
     if not path.is_file():
-        raise SystemExit(f"no such document: {path}")
+        return f"no such document: {path}"
     text = path.read_text(encoding="utf-8")
     meta, _ = split_fm(text)
     if not meta:
-        raise SystemExit(
-            f"{path.name} has no front matter; it is not a governed document"
-        )
+        return f"{path.name} has no front matter; it is not a governed document"
     st = doc_state(path, ctx)
     if st.placeholders:
-        raise SystemExit(
+        return (
             f"{path.name} still has {st.placeholders} [TODO]/[NEEDS CLARIFICATION] "
             "marker(s). Resolve them before approval."
         )
+    if path.name == "spec.md":
+        if is_imported(meta):
+            return (
+                f"{path.parent.name} is an imported legacy document ({adoption_state(meta) or 'pending'}); "
+                "it cannot be approved as a behavioural reference until it is classified "
+                "(groundwork.py adopt-specs --classify baseline|planned|archived)."
+            )
+        if is_baseline(meta):
+            import groundwork_baseline as BL
+
+            bad = BL.approval_problems(path.parent, meta, text)
+            if bad:
+                return f"{path.parent.name}: " + "; ".join(bad)
+    root = owner_root(path, ctx)
+    rel = str(path.relative_to(root.resolve()))
+    rec = load_approvals(root).get(rel)
+    # A spec that was approved and then changed may be re-approved only with the change explained.
+    if (
+        rec
+        and rec.get("hash") != body_hash(text)
+        and path.name == "spec.md"
+        and changes_count(text) <= rec.get("changes", 0)
+    ):
+        return (
+            "this spec was approved before and has changed since. Record what changed and why as a dated line under "
+            "'## Changes' (after the required sections), e.g. '- 2026-09-30: FR-6 now means the exact, unrounded payment "
+            "(found while planning; user chose this reading)', then approve again."
+        )
+    return None
+
+
+def approve(path: Path, ctx: Ctx, who: str | None = None) -> DocState:
+    path = Path(path).resolve()
+    why = approve_preflight(path, ctx)
+    if why:
+        raise SystemExit(why)
+    text = path.read_text(encoding="utf-8")
+    meta, _ = split_fm(text)
     root = owner_root(path, ctx)
     rel = str(path.relative_to(root.resolve()))
     store = load_approvals(root)
     h = body_hash(text)
     rec = store.get(rel)
-    # A spec that was approved and then changed may be re-approved only with the change explained.
-    if (
-        rec
-        and rec.get("hash") != h
-        and path.name == "spec.md"
-        and changes_count(text) <= rec.get("changes", 0)
-    ):
-        raise SystemExit(
-            "this spec was approved before and has changed since. Record what changed and why as a dated line under "
-            "'## Changes' (after the required sections), e.g. '- 2026-09-30: FR-6 now means the exact, unrounded payment "
-            "(found while planning; user chose this reading)', then approve again."
-        )
     if not rec or rec.get("hash") != h:
         rec = {"hash": h, "signers": [], "changes": changes_count(text)}
     who = who or signer()
@@ -376,6 +402,13 @@ def approve(path: Path, ctx: Ctx, who: str | None = None) -> DocState:
         ),
         encoding="utf-8",
     )
+    if path.name == "spec.md" and ctx.repo:
+        import groundwork_baseline as BL
+
+        if BL.load_caps(
+            ctx
+        ):  # the capability table shows approval state: keep the view current
+            BL.write_index(ctx)
     return doc_state(path, ctx)
 
 
@@ -473,6 +506,66 @@ def list_of(meta: dict, key: str) -> list[str]:
     return [x for x in (v if isinstance(v, list) else [v]) if x]
 
 
+# --- origin: planned feature, baseline (existing behaviour), or imported legacy document (§5j) ----
+
+ORIGINS = {"baseline", "imported"}
+ADOPTION_STATES = {"pending", "archived"}
+
+
+def origin(meta: dict) -> str:
+    """'' (a planned feature), 'baseline' (documents behaviour that existed before GroundWork) or
+    'imported' (a legacy document awaiting classification, or archived)."""
+    return str(meta.get("origin", "") or "").strip()
+
+
+def is_baseline(meta: dict) -> bool:
+    return origin(meta) == "baseline"
+
+
+def is_imported(meta: dict) -> bool:
+    return origin(meta) == "imported"
+
+
+def adoption_state(meta: dict) -> str:
+    return str(meta.get("adoption_state", "") or "").strip()
+
+
+def spec_meta(fdir: Path) -> dict:
+    sp = fdir / "spec.md"
+    if not sp.is_file():
+        return {}
+    return split_fm(sp.read_text(encoding="utf-8"))[0]
+
+
+DISCREPANCY_OPEN = re.compile(r"^\s*- \[ \]\s*(.*)$", re.MULTILINE)
+
+
+def open_discrepancies(text: str) -> list[str]:
+    """Open entries ('- [ ] …') of a baseline's '## Known discrepancies' section."""
+    m = re.search(
+        r"^## Known discrepancies\b(.*?)(?=^## |\Z)", text, re.MULTILINE | re.DOTALL
+    )
+    if not m:
+        return []
+    return [x.strip()[:80] for x in DISCREPANCY_OPEN.findall(m.group(1))]
+
+
+def reference_problem(rc: Ctx, fdir: Path) -> str | None:
+    """Why a baseline or imported feature cannot be cited (by a relation or a bug), or None.
+    Planned features keep their own rules; this only judges the two adopted origins."""
+    meta = spec_meta(fdir)
+    if is_imported(meta):
+        st = adoption_state(meta) or "pending"
+        return f"imported legacy document ({st}); classify it first (adopt-specs --classify)"
+    if is_baseline(meta):
+        st = doc_state(fdir / "spec.md", rc)
+        if st.status == "stale":
+            return "baseline edited after approval; it must be re-approved"
+        if not st.approved:
+            return f"baseline is {st.status}, not approved"
+    return None
+
+
 def resolve_feature(ctx: Ctx, ref: str) -> tuple[Ctx | None, Path | None]:
     """'NNN-slug' (this repo) or 'repo/NNN-slug' (a sibling repo in the workspace) -> (ctx, feature dir)."""
     ref = ref.strip()
@@ -492,6 +585,15 @@ def resolve_feature(ctx: Ctx, ref: str) -> tuple[Ctx | None, Path | None]:
 
 
 def feature_implemented(rctx: Ctx, fdir: Path) -> tuple[bool, str]:
+    """Is this feature built? A planned feature: every task ticked. A baseline describes behaviour
+    that already exists, so it counts once a human has approved it (nothing to tick). An imported
+    document counts for nothing until classified."""
+    meta = spec_meta(fdir)
+    if is_baseline(meta):
+        why = reference_problem(rctx, fdir)
+        return (why is None), ("baseline, approved" if why is None else why)
+    if is_imported(meta):
+        return False, reference_problem(rctx, fdir) or "imported"
     done, total = task_counts(rctx, fdir.name)
     return (total > 0 and done == total), f"tasks {done}/{total}"
 
@@ -511,6 +613,14 @@ def dependency_problems(ctx: Ctx, spec: DocState) -> list[str]:
         if fd is None:
             bad.append(f"{ref} (does not exist)")
             continue
+        tmeta = spec_meta(fd)
+        if origin(tmeta):
+            # a baseline's interface is the behaviour that already exists: an approved baseline
+            # is the agreed contract; nothing is fabricated to stand in for a plan
+            why = reference_problem(rc, fd)
+            if why:
+                bad.append(f"{ref} ({why})")
+            continue
         sp, pl = doc_state(fd / "spec.md", rc), doc_state(fd / "plan.md", rc)
         if not sp.approved or not pl.exists or pl.placeholders:
             bad.append(
@@ -519,10 +629,67 @@ def dependency_problems(ctx: Ctx, spec: DocState) -> list[str]:
     return bad
 
 
+def dependency_warnings(ctx: Ctx, spec: DocState) -> list[str]:
+    """Non-blocking: a dependency is an approved baseline that carries open known discrepancies.
+    It still satisfies the dependency (a ticked task list proves no more), but the reader should know."""
+    out = []
+    for key in ("depends_on", "builds_against"):
+        for ref in list_of(spec.meta, key):
+            _rc, fd = resolve_feature(ctx, ref)
+            if fd is None or not is_baseline(spec_meta(fd)):
+                continue
+            opened = open_discrepancies((fd / "spec.md").read_text(encoding="utf-8"))
+            if opened:
+                out.append(
+                    f"{ref} is a baseline with {len(opened)} open known discrepanc{'y' if len(opened) == 1 else 'ies'}: "
+                    + "; ".join(opened[:3])
+                )
+    return out
+
+
 def feature_steps(ctx: Ctx, slug: str) -> list[Step]:
     fdir = ctx.repo / "specs" / slug
     steps: list[Step] = []
     spec = doc_state(fdir / "spec.md", ctx)
+    if is_imported(spec.meta):
+        st = adoption_state(spec.meta) or "pending"
+        if st == "archived":
+            return [
+                Step(
+                    "classify",
+                    True,
+                    "archived legacy reference: never cited, never built",
+                )
+            ]
+        return [
+            Step(
+                "classify",
+                False,
+                f"imported legacy spec ({st}): a reference awaiting classification, not work to build",
+            )
+        ]
+    if is_baseline(spec.meta):
+        # a baseline is never all-green: it documents what exists and is not an implementation target
+        steps.append(
+            Step(
+                "spec",
+                spec.approved,
+                f"baseline spec.md is {spec.status}"
+                + (
+                    f", {spec.placeholders} unresolved marker(s)"
+                    if spec.placeholders
+                    else ""
+                ),
+            )
+        )
+        steps.append(
+            Step(
+                "baseline",
+                False,
+                "a baseline documents existing behaviour; it is not an implementation target",
+            )
+        )
+        return steps
     ref = spec.meta.get("rfc", "")
     rfc_path = find_rfc(ctx, ref)
     if rfc_path is None:
@@ -630,6 +797,10 @@ INSTRUCTIONS = {
     "matches (and say so to the user), then run `groundwork.py plan-sync`.",
     "deps": "Finish (resume) the features it depends on first. If they can proceed in parallel against an approved "
     "contract, ask the user and move them from depends_on to builds_against.",
+    "classify": "Investigate and interview (baseline skill), then classify it: groundwork.py adopt-specs --classify "
+    "baseline|planned|archived <slug>. Until then it cannot be cited or built against.",
+    "baseline": "New behaviour needs its own feature (interview skill → RFC → spec) that extends or amends this "
+    "baseline; a defect in it is a bug (fix-bug skill). Clear the active feature: this one cannot be built.",
 }
 
 
@@ -676,14 +847,32 @@ def next_step(ctx: Ctx) -> tuple[str, str]:
                 f"{len(items)} item(s) in flight: {top}. If the user's request continues one, use the "
                 "resume skill (groundwork.py board); otherwise start new work with the interview skill."
             )
+        import groundwork_baseline as BL
+
+        review = BL.review_summary(ctx)
         return "idle", (
             "Nothing in flight. If the user wants to build something, start with the interview skill "
             "(then write-rfc); if they report a bug, use the fix-bug skill."
+            + (
+                f" Documentation awaiting review (baseline skill): {review}."
+                if review
+                else ""
+            )
         )
     if not (ctx.repo / "specs" / slug).is_dir():
         return (
             "idle",
             f"Active feature '{slug}' has no specs/{slug}/ directory. Clear or recreate it.",
+        )
+    if origin(spec_meta(ctx.repo / "specs" / slug)):
+        key = (
+            "baseline"
+            if is_baseline(spec_meta(ctx.repo / "specs" / slug))
+            else "classify"
+        )
+        return key, (
+            f"[{slug}] is {'a baseline' if key == 'baseline' else 'an imported legacy spec'}, not an "
+            f"implementation target; clear .groundwork/active. " + INSTRUCTIONS[key]
         )
     for st in feature_steps(ctx, slug):
         if not st.ok:
@@ -782,6 +971,14 @@ def _why_blocked(ctx: Ctx) -> str | None:
             "the user (interview skill), RFC → approval → spec → plan → tasks → evals. A bug: the fix-bug skill (diagnose, "
             "classify, cite the violated requirements, name a regression test). Resuming: the resume skill. "
             "For a tiny emergency the USER can run /groundwork-specflow:bypass <reason>."
+        )
+    if (ctx.repo / "specs" / slug).is_dir() and origin(
+        spec_meta(ctx.repo / "specs" / slug)
+    ):
+        return (
+            f"'{slug}' is a baseline or imported legacy spec: documentation of existing behaviour, never an "
+            "implementation target. New behaviour needs its own feature (interview skill); a defect needs the "
+            "fix-bug skill. Clear .groundwork/active."
         )
     for st in (
         feature_steps(ctx, slug)

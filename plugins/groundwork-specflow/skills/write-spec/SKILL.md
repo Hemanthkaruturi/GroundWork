@@ -26,7 +26,7 @@ Precondition: the RFC is **approved** (`groundwork.py status` shows it). If not,
 5. Cite the RFC; restate only what this repo must do. A spec that will not fit on a page is usually two features.
 6. Unknowns → `[NEEDS CLARIFICATION: …]`; ask the user; resolve; never guess.
 7. Constitution check (§10).
-7b. If the spec **amends** another feature: edit that spec now, add a dated line naming this feature under its `## Changes` section (after the required sections), and ask the user to re-approve it too. An extension specifies only its delta.
+7b. If the spec **amends** another feature: edit that spec now, add a dated line naming this feature under its `## Changes` section (after the required sections), and ask the user to re-approve it too. An extension specifies only its delta. When the target is a **baseline** (existing behaviour), also update its requirement text and state in this spec what must be preserved; the baseline must be approved and unchanged, or the relation is refused (GW076).
 8. Ask the user to review and run `/groundwork-specflow:approve <path to spec.md>`. **Stop** until approved.
 
 Finally run `python3 "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py" check` and fix every error it reports for this document before asking the user to review.

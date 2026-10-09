@@ -181,7 +181,10 @@ def bug_state(ctx: C.Ctx, slug: str) -> BugState:
                 )
                 continue
             sp = C.doc_state(fd / "spec.md", rc)
-            if not sp.approved:
+            why = C.reference_problem(rc, fd)
+            if why:
+                add("GW062", "error", f"violates {rid}@{feat}: {why}")
+            elif not sp.approved:
                 add(
                     "GW062",
                     "error",

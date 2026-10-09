@@ -58,6 +58,13 @@ Use the **code-layout** skill. `discovery.json` → `layout` shows whether the r
 - **Credentials:** `init` makes `.env` git-ignored. If `check` reports a committed `.env` or a key written into a file, tell the user plainly that it must be removed **and rotated**. Don't fix it silently.
 - **Code map, always:** `init` writes `CODEMAP.md` from the code. Fill its **Holds** column (one line per folder, from what the code shows) and add notes. Run `groundwork.py codemap` again after the layout decision.
 
+## Existing behaviour: baselines, legacy specs, deferred capabilities (existing code only)
+An existing repo has behaviour nobody specified. This is a normal bootstrap step, not an afterthought — use the **baseline** skill:
+- **Legacy specs** (`init` printed "legacy specs: N …", or `specs/` holds documents with no GroundWork front matter): `groundwork.py adopt-specs --dry-run`, then `adopt-specs`. They come in as `origin: imported`, pending — references, nothing approved. Tell the user which ones the original tool did not mark finished. Classify each with the user (baseline · planned · archived · split).
+- **No specs:** propose a capability inventory from `discovery.json`, `CODEMAP.md`, the README and docs (business capabilities, current vs legacy surfaces), record it with `groundwork.py capability set …`, and ask which to baseline **now** (recommend core workflows and paths where failure costs money, loses data or breaks a consumer). "None for now" is allowed; the deferred ones stay visible in `specs/README.md`.
+- For each selected capability: investigate, interview, draft the baseline (`new-baseline`), read it back, and ask the user to approve (several paths in one `/groundwork-specflow:approve`). Never canonise a defect: a confirmed guarantee the code breaks is a *Known discrepancy* with a bug reference.
+- End with `groundwork.py capabilities` and say plainly what is baselined, what is deferred and what is still pending classification. Confirming the foundation docs does not approve any baseline.
+
 ## AGENTS.md
 **Python projects use `uv`, never pip.** Write the commands as `uv sync`, `uv run pytest` etc. (verify each by running it). If `discovery.json` shows
 `python.other_managers` (pip requirements, poetry, pipenv), do **not** migrate silently: ask (`AskUserQuestion`: Migrate to uv (Recommended) / Keep current for now)

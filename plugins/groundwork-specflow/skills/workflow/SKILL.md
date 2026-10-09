@@ -31,6 +31,8 @@ workspace (RFC → CONTRACTS/) before either repo builds it. Never make a quiet 
 9. **refresh** — whenever reality drifts from the foundation docs (`groundwork.py fresh`), and always before handover.
 10. **handover** — spec handover.md per repo, plus one workspace DECISIONS/handovers/ file per cross-repo RFC, so the next engineer (or agent) can continue cold.
 
+Alongside the path, not a step of it: **baseline** — specs with `origin: baseline` describe behaviour that existed before GroundWork (no RFC, no tasks, never in flight; approved by a human, then extendable, amendable and citable by bugs). Legacy specs imported by `adopt-specs` are `origin: imported` references until a person classifies them. The session context lists both under DOCUMENTATION REVIEW, never under IN FLIGHT.
+
 ## Resume, bugs, and relationships
 - **Resuming** any unfinished work (a closed session, another person, another agent): the **resume** skill reads `groundwork.py board` — everything in flight, its next action, last note, blockers.
 - **Bugs**: the **fix-bug** skill. A bug is a violated requirement; the fix is gated on citing which (across specs if needed), a classification (code-bug / spec-gap / design-flaw), and a regression test.

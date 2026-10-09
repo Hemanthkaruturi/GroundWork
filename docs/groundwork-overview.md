@@ -10,10 +10,10 @@ GroundWork is a plugin for Claude Code and Devin. It makes the agent follow a sh
 
 | | |
 | --- | --- |
-| 18 skills | one for each step of the path, plus resume, refresh, bugs, ownership, code layout, code quality and plain writing |
+| 19 skills | one for each step of the path, plus resume, refresh, bugs, ownership, code layout, code quality, baseline and plain writing |
 | 6 hooks | the gate before edits and shell commands, session awareness, reminders, reply length |
-| 65 numbered rules | checked with no AI and no network, on a laptop, in a git hook and in CI |
-| 200 automated tests | the whole lifecycle, and every rule has a test that breaks exactly that rule |
+| 71 numbered rules | checked with no AI and no network, on a laptop, in a git hook and in CI |
+| 237 automated tests | the whole lifecycle, and every rule has a test that breaks exactly that rule |
 | 2 coding agents | Claude Code, and Devin (CLI and Desktop), from the same plugin |
 | 3 platforms | Linux, macOS and Windows, tested on Python 3.10 and 3.12 |
 | 0 network calls | it runs on your machine, collects nothing and sends nothing |
@@ -47,6 +47,7 @@ Every feature, in one line, with where to see it.
 | **Credentials** | Secrets come only from environment variables (locally `.env`, git-ignored); a committed `.env` or a pasted key is caught | 5.32 |
 | **Code quality** | One recorded toolchain per repo (formatter, linter, types, tests), run by `verify`, plus ten coding rules every agent reads in AGENTS.md | 5.33 |
 | **Onboarding existing projects** | `init` gathers evidence, `doctor` shows how far the project is from the standard | 5.14, 5.18 |
+| **Baselines for existing behaviour** | What the code already does becomes approved specs; legacy specs are imported and classified, never rewritten; later features extend or amend them and bugs can cite them | 5.34 |
 | **Enforcement dial and emergency bypass** | Block, warn or off, and a logged 60-minute bypass for real emergencies | 5.27 |
 | **Git hook and CI** | The same check on every commit and every pull request | 5.2, 5.13, 5.28 |
 | **Short, plain replies** | Answer first, about 150 words, nothing important lost | 5.15 |
@@ -103,7 +104,7 @@ Fix *where* things live, *what* each document contains, and *who* approves. Leav
 ### Structure everyone shares
 - **Two levels, plus standalone.** A *workspace* holds the product-level truth (project brief, architecture, rules, contracts, decisions). Each *repo* holds its own code, specs and internals. A single repo with no workspace above it is *standalone* and carries both sets of documents. The agent always knows which level it is on, and a directory that is neither is *unknown*: nothing may be built there.
 - **Standard documents:** `PROJECT`, `ARCHITECTURE`, `CONSTITUTION` (the non-negotiable rules), `AGENTS`, RFCs, contracts, specs, plans, tasks, evals, bug records, handovers.
-- **A written standard** (`STANDARD.md`) with 65 numbered rules. `groundwork check` verifies them with no AI and no network, so it runs the same on a laptop, in a git hook and in CI.
+- **A written standard** (`STANDARD.md`) with 71 numbered rules. `groundwork check` verifies them with no AI and no network, so it runs the same on a laptop, in a git hook and in CI.
 
 ### Every repo looks the same inside
 - **A standard code layout.** Business logic lives in `core/`. Code that talks to an outside system (an LLM, a database, an HTTP API, a queue, email) lives in `connectors/`, one folder per system. Routes, commands and workers live in `entrypoints/`, and settings are read only in `config/`. A small wiring file plugs connectors into core. There are profiles for services, command-line tools, web front ends and libraries.
@@ -892,6 +893,34 @@ The agent may not make it green by switching a rule off, adding an ignore commen
 ```
 On the standard toolchain, files over 400 lines are flagged, because long files hide duplication and mix jobs.
 
+### 5.34 Baselines: existing behaviour becomes a reference, not a guess
+An adopted repo has behaviour nobody specified. Without a written reference the next feature cannot say what it extends, and the first bug cannot cite a requirement. GroundWork fills that gap with **baseline specs** (`origin: baseline`): what the system does today, written from the code and tests, with the *why* confirmed by a person. A baseline is history, not work: it descends from no RFC, has no tasks, and never appears as work in flight. Once a human approves it, a feature can extend or amend it and a bug can cite it.
+
+Repos that already have specs from another tool are handled the same way. `adopt-specs` brings them in as references without touching a line of their text *(real output on a copy of a 14-spec repository)*:
+```
+[llm-gateway] imported: 001-clients-and-tenants, 002-price-book-and-cost-model, … 014-cloud-run-deployment
+  not marked finished in the original — history or work in flight? the user decides:
+    - 009-actual-provider-spend: original status 'Draft'
+    - 011-web-search: original status 'Draft', tasks 7/46
+    - 014-cloud-run-deployment: original status 'In progress', tasks 8/9
+
+Imported documents are `origin: imported`, `adoption_state: pending`: references, not approved
+requirements. Next: the baseline skill investigates each, then
+`groundwork.py adopt-specs --classify baseline|planned|archived <slug>`.
+```
+Imported does not mean finished, intended or approved. A person classifies each document: **baseline** (implemented behaviour worth keeping as the reference), **planned** (unfinished work that continues through the normal path), or **archived**. The session context lists them under *DOCUMENTATION REVIEW*, never under *IN FLIGHT* *(real output)*:
+```
+DOCUMENTATION REVIEW (references, not work to build; baseline skill): 14 imported awaiting classification
+  - 001-clients-and-tenants — imported — awaiting classification
+  …
+```
+A repo with no specs gets a **capability inventory** instead: the agent proposes capabilities from the code and docs, the user corrects the boundaries and picks which to baseline now, and the rest stay visible as *deferred* in a generated table in `specs/README.md`. For each selected capability the agent reads the code, interviews the user about purpose, intent and what must be preserved, and writes the baseline with an evidence table (which file, which test, inspected or executed) and a *Known discrepancies* list for guarantees the code currently breaks. A defect is never written down as the requirement. Approval is one human command for several documents; if any fails its check, none is recorded *(illustration)*:
+```
+/groundwork-specflow:approve specs/002-case-search/spec.md specs/003-billing/spec.md
+002-case-search/spec.md: approved (1/1 sign-offs: meena@example.com)
+003-billing/spec.md: approved (1/1 sign-offs: meena@example.com)
+```
+
 ## 6. How it helps
 
 | If you are… | You get… |
@@ -924,7 +953,7 @@ The step-by-step version is in `docs/manual-testing.md`.
 
 ## 8. What's inside
 
-**18 skills**
+**19 skills**
 
 | Skill | What it does |
 | --- | --- |
@@ -967,7 +996,7 @@ The step-by-step version is in `docs/manual-testing.md`.
 | `quality`, `quality init`, `quality keep`, `quality set`, `verify` | record the repo's code quality toolchain; run format, lint, types and tests |
 | `codemap`, `codemap --check` | write `CODEMAP.md` (where each kind of code lives) from the code; check it is current |
 
-**Quality:** 200 automated tests cover the whole lifecycle, on Linux, macOS and Windows, on Python 3.10 and 3.12. Every numbered rule has a test that breaks exactly that rule.
+**Quality:** 237 automated tests cover the whole lifecycle, on Linux, macOS and Windows, on Python 3.10 and 3.12. Every numbered rule has a test that breaks exactly that rule.
 
 **Privacy:** it runs locally, makes no network requests, has no telemetry, and never uses, stores or sends credentials. The key check reports only where a key is, never the key itself, and never opens `.env`. See `PRIVACY.md`.
 

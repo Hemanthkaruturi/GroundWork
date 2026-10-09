@@ -15,6 +15,7 @@ import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+import groundwork_baseline as BL
 import groundwork_brevity as V
 import groundwork_bugs as B
 import groundwork_codemap as M
@@ -364,6 +365,21 @@ def check_features(ctx: C.Ctx, r: Report) -> None:
                 "GW020", fdir, "feature directory must be NNN-slug (lowercase, hyphens)"
             )
             continue
+        meta = C.spec_meta(fdir)
+        bad_meta = BL.metadata_problems(fdir, meta)
+        for b in bad_meta:
+            r.err("GW027", fdir / "spec.md", b)
+        if bad_meta:
+            continue
+        if C.is_imported(meta):
+            _imported(ctx, r, fdir, meta)
+            continue
+        if C.is_baseline(meta):
+            if not (fdir / "spec.md").is_file():
+                r.err("GW020", fdir, "missing: spec.md")
+                continue
+            _baseline(ctx, r, fdir, C.doc_state(fdir / "spec.md", ctx))
+            continue
         absent = [
             n
             for n in ("spec", "plan", "tasks", "evals")
@@ -375,6 +391,184 @@ def check_features(ctx: C.Ctx, r: Report) -> None:
         _handover(ctx, r, fdir)
         spec = C.doc_state(fdir / "spec.md", ctx)
         _feature(ctx, r, fdir, spec)
+    st, why = BL.index_state(ctx)
+    if st in ("missing", "outdated"):
+        r.warn(
+            "GW041",
+            BL.index_path(ctx),
+            f"capability table is {st}" + (f": {why}" if why else ""),
+            "run: groundwork.py capabilities",
+        )
+
+
+def _imported(ctx: C.Ctx, r: Report, fdir: Path, meta: dict) -> None:
+    """A legacy document under GroundWork metadata: a reference awaiting a person, never judged as work."""
+    st = C.adoption_state(meta) or "pending"
+    for name in BL.historical(meta):
+        if not (fdir / name).is_file():
+            r.warn(
+                "GW028",
+                fdir / name,
+                "historical companion listed in front matter but missing",
+            )
+    if meta.get("id") != fdir.name:
+        r.err(
+            "GW021",
+            fdir / "spec.md",
+            f"front matter id '{meta.get('id')}' != directory '{fdir.name}'",
+        )
+    if st == "archived":
+        return
+    text = (fdir / "spec.md").read_text(encoding="utf-8")
+    gaps = missing_sections(text, SPEC_SECTIONS, numbered=True)
+    r.warn(
+        "GW028",
+        fdir / "spec.md",
+        f"imported legacy spec awaiting classification (original status: {meta.get('adopted_status', '?')})"
+        + (f"; sections differing from the standard: {len(gaps)}" if gaps else ""),
+        "investigate and interview (baseline skill), then: groundwork.py adopt-specs --classify baseline|planned|archived "
+        + fdir.name,
+    )
+
+
+def _baseline(ctx: C.Ctx, r: Report, fdir: Path, spec: C.DocState) -> None:
+    """A baseline documents existing behaviour: spec only, no RFC, never in flight — but its requirements
+    must be real (ids, acceptance criteria, verification guidance, intent, discrepancies, evidence)."""
+    stext = (fdir / "spec.md").read_text(encoding="utf-8")
+    meta = spec.meta
+    ref = str(meta.get("rfc", "") or "").strip()
+    if ref and C.find_rfc(ctx, ref) is None:
+        r.err(
+            "GW021",
+            fdir / "spec.md",
+            f"cites RFC '{ref}' which does not exist (a baseline needs none; leave it empty)",
+        )
+    if meta.get("id") != fdir.name:
+        r.err(
+            "GW021",
+            fdir / "spec.md",
+            f"front matter id '{meta.get('id')}' != directory '{fdir.name}'",
+        )
+    _approval_claims(r, spec, "GW026")
+    for name in BL.historical(meta):
+        if not (fdir / name).is_file():
+            r.warn(
+                "GW028",
+                fdir / name,
+                "historical companion listed in front matter but missing",
+            )
+    if spec.placeholders:
+        r.warn(
+            "GW025",
+            spec.path,
+            f"baseline is unfinished ({spec.placeholders} unresolved marker(s))",
+        )
+        return
+    adopted = bool(meta.get("adopted_from"))
+    miss = missing_sections(stext, SPEC_SECTIONS, numbered=True)
+    if miss:
+        (r.warn if adopted else r.err)(
+            "GW022",
+            fdir / "spec.md",
+            ("adopted baseline keeps legacy headings; " if adopted else "")
+            + "missing/misordered section(s): "
+            + "; ".join(miss),
+            "add the missing sections when the baseline is next touched"
+            if adopted
+            else "",
+        )
+    for b in BL.content_problems(meta, stext):
+        r.err("GW029", fdir / "spec.md", b)
+    gaps = BL.evidence_gaps(stext)
+    if gaps:
+        r.warn(
+            "GW029",
+            fdir / "spec.md",
+            f"{len(gaps)} requirement(s) have no row in the Evidence table: "
+            + ", ".join(gaps[:8])
+            + (f" (+{len(gaps) - 8} more)" if len(gaps) > 8 else ""),
+            "add a row per requirement: implementation, tests or observations, verification state, date",
+        )
+    _requirement_ids(r, fdir, stext)
+    # optional governed companions (not historical): held to the normal shape and pinned to the spec
+    hist = BL.historical(meta)
+    shash = C.body_hash(stext)
+    frs = _ids(stext, "FR")
+    acs = _ids(stext, "AC")
+    for name in ("plan", "evals"):
+        f = fdir / f"{name}.md"
+        if not f.is_file() or f.name in hist or C.doc_state(f, ctx).placeholders:
+            continue
+        pinned = C.split_fm(f.read_text(encoding="utf-8"))[0].get("spec_version", "")
+        if not pinned:
+            r.warn(
+                "GW036",
+                f,
+                f"{name}.md is not pinned to a spec version",
+                "groundwork.py plan-sync",
+            )
+        elif pinned != shash:
+            r.err(
+                "GW037",
+                f,
+                f"{name}.md was written against an earlier version of the spec (the spec changed since)",
+                "re-verify it against the current spec, then: groundwork.py plan-sync",
+            )
+        if name == "plan":
+            pm = missing_sections(
+                f.read_text(encoding="utf-8"), PLAN_SECTIONS, numbered=True
+            )
+            if pm:
+                r.err("GW030", f, "missing/misordered section(s): " + "; ".join(pm))
+        else:
+            etext = f.read_text(encoding="utf-8")
+            for ac in acs:
+                if not re.search(rf"\b{ac}\b", etext):
+                    r.err("GW033", f, f"{ac} has no evaluation scenario")
+    del frs
+
+
+def _requirement_ids(r: Report, fdir: Path, stext: str) -> list[str]:
+    """GW023 for any finished spec: unique ids, FR and AC present, every AC cites a known requirement."""
+    frs, nfrs, acs = _ids(stext, "FR"), _ids(stext, "NFR"), _ids(stext, "AC")
+    for kind, ids in (
+        ("FR", frs),
+        ("NFR", nfrs),
+        ("AC", acs),
+        ("US", _ids(stext, "US")),
+    ):
+        dup = {i for i in ids if ids.count(i) > 1}
+        if dup:
+            r.err(
+                "GW023", fdir / "spec.md", "duplicate id(s): " + ", ".join(sorted(dup))
+            )
+    if not frs:
+        r.err(
+            "GW023", fdir / "spec.md", "no numbered functional requirements (**FR-1**)"
+        )
+    if not acs:
+        r.err("GW023", fdir / "spec.md", "no numbered acceptance criteria (**AC-1**)")
+    known = set(frs) | set(nfrs)
+    proven: set[str] = set()
+    for m in re.finditer(r"^- \*\*(AC-\d+)\*\*(.*)$", stext, re.MULTILINE):
+        refs = set(re.findall(r"\b(N?FR-\d+)\b", m.group(2)))
+        if not refs:
+            r.err(
+                "GW023",
+                fdir / "spec.md",
+                f"{m.group(1)} does not cite the requirement it proves",
+            )
+        for x in refs - known:
+            r.err("GW023", fdir / "spec.md", f"{m.group(1)} cites unknown {x}")
+        proven |= refs
+    for fr in frs:
+        if fr not in proven:
+            r.warn(
+                "GW023",
+                fdir / "spec.md",
+                f"{fr} is not proven by any acceptance criterion",
+            )
+    return frs
 
 
 def _feature(ctx: C.Ctx, r: Report, fdir: Path, spec: C.DocState) -> None:
@@ -440,44 +634,9 @@ def _feature(ctx: C.Ctx, r: Report, fdir: Path, spec: C.DocState) -> None:
             "Manual test section is empty",
             "say exactly how a human verifies this by hand",
         )
-    frs, nfrs, acs = _ids(stext, "FR"), _ids(stext, "NFR"), _ids(stext, "AC")
-    for kind, ids in (
-        ("FR", frs),
-        ("NFR", nfrs),
-        ("AC", acs),
-        ("US", _ids(stext, "US")),
-    ):
-        dup = {i for i in ids if ids.count(i) > 1}
-        if dup:
-            r.err(
-                "GW023", fdir / "spec.md", "duplicate id(s): " + ", ".join(sorted(dup))
-            )
-    if not frs:
-        r.err(
-            "GW023", fdir / "spec.md", "no numbered functional requirements (**FR-1**)"
-        )
-    if not acs:
-        r.err("GW023", fdir / "spec.md", "no numbered acceptance criteria (**AC-1**)")
+    frs = _requirement_ids(r, fdir, stext)
+    nfrs, acs = _ids(stext, "NFR"), _ids(stext, "AC")
     known = set(frs) | set(nfrs)
-    proven: set[str] = set()
-    for m in re.finditer(r"^- \*\*(AC-\d+)\*\*(.*)$", stext, re.MULTILINE):
-        refs = set(re.findall(r"\b(N?FR-\d+)\b", m.group(2)))
-        if not refs:
-            r.err(
-                "GW023",
-                fdir / "spec.md",
-                f"{m.group(1)} does not cite the requirement it proves",
-            )
-        for x in refs - known:
-            r.err("GW023", fdir / "spec.md", f"{m.group(1)} cites unknown {x}")
-        proven |= refs
-    for fr in frs:
-        if fr not in proven:
-            r.warn(
-                "GW023",
-                fdir / "spec.md",
-                f"{fr} is not proven by any acceptance criterion",
-            )
 
     shash = C.body_hash(stext)
     for name in ("plan", "tasks", "evals"):
@@ -578,6 +737,28 @@ def check_relations(ctx: C.Ctx, r: Report, workspace_wide: bool) -> None:
         sdir = rc.repo / "specs" / e.src[1]
         src_spec = C.doc_state(sdir / "spec.md", rc)
         trc = next((c for c in R.contexts(ctx) if c.repo.name == e.dst[0]), None)
+        if trc:
+            # a baseline or imported target is citable only when approved / classified (§5j)
+            why = C.reference_problem(trc, trc.repo / "specs" / e.dst[1])
+            if why:
+                r.err(
+                    "GW076",
+                    sdir / "spec.md",
+                    f"{e.kind}: {e.raw} — {why}",
+                    "approve the baseline (or classify the import) before relating work to it",
+                )
+            for w in (
+                C.dependency_warnings(rc, src_spec)
+                if e.kind in ("depends_on", "builds_against")
+                else []
+            ):
+                if w.startswith(e.raw + " "):
+                    r.warn(
+                        "GW075",
+                        sdir / "spec.md",
+                        w,
+                        "read those discrepancies before building on it",
+                    )
         if e.kind == "amends" and src_spec.approved and trc:
             text = (trc.repo / "specs" / e.dst[1] / "spec.md").read_text(
                 encoding="utf-8"
@@ -649,8 +830,11 @@ def check_ownership(ctx: C.Ctx, r: Report) -> None:
                 st = C.doc_state(sp, ctx)
                 items.append((sp, st.meta, st.approved, "feature"))
     for path, meta, approved, kind in items:
+        adopted = bool(
+            C.origin(meta)
+        )  # a baseline has an owner but no requester, implementer or support role
         if approved:
-            for role in ("requested_by", "owner"):
+            for role in ("owner",) if adopted else ("requested_by", "owner"):
                 if not str(meta.get(role, "")).strip():
                     r.warn(
                         "GW080",
@@ -666,7 +850,7 @@ def check_ownership(ctx: C.Ctx, r: Report) -> None:
                         path,
                         f"`{role}`: '{name}' is not listed under 'Who works on what' in PROJECT.md",
                     )
-        if kind == "feature":
+        if kind == "feature" and not adopted:
             fdir = path.parent
             done, total = C.task_counts(ctx, fdir.name)
             if total and done == total:
@@ -700,6 +884,8 @@ def check_brevity(ctx: C.Ctx, r: Report) -> None:
         docs += [(st.path, "rfc") for st in C.rfcs(ctx)]
     if ctx.level in ("repo", "standalone"):
         for fdir in C.feature_dirs(ctx):
+            if C.is_imported(C.spec_meta(fdir)):
+                continue  # a legacy reference awaiting classification; judged once reconciled
             docs += [(fdir / "spec.md", "spec"), (fdir / "plan.md", "plan")]
         docs += [(bp, "bug") for bp in B.bug_paths(ctx)]
     for path, kind in docs:

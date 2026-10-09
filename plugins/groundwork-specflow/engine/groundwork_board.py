@@ -26,6 +26,8 @@ SKILL_FOR = {
     "handover": "handover",
     "deps": "resume",
     "bug": "fix-bug",
+    "classify": "baseline",
+    "baseline": "baseline",
 }
 
 
@@ -175,6 +177,26 @@ def collect(ctx: C.Ctx, include_done: bool = False) -> list[Work]:
         for fdir in C.feature_dirs(rc):
             if not (fdir / "spec.md").is_file():
                 continue
+            meta = C.spec_meta(fdir)
+            if C.origin(meta):
+                # baselines and imports are references, never implementation work; `--all` lists them
+                if not include_done:
+                    continue
+                st = C.feature_steps(rc, fdir.name)[0]
+                out.append(
+                    Work(
+                        "baseline" if C.is_baseline(meta) else "import",
+                        f"{rname}/{fdir.name}" if prefix else fdir.name,
+                        f"{rname}/{fdir.name}" if prefix else fdir.name,
+                        st.detail,
+                        "" if st.ok else C.INSTRUCTIONS.get(st.key, ""),
+                        "baseline",
+                        _newest(fdir),
+                        repo=rname,
+                        owner=str(meta.get("owner", "")),
+                    )
+                )
+                continue
             steps = C.feature_steps(rc, fdir.name)
             done, total = C.task_counts(rc, fdir.name)
             bad = next((s for s in steps if not s.ok), None)
@@ -231,9 +253,9 @@ def collect(ctx: C.Ctx, include_done: bool = False) -> list[Work]:
     return out
 
 
-def render(items: list[Work]) -> str:
+def render(items: list[Work], review: list[str] | None = None) -> str:
     if not items:
-        return "Nothing in flight."
+        return "\n".join(["Nothing in flight.", *(review or [])])
     lines = ["IN FLIGHT (active first, then most recently touched)"]
     for i, w in enumerate(items, 1):
         lines.append(
@@ -247,6 +269,8 @@ def render(items: list[Work]) -> str:
             lines.append(f"      owner: {w.owner}")
         if w.note:
             lines.append(f"      last note: {w.note}")
+    if review:
+        lines += ["", *review]
     return "\n".join(lines)
 
 

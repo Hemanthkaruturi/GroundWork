@@ -173,12 +173,50 @@ def diagnose_ctx(ctx: C.Ctx, ws_children: bool = True) -> Diagnosis:
     ):
         add("Freshness", "ok", "documents confirmed and current")
 
-    # process
-    features = [] if ctx.level == "workspace" else C.feature_dirs(ctx)
+    # process — planned features only; baselines and imports are documentation (§5j)
+    import groundwork_baseline as BL
+
+    all_dirs = [] if ctx.level == "workspace" else C.feature_dirs(ctx)
+    features = [f for f in all_dirs if not C.origin(C.spec_meta(f))]
     rf = C.rfcs(ctx) if ctx.level != "unknown" else []
     approved = [r for r in rf if r.approved]
     if ctx.level in ("workspace", "standalone"):
         add("Process", "info", f"{len(rf)} RFC(s), {len(approved)} approved")
+    if len(all_dirs) != len(features):
+        kinds: dict[str, int] = {}
+        for f in all_dirs:
+            m = C.spec_meta(f)
+            if C.is_imported(m):
+                k = "imported " + (C.adoption_state(m) or "pending")
+            elif C.is_baseline(m):
+                k = "baseline " + C.doc_state(f / "spec.md", ctx).status
+            else:
+                continue
+            kinds[k] = kinds.get(k, 0) + 1
+        add(
+            "Documentation",
+            "info",
+            "existing behaviour: "
+            + ", ".join(f"{n} {k}" for k, n in sorted(kinds.items())),
+        )
+    review = BL.review_items(ctx) if ctx.level != "workspace" else []
+    if review:
+        add(
+            "Documentation",
+            "warn",
+            f"{len(review)} item(s) await a person",
+            "; ".join(f"{a}: {b}" for a, b in review[:3]),
+            "baseline skill: classify imports, review and approve baselines, decide deferred capabilities",
+        )
+    ist, iwhy = BL.index_state(ctx) if ctx.level != "workspace" else ("none", "")
+    if ist in ("missing", "outdated"):
+        add(
+            "Documentation",
+            "warn",
+            f"capability table {ist}",
+            iwhy,
+            "groundwork.py capabilities",
+        )
     for f in features:
         try:
             steps = C.feature_steps(ctx, f.name)
@@ -203,7 +241,7 @@ def diagnose_ctx(ctx: C.Ctx, ws_children: bool = True) -> Diagnosis:
                 "groundwork.py check",
             )
     if not features and ctx.level != "workspace":
-        add("Process", "info", "no features specced yet", fix="")
+        add("Process", "info", "no planned features specced yet", fix="")
 
     # people & accountability
     import groundwork_people as PP

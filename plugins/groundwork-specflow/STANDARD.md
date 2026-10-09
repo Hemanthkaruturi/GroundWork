@@ -1,6 +1,6 @@
 # The Groundwork Standard
 
-**Version 0.7.0** · the specification that `groundwork check` enforces and the templates implement.
+**Version 0.8.0** · the specification that `groundwork check` enforces and the templates implement.
 
 Everything a team or an agent needs to know to work "the Groundwork way" is here. If two
 projects follow the same version of this document, a person or an agent moving between them
@@ -74,7 +74,9 @@ documents cannot be approved. Section names below are matched case-insensitively
 **RFC** (`DECISIONS/RFC-NNNN-slug.md`) — records a decision. Front matter: `id, title, status, classification (internal|api), signoffs_required, author, created`. Numbered `##` sections, in order: *1 Summary · 2 The need · 3 Interview record · 4 Proposal · 5 Alternatives considered · 6 Risks and objections · 7 Impact · 8 Cross-repo contract · 9 Out of scope · 10 Open questions*.
 An `api` RFC (one that crosses a repository boundary) MUST fill §8 and MUST require at least two sign-offs — one for every lead it touches.
 
-**Spec** (`specs/NNN-slug/spec.md`) — *what and why*, never *how*. Front matter: `id` (= directory name), `rfc`, `title`, `status`, `created`, `author`, the ownership roles (§5e), and the relations `extends`, `depends_on`, `builds_against`, `amends` (§5c). An amended spec gains a `## Changes` section after the required ones. Numbered sections: *1 Problem · 2 Users and context · 3 User stories · 4 Functional requirements · 5 Non-functional requirements · 6 Acceptance criteria · 7 Failure behaviour · 8 Manual test · 9 Out of scope · 10 Constitution check*.
+**Spec** (`specs/NNN-slug/spec.md`) — *what and why*, never *how*. Front matter: `id` (= directory name), `rfc`, `title`, `status`, `created`, `author`, the ownership roles (§5e), the relations `extends`, `depends_on`, `builds_against`, `amends` (§5c), and optionally `origin` (§5j: absent for a planned feature, `baseline` for existing behaviour, `imported` for a legacy document, which also carries `adoption_state`). An amended spec gains a `## Changes` section after the required ones. Numbered sections: *1 Problem · 2 Users and context · 3 User stories · 4 Functional requirements · 5 Non-functional requirements · 6 Acceptance criteria · 7 Failure behaviour · 8 Manual test · 9 Out of scope · 10 Constitution check*.
+
+**Baseline spec** (`origin: baseline`) — the same ten sections, written for behaviour that already exists, followed by `## Intent and rationale` (the interview record: question, answer, source or person, effect), `## Known discrepancies` (confirmed guarantees the code currently breaks, `- [ ]` open / `- [x]` resolved, each naming a bug record), `## Evidence` (one row per FR/NFR/AC: implementation paths, tests or observations, verification state *inspected · executed/passed · executed/failed · not verified*, date) and `## Changes`. Extra front matter: `observed_at`, optional `source_revision`, and for a reconciled import `adopted_from`, `adopted_status`, `adopted_at`, `historical_companions`.
 
 **Plan** (`plan.md`) — *how*. Numbered: *1 Approach · 2 Affected modules and files · 3 Data model and migrations · 4 Interfaces and contracts · 5 Failure modes and edge cases · 6 Test strategy · 7 Rollout and rollback · 8 Constitution check*.
 
@@ -94,7 +96,7 @@ interview → RFC → [approve] → spec → [approve] → plan → tasks → ev
 
 1. **Interview.** Before any RFC, the agent questions the human until the picture is unambiguous, and records the exchange in RFC §3.
 2. **RFC.** Decides. Classified `internal` or `api`. Filed in `DECISIONS/` and indexed in `DECISIONS/README.md`.
-3. **Spec.** Descends from exactly one approved RFC (`rfc:` front matter). One spec per repo touched.
+3. **Spec.** Descends from exactly one approved RFC (`rfc:` front matter). One spec per repo touched. (A *baseline* spec, §5j, descends from no RFC: it records what already exists.)
 4. **Plan, tasks, evals.** Complete before code. Evals are written *before* implementation.
 5. **Implement.** One task at a time; checks green after each; docs updated in the same change.
 6. **Handover.** So the next engineer or agent continues without reverse-engineering decisions.
@@ -195,6 +197,28 @@ For every RFC, feature and bug the project MUST be able to say **whom to contact
 - Names in roles SHOULD appear in the people table (GW081); approved RFCs/specs SHOULD have a requester and owner (GW080); implemented features SHOULD record an implementer (GW082) and a support contact (GW083). Changing a role does not affect an approval (approvals cover the document body).
 - A change that affects a feature owned by someone else MUST prompt the agent to tell the user who that is.
 
+## 5j. Baselines — behaviour that existed before GroundWork
+
+A repo adopted with code already in it has behaviour nobody specified. Later features must be able to say what they extend or amend, and bugs must be able to cite a requirement, so that behaviour is written down as **baselines**: specs with `origin: baseline`. A baseline is **history, not work**: observation comes from the code and tests, intent from the user or reliable existing documents. It MUST NOT describe a defect as the requirement; a confirmed guarantee the code breaks goes under *Known discrepancies* with a bug reference.
+
+| Concern | Planned feature (no `origin`) | Baseline (`origin: baseline`) | Imported (`origin: imported`) |
+| --- | --- | --- | --- |
+| Lineage | approved RFC (GW021) | none; a cited RFC must still exist | none |
+| Files | spec, plan, tasks, evals (GW020) | `spec.md` only; `plan.md`/`evals.md` MAY exist as governed companions (checked, pinned); `tasks.md` only as a `historical_companions` entry (GW027) | whatever was imported, listed in `historical_companions`, never judged |
+| Shape | all sections (GW022/024) | a newly written baseline: all sections (E); a reconciled import (`adopted_from` set): legacy headings allowed (W), but verification guidance, intent, discrepancies and evidence MUST be present (GW029) | reported once as awaiting classification (GW028) |
+| Requirement ids | GW023 | GW023 | — |
+| In flight | yes | never; `board --all` lists it | never; the review summary lists it until classified |
+| Satisfies `depends_on` / `builds_against` | every task ticked / spec approved and plan finished | approved and unchanged since (GW076 otherwise); open discrepancies warn (GW075) | never (GW076) |
+| Citable by `extends`, `amends`, bug `violates` | per §5c/§5d | only while approved and unchanged (GW076/GW062) | never until classified |
+| Ownership | §5e | `owner` required on approval (GW080); no requester, implementer or support role | — |
+| Doctor stage 5 | counts | does not count | does not count |
+
+**Importing legacy specs.** `groundwork.py adopt-specs` brings `specs/NNN-slug/spec.md` directories that carry no GroundWork lineage under its metadata as `origin: imported`, `adoption_state: pending`: the body is byte-preserved, existing front-matter keys are never changed, original status and dates are kept verbatim as `adopted_status`/`created`, and nothing is approved, completed or activated. A person then classifies each with `adopt-specs --classify baseline|planned|archived`. `archived` keeps the document discoverable but never citable. Approval of a pending or archived import is refused.
+
+**Approval of a baseline** follows §7, plus: behavioural content is judged from the body only (the body is what the approval hashes), and the front matter must carry a valid `origin`, no `adoption_state`, an `owner` and an `id` matching the directory. The body must have numbered FR and AC, a non-empty *Manual test*, and non-empty *Intent and rationale*, *Known discrepancies* and *Evidence* sections. A requirement with no Evidence row is a warning; unknown expected behaviour is a marker and blocks.
+
+**The capability index.** `.groundwork/capabilities.json` (committed) records what the repo does — one record per capability slug with `title`, `lifecycle` (`active · legacy · retired · planned · uncertain`, authoritative only once a person confirmed it), `sources`, `rationale_ref`, `specs` (zero or more linked `NNN-slug`; links are additive and idempotent), `next_action` and `interview_notes`. `groundwork.py capabilities` renders it into `specs/README.md` as a generated table (engine columns rewritten, the *Notes* column kept); coverage per row is derived from the linked specs (`baselined` only when every link is an approved baseline, else `partial (…)`, `import-review`, `uncovered (…)` or `deferred`), approval from the approval records and never from front matter. A table older than the records is GW041.
+
 ## 5f. Code layout
 
 Documents have fixed places; so can code. Each repo (and standalone) records **one decision** in `.groundwork/config.json` → `"layout"`, made by a human:
@@ -268,6 +292,7 @@ An existing repo is asked before any tool config is added, because a new formatt
 - Approval is a **human act**, recorded in `.groundwork/approvals.json` as a hash of the document body plus the signers.
 - A document's approval is valid only while its body is unchanged. Editing it makes the approval **stale** and it must be given again. The `status:` line in the front matter is a courtesy display; the record is the truth.
 - A document with `signoffs_required: N` is approved when N distinct people have approved the same body.
+- `approve` MAY take several documents at once. Every one is checked first (exists, has front matter, no markers, baseline requirements, not an unclassified import); if any fails, **none** is recorded. Each approval is still hashed and recorded against its own document.
 - A document MUST NOT be approved while unfinished.
 - An agent MUST NOT create, edit or run anything that produces an approval record.
 - The gate applies to every route by which code is written, not only the editor tools: shell redirections and heredocs, `tee`, `sed -i`, `cp`/`mv`, downloads saved to files, `patch`/`git apply` and inline interpreter scripts that write files are judged exactly like a Write. These are proposed agent tool commands that the gate parses for write targets; the plugin never executes them. (A script *file* that writes files when run is opaque to static analysis and is not covered.)
@@ -313,11 +338,14 @@ sections; they never invalidate a conforming project.
 | GW012 | E | An `api` RFC lacks a §8 contract or requires fewer than 2 sign-offs |
 | GW013 | E | An RFC claims `approved` but its approval is invalid (stale or forged) |
 | GW014 | W | An RFC is not listed in `DECISIONS/README.md` |
-| GW020 | E | A feature directory is not `NNN-slug` or lacks one of spec/plan/tasks/evals |
-| GW021 | E | A spec's `rfc` does not exist, its `id` mismatches the directory, or it is approved under an unapproved RFC |
-| GW022 | E | A finished spec lacks a required section |
+| GW020 | E | A feature directory is not `NNN-slug` or lacks one of spec/plan/tasks/evals (a baseline needs only spec.md) |
+| GW021 | E | A spec's `rfc` does not exist, its `id` mismatches the directory, or it is approved under an unapproved RFC (a baseline needs no RFC) |
+| GW022 | E/W | A finished spec lacks a required section (E; W for a reconciled import that keeps legacy headings) |
 | GW023 | E/W | Requirement ids duplicated, missing, unknown, or an AC that cites nothing (E); an FR proven by no AC (W) |
 | GW024 | E | A finished spec's Manual test is empty |
+| GW027 | E | A spec's `origin` or `adoption_state` is not a recognised value or combination, or a baseline carries a `tasks.md` that is not a historical companion |
+| GW028 | W | An imported legacy spec awaits classification, or a listed historical companion file is missing |
+| GW029 | E/W | A finished baseline lacks verification guidance, intent, known discrepancies or evidence (E); a requirement has no Evidence row (W) |
 | GW025 | W | A document of a feature is unfinished |
 | GW026 | E | A spec claims `approved` but its approval is invalid |
 | GW030 | E | A finished plan lacks a required section |
@@ -340,6 +368,8 @@ sections; they never invalidate a conforming project.
 | GW072 | E | An amended spec does not record the amendment under `## Changes` |
 | GW073 | W | Several unfinished features modify the same base at once |
 | GW074 | E | Implementation started while `depends_on`/`builds_against` are not ready |
+| GW075 | W | A dependency is an approved baseline with open known discrepancies |
+| GW076 | E | A relation targets a baseline that is not approved (or was edited since), or an imported document that is not classified |
 | GW036 | W | A finished plan/tasks/evals is not pinned to a spec version (`plan-sync`) |
 | GW037 | E | A finished plan/tasks/evals was written against an earlier version of the spec |
 | GW038 | W | Every task is done but the spec has no finished `handover.md` |
@@ -351,6 +381,7 @@ sections; they never invalidate a conforming project.
 | GW090 | W | A finished document exceeds its word budget (§5a″) |
 | GW091 | W | A finished document's sentences average more than 26 words |
 | GW040 | W | An approval record points at a file that no longer exists |
+| GW041 | W | The capability table in `specs/README.md` is missing or older than the records it is built from |
 | GW100 | E | The `layout` entry is malformed: unknown mode or profile, a role the profile lacks, or a path outside the repo (§5f) |
 | GW101 | W | A folder the profile requires does not exist |
 | GW102 | W | A role imports a role the profile does not allow (e.g. core → connectors) |
@@ -388,6 +419,7 @@ python3 <plugin>/engine/groundwork.py check --json     # machine-readable
   files, records `"standard"`, and writes `.groundwork/discovery.json` — evidence about an existing codebase (stack, manifests, entry
   points, tests, CI/infra, existing docs and ADRs, top contributors) for an agent to draft from. It is idempotent and never overwrites;
   `--retrofit` additively appends missing required sections to existing documents. In a workspace it covers every repo under it.
+- `groundwork.py adopt-specs [--dry-run] [slug …]` imports legacy spec directories as `origin: imported` (§5j); `adopt-specs --classify baseline|planned|archived <slug …>` classifies them. `groundwork.py new-baseline <slug> [--title T] [--capability C]` creates a baseline (spec.md only; active work unchanged). `groundwork.py capability set|link|unlink` edits capability records and `groundwork.py capabilities` regenerates the table.
 - `groundwork.py doctor [--json]` is read-only. It places the project on a ladder — **0 Not started** (required docs missing) ·
   **1 Scaffolded** (unfinished, or non-conforming) · **2 Documented** (finished, conforming) · **3 Current** (confirmed, not stale) ·
   **4 Guarded** (git hook or CI enforces the standard) · **5 Practicing** (the RFC → spec path is in use) — and lists ordered next steps.
@@ -404,7 +436,7 @@ Errors block; warnings block only with `--strict`. `enforcement: warn|off` in `.
 `check` needs only Python 3.10+ (tested on 3.12) and the project — no model, no network, no Claude Code — so it
 is the same on a laptop, in a git hook and in CI, for humans and for any agent.
 
-A project **conforms to Groundwork 0.7** when `check --strict` reports no findings.
+A project **conforms to Groundwork 0.8** when `check --strict` reports no findings.
 
 ## 11. Changing the standard
 

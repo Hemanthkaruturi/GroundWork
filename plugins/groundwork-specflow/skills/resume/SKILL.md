@@ -13,6 +13,7 @@ Every question to the user goes through the `AskUserQuestion` tool (load it with
 ## Steps
 1. Run `python3 "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py" board` (add `--all` to include finished work). Each item shows its state, the single next action, the last note, and what blocks it.
    Nothing in flight → there is nothing to resume: use the **interview** skill for new work or **fix-bug** for a defect.
+   A DOCUMENTATION REVIEW list (imports awaiting classification, baselines awaiting approval, deferred capabilities) is not work in flight: it waits for a person. Offer the **baseline** skill for it; never activate a baseline or an import (`activate` refuses).
 2. Choose the target:
    - The user's message clearly names or continues one item → that one; say which.
    - Otherwise ask (`AskUserQuestion`): the active item first (Recommended), then the next most recent, up to three, plus "Something new".

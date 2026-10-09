@@ -4,7 +4,7 @@ GroundWork is a plugin for Claude Code (and Devin) that makes a coding agent wor
 
 ## What it adds to Claude Code
 
-- **Skills** for each step: bootstrap, interview, RFC, spec, plan, tasks, evals, implement, handover, resume, bug fixing, ownership, code layout, code quality and plain writing.
+- **Skills** for each step: bootstrap, interview, RFC, spec, plan, tasks, evals, implement, handover, resume, bug fixing, ownership, code layout, code quality, baseline (existing behaviour and legacy specs) and plain writing.
 - **Commands you type:** `/groundwork-specflow:approve`, `/groundwork-specflow:bypass` (emergencies, logged) and `/groundwork-specflow:status`.
 - **Hooks** that run at session start, on each prompt, before file edits and shell commands, and at the end of a reply.
 - **A local command-line engine** (`engine/groundwork.py`) that checks projects against the written standard (`STANDARD.md`).

@@ -24,6 +24,7 @@ for _k in (
     "DEVIN_PROJECT_DIR",
     "DEVIN_PLUGIN_ROOT",
     "CLAUDE_PROJECT_DIR",
+    "PLUGIN_ROOT",
 ):  # tests pick the harness themselves
     ENV.pop(_k, None)
 

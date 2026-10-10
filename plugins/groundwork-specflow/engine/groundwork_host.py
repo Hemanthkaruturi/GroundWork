@@ -1,7 +1,7 @@
 """Which agent harness is calling the hooks, and how to talk back to it.
 
-One hooks/hooks.json serves Claude Code and Devin (CLI and Desktop); Devin loads a Claude plugin's hooks/hooks.json
-as-is. The harnesses differ in their tool names, in the fields they send, and in how a hook denies a tool call.
+One hooks/hooks.json serves Claude Code, Devin (CLI and Desktop) and Codex; Devin and Codex load a Claude plugin's
+hooks/hooks.json as-is. The harnesses differ in their tool names, in the fields they send, and in how a hook denies a tool call.
 This module hides those differences so the hook handlers in groundwork.py stay harness-neutral.
 """
 
@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 from pathlib import Path
 
 from groundwork_core import PLUGIN_ROOT
@@ -47,19 +48,29 @@ PATCH_FILE = re.compile(
 )
 
 
+def is_devin_env() -> bool:
+    return bool(
+        os.environ.get("DEVIN_PLUGIN_ROOT") or os.environ.get("DEVIN_PROJECT_DIR")
+    )
+
+
 def name(full: dict | None = None) -> str:
-    """'devin' or 'claude'. A tool name in the payload decides; otherwise Devin's hook environment does."""
+    """'codex', 'devin' or 'claude'.
+
+    Codex is recognised first, because it shares the tool name apply_patch with Devin: it sends a `turn_id` with
+    turn-scoped events (learn.chatgpt.com/docs/hooks) and sets PLUGIN_ROOT for plugin hooks. Otherwise a tool name in
+    the payload decides, and failing that Devin's hook environment does.
+    """
     forced = os.environ.get("GROUNDWORK_HOST", "").strip().lower()
-    if forced in ("claude", "devin"):
+    if forced in ("claude", "devin", "codex"):
         return forced
-    tool = str((full or {}).get("tool_name", ""))
+    full = full or {}
+    if "turn_id" in full or (os.environ.get("PLUGIN_ROOT") and not is_devin_env()):
+        return "codex"
+    tool = str(full.get("tool_name", ""))
     if tool:
         return "devin" if tool in DEVIN_TOOLS else "claude"
-    return (
-        "devin"
-        if os.environ.get("DEVIN_PLUGIN_ROOT") or os.environ.get("DEVIN_PROJECT_DIR")
-        else "claude"
-    )
+    return "devin" if is_devin_env() else "claude"
 
 
 def cwd(full: dict) -> str:
@@ -77,9 +88,33 @@ def session_cwd(full: dict) -> str | None:
     return full.get("cwd") or os.environ.get("DEVIN_PROJECT_DIR")
 
 
+# Codex has no plugin slash commands: its TUI rejects /groundwork-specflow:approve as unrecognised. It turns
+# commands/<name>.md into the skill `groundwork-specflow:source-command-<name>`, and skills are mentioned with `$`.
+# Approve and bypass keep a short form: the prompt hook runs them from the typed text (HUMAN_CMD), skill or not.
+COMMANDS = ("approve", "bypass", "status")
+HUMAN_ACTS = ("approve", "bypass")
+SLASH_CMD = re.compile(r"/groundwork-specflow:([a-z-]+)")
+
+
+def codex_command(cmd: str) -> str:
+    if cmd in HUMAN_ACTS:
+        return f"$source-command-{cmd}"
+    return (
+        "$groundwork-specflow:" + ("source-command-" if cmd in COMMANDS else "") + cmd
+    )
+
+
+def codex_commands(text: str) -> str:
+    """`/groundwork-specflow:approve` -> `$source-command-approve`, `:bootstrap` -> `$groundwork-specflow:bootstrap`."""
+    return SLASH_CMD.sub(lambda m: codex_command(m.group(1)), text)
+
+
 def deny(full: dict, reason: str) -> dict:
-    if name(full) == "devin":
+    host = name(full)
+    if host == "devin":
         return {"decision": "block", "reason": reason}
+    if host == "codex":
+        reason = codex_commands(reason)
     return {
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
@@ -90,6 +125,8 @@ def deny(full: dict, reason: str) -> dict:
 
 
 def context(full: dict, default_event: str, text: str) -> dict:
+    if name(full) == "codex":
+        text = codex_commands(text)
     return {
         "hookSpecificOutput": {
             "hookEventName": full.get("hook_event_name") or default_event,
@@ -119,12 +156,31 @@ def edit_targets(full: dict) -> tuple[list[Path], bool]:
     return paths, bool(paths)
 
 
+def shell_command(full: dict) -> str:
+    """The shell tool's command as one string. An argv list (`["bash", "-lc", "..."]`) is joined with shell quoting,
+    so `bash -c` bodies are still read; anything else unexpected becomes its text rather than crashing the gate."""
+    inp = full.get("tool_input")
+    cmd = inp.get("command", "") if isinstance(inp, dict) else inp
+    if isinstance(cmd, list):
+        return shlex.join(str(c) for c in cmd)
+    return cmd if isinstance(cmd, str) else str(cmd or "")
+
+
 def skill_name(full: dict) -> str:
     inp = full.get("tool_input") or {}
     return next(
         (str(inp[k]) for k in SKILL_KEYS if isinstance(inp, dict) and inp.get(k)), ""
     )
 
+
+CODEX_NOTE = """\
+HOST: Codex. The groundwork skills were written for Claude Code; read them with these substitutions:
+- `${{CLAUDE_PLUGIN_ROOT}}` means {root} — use that literal path in commands, e.g. `python3 "{engine}" status`.
+- There is no AskUserQuestion or ToolSearch tool here. Wherever a skill says AskUserQuestion or "picker", ask ONE round: each question with a short numbered list of options, your recommendation first and marked (Recommended), then end your turn and wait. Never bury questions inside a long reply.
+- Write/Edit/MultiEdit mean apply_patch; Bash is the shell. The gates apply to both.
+- Record your work with `--via codex`, not `--via claude-code`.
+- Codex has no /groundwork-specflow:<name> commands; it rejects them as unrecognised. Wherever a skill or the engine's output says /groundwork-specflow:approve or :bypass, the user types `$source-command-approve` or `$source-command-bypass`; for :status, `$groundwork-specflow:source-command-status`; for any other /groundwork-specflow:<name>, `$groundwork-specflow:<name>`. Always tell the user the `$` form.
+- Approval and bypass are human acts: the user types `$source-command-approve <doc>` or `$source-command-bypass <reason>`. If that reports no result, the user runs `python3 "{engine}" approve <doc>` in their own terminal. Never run it yourself."""
 
 DEVIN_NOTE = """\
 HOST: Devin. The groundwork skills were written for Claude Code; read them with these substitutions:
@@ -156,15 +212,19 @@ BOOTSTRAP_NOTE = (
 
 def adapt_rules(rules: str, host: str) -> str:
     """The session rules, worded for the harness that will read them."""
-    if host != "devin":
+    if host not in ("devin", "codex"):
         return rules
     engine = (PLUGIN_ROOT / "engine" / "groundwork.py").as_posix()
     rules = rules.replace(ASK_RULE_CLAUDE, ASK_RULE_DEVIN).replace(
-        "--via claude-code", "--via devin"
+        "--via claude-code", f"--via {host}"
     )
     rules = rules.replace("${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py", engine)
-    note = DEVIN_NOTE.format(root=PLUGIN_ROOT.as_posix(), engine=engine)
-    if BOOTSTRAPPED:
+    if host == "codex":
+        rules = codex_commands(rules)
+    note = (CODEX_NOTE if host == "codex" else DEVIN_NOTE).format(
+        root=PLUGIN_ROOT.as_posix(), engine=engine
+    )
+    if BOOTSTRAPPED and host == "devin":
         rules, note = (
             rules.replace("/groundwork-specflow:", "/"),
             note.replace("/groundwork-specflow:", "/") + "\n" + BOOTSTRAP_NOTE,

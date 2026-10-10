@@ -220,8 +220,10 @@ def cmd_session_context(_a) -> None:
     )
 
 
+# `/approve` (Claude, Devin) or `$source-command-approve`, the skill Codex makes from commands/approve.md.
 HUMAN_CMD = re.compile(
-    r"^\s*/(?:groundwork-specflow:)?(approve|bypass)\b\s*(.*)$", re.DOTALL
+    r"^\s*[/$](?:groundwork-specflow:)?(?:source-command-)?(approve|bypass)\b\s*(.*)$",
+    re.DOTALL,
 )
 
 
@@ -312,6 +314,13 @@ def cmd_gate(_a) -> None:
             )
         ok, reason = C.gate_code_edit(path, G.session_cwd(full))
         if not ok:
+            if (
+                len(paths) > 1
+            ):  # one apply_patch can touch many files; say which one is held
+                reason += (
+                    f" — blocked because this edit also writes {path}. "
+                    "Edit that file separately; the other files in this edit are not the problem."
+                )
             return deny(full, reason)
 
 
@@ -450,7 +459,7 @@ def cmd_gate_bash(_a) -> None:
     command, dump the process environment, or send hook input over the network.
     """
     full = hook_input()
-    cmd = full.get("tool_input", {}).get("command", "")
+    cmd = G.shell_command(full)
     cwd = Path(G.cwd(full))
     if C.is_protected_command(cmd, cwd):
         return deny(

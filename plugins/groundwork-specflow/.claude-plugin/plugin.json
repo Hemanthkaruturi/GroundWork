@@ -1,6 +1,6 @@
 {
   "name": "groundwork-specflow",
-  "version": "0.1.18",
+  "version": "0.1.19",
   "description": "Forces coding agents to follow a documented, spec-driven process: know workspace vs repo, keep PROJECT/ARCHITECTURE/CONSTITUTION current, interview \u2192 RFC \u2192 approval \u2192 spec \u2192 plan \u2192 tasks \u2192 evals \u2192 code.",
   "author": {
     "name": "Hemanth Karuturi"

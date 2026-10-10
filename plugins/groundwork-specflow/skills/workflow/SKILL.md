@@ -8,6 +8,12 @@ description: The groundwork operating model — workspace vs repo levels, the do
 Coding agents multiply speed *and* inconsistency. The cure is a shared system, written down
 before code: every agent gets the same product brief, architecture, constitution, contract and spec.
 
+## Check the hooks are running
+The rules are enforced by hooks. If this session's context has no message starting "groundwork is active",
+the hooks are not running and nothing is enforced. Tell the user that before anything else. In Codex, plugin hooks
+run only after the user trusts them: they type `/hooks`, trust the groundwork-specflow hooks, and start a new session.
+Elsewhere, ask them to check that the plugin is installed and enabled.
+
 ## Know your level first
 Run `python3 "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py" status`. It tells you which you are in:
 

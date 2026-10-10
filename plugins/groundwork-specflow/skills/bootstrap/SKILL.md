@@ -14,6 +14,8 @@ description: Create or complete the foundation documents (PROJECT.md, ARCHITECTU
 - If `AskUserQuestion` is not loaded yet, load it first with `ToolSearch` query `select:AskUserQuestion`, then call it. Only if the tool truly does not exist in this session (e.g. non-interactive `-p` mode) may you fall back to plain text, and then ask at most one short round, numbered.
 - Confirmations count as questions too ("Is this PROJECT.md right?" → ask with options: Looks right / Change something).
 
+0. If this session's context has no "groundwork is active" message, the hooks are off: follow "Check the hooks are running"
+   in the workflow skill first.
 1. Run `python3 "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py" status`. If the level is **unknown**, stop and ask
    the user: is this a repo (`git init`) or a workspace holding several repos (`groundwork.py mark-workspace`)?
 2. Run `python3 "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py" init` (add `--dry-run` first if the project already has documents).

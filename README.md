@@ -209,6 +209,27 @@ What's different on Devin:
 - **Devin may skip a hook that fails.** It runs plugin hooks "best effort": if one fails to load or run, the session carries on without it. Add the git hook from `bootstrap` (or `groundwork.py hooks install`) so commits are checked either way.
 - **Your company may have turned plugins off.** If Devin says CLI plugins are disabled by your organization, the plugin install won't load, whether for you, with `--local` or through `.devin/config.json`. Use the prompt above instead.
 
+### Using Codex instead
+
+GroundWork also runs in [Codex](https://developers.openai.com/codex) (the Codex CLI and the ChatGPT desktop app), from this same repository. Codex reads this repo's Claude plugin marketplace as it is. You need Python 3.10+ and git, as above.
+
+```
+codex plugin marketplace add Hemanthkaruturi/GroundWork
+codex plugin add groundwork-specflow@groundwork-specflow
+```
+
+**Then trust the hooks, or nothing is enforced.** Codex installs plugin hooks switched off and skips them without a warning until you trust them. Open `codex` in your project, type `/hooks`, check that the hooks come from `groundwork-specflow`, press `t` to trust them, and start a new session. Codex asks again after each GroundWork update, because the hooks have changed. If a session never mentions GroundWork, this is the step that was missed.
+
+Then run bootstrap: type `$groundwork-specflow:bootstrap`, or ask Codex to "use the groundwork bootstrap skill".
+
+What's different on Codex:
+
+- **Commands start with `$`, not `/`.** Codex has no plugin slash commands and rejects `/groundwork-specflow:approve` as unrecognised. Approve with `$source-command-approve <doc>`, bypass with `$source-command-bypass <reason>`, and see where you are with `$groundwork-specflow:source-command-status`. The names come from Codex, which turns each GroundWork command into a skill called `source-command-<name>`, and puts `groundwork-specflow:` in front of every GroundWork skill.
+- **Questions come as numbered options in the reply**, as on Devin, because Codex has no picker tool outside plan mode.
+- **One edit can touch several files.** Codex writes files with `apply_patch`, which can change many at once. If one of them isn't allowed yet, the whole patch is held, and the message names that file.
+- **The sandbox has no network by default**, so installing the quality tools (ruff, mypy, pytest) fails until you allow it, for example with `-c sandbox_workspace_write.network_access=true`.
+- **The Codex IDE extension doesn't load plugins**, and plugin hooks don't run in cloud sessions. Run `groundwork check` in CI to catch what they miss.
+
 **Installed the plugin before it was renamed?** It used to be called `groundwork`. If updating fails with `Plugin "groundwork" not found`, run this once in Claude Code, then restart:
 
 ```

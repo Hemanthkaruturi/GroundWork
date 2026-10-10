@@ -5,7 +5,7 @@
 <h3 align="center">Coding agents write code fast.<br>GroundWork makes sure it's the right code.</h3>
 
 <p align="center">
-  A free, open-source plugin for Claude Code that turns your AI agent from a fast improviser<br>
+  A free, open-source plugin for Claude Code, Codex and Devin that turns your AI agent from a fast improviser<br>
   into a teammate that plans first, asks before building, and leaves a paper trail.
 </p>
 
@@ -88,7 +88,7 @@ Point it at an existing project and it reads the code, drafts the documents from
 
 ## Install and use
 
-**You need:** [Claude Code](https://claude.com/claude-code), Python 3.10+ (`python3` or `python` on PATH) and git.
+**You need:** [Claude Code](https://claude.com/claude-code), Python 3.10+ (`python3` or `python` on PATH) and git. Using Codex or Devin? See [Using Codex instead](#using-codex-instead) or [Using Devin instead](#using-devin-instead).
 
 **1. Install the plugin.** GroundWork is listed in Anthropic's plugin directory. Open [Customize](https://claude.ai/customize/plugins) in claude.ai or the Claude desktop app, go to the **Plugins** tab, choose **Discover**, search for **groundwork-specflow** (listed "from Anthropic Directory") and select **Add**. (This is the Plugins page, not the Connectors directory, which won't list it.) Then, in Claude Code, sign in with the same claude.ai account (`/login`, Claude Code v2.1.273 or later). The plugin syncs in the background the next time you start Claude Code. When you see `Plugins changed. Run /reload-plugins to activate.`, run:
 
@@ -223,6 +223,15 @@ codex plugin add groundwork-specflow@groundwork-specflow
 **Then trust the hooks, or nothing is enforced.** Codex installs plugin hooks switched off and skips them without a warning until you trust them. Open `codex` in your project, type `/hooks`, check that the hooks come from `groundwork-specflow`, press `t` to trust them, and start a new session. Codex asks again after each GroundWork update, because the hooks have changed. If a session never mentions GroundWork, this is the step that was missed.
 
 Then run bootstrap: type `$groundwork-specflow:bootstrap`, or ask Codex to "use the groundwork bootstrap skill".
+
+**To update the plugin**, fetch the latest GroundWork and install it again. Codex doesn't update an installed plugin by itself:
+
+```
+codex plugin marketplace upgrade groundwork-specflow
+codex plugin add groundwork-specflow@groundwork-specflow
+```
+
+Then open `codex`, trust the updated hooks in `/hooks`, and start a new session. `codex plugin list` shows which version is installed.
 
 **Or install it into the project**, for everyone who opens it in Codex, and where your company has turned plugins off. Codex doesn't install plugins from a repo's own settings in the CLI, so this copies GroundWork in as Codex project skills and hooks instead, like the Devin install. From your project's root:
 

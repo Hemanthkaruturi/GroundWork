@@ -11,7 +11,7 @@ GroundWork is a plugin for Claude Code and Devin. It makes the agent follow a sh
 | | |
 | --- | --- |
 | 19 skills | one for each step of the path, plus resume, refresh, bugs, ownership, code layout, code quality, baseline and plain writing |
-| 6 hooks | the gate before edits and shell commands, session awareness, reminders, reply length |
+| 8 hooks | the gate before edits and shell commands, session awareness, reminders, reply length, and optional alerts when the agent waits for you |
 | 83 numbered rules | checked with no AI and no network, on a laptop, in a git hook and in CI |
 | 292 automated tests | the whole lifecycle, and every rule has a test that breaks exactly that rule |
 | 2 coding agents | Claude Code, and Devin (CLI and Desktop), from the same plugin |
@@ -33,7 +33,7 @@ Every feature, in one line, with where to see it.
 | **Nothing is guessed** | Unknowns become visible markers that block approval | 5.6 |
 | **Amendments** | A plan that finds a spec problem must show evidence, let you choose, log the change, and get re-approval | 5.7, 5.24 |
 | **Workspaces and repos** | Product-level truth in one place, each repo owns its own craft | 5.1, 5.18 |
-| **Constitution and guardrails** | Non-negotiable rules, checked once per change, in the RFC | 5.20 |
+| **Constitution and guardrails** | Non-negotiable rules, checked once per change, in the RFC; the guardrails are listed at every session start | 5.20 |
 | **One owner per fact** | Each document on the path adds its own kind of information and cites the one before it; the check warns when a spec repeats its RFC, a plan repeats its spec, or an ADR repeats its RFC | 5.20, 5.23 |
 | **Cross-repo RFCs and contracts** | A change that crosses repos needs a versioned contract and more than one sign-off | 5.21, 5.22 |
 | **Evals and traceability** | Every requirement has a task, every acceptance criterion has a test scenario, written before code | 5.23 |
@@ -51,6 +51,7 @@ Every feature, in one line, with where to see it.
 | **Retrospective decisions** | Discovery lists leads (docs, code comments, commit subjects); a person records at most a few ADRs, each saying where its reason comes from, or that nobody knows | 5.34 |
 | **As-built contracts and evidence-led bootstrap** | Discovery finds routes, commands, schemas, API docs and rule-shaped lines; a surface others consume becomes a contract with named provider and consumer reviewers | 5.34 |
 | **Baselines for existing behaviour** | What the code already does becomes approved specs; legacy specs are imported and classified, never rewritten; later features extend or amend them and bugs can cite them; the files a baseline cites are watched for drift | 5.34 |
+| **Alerts when the agent waits for you** | A sound, a desktop notification and a short spoken phrase when a document is ready for approval, a question is asked, or a handover is written. Off until you turn it on | 5.35 |
 | **Enforcement dial and emergency bypass** | Block, warn or off, and a logged 60-minute bypass for real emergencies | 5.27 |
 | **Git hook and CI** | The same check on every commit and every pull request | 5.2, 5.13, 5.28 |
 | **Short, plain replies** | Answer first, about 150 words, nothing important lost | 5.15 |
@@ -122,6 +123,7 @@ Fix *where* things live, *what* each document contains, and *who* approves. Leav
 - **Nothing is guessed.** Unknowns become visible markers that block approval.
 - **Changes go up only through an amendment.** If planning finds a problem in the spec, the agent shows the evidence, *you* pick the reading, the spec gets a dated "what changed and why" line, you re-approve, and the plan is re-checked against the new spec.
 - **A dial, not a wall.** Enforcement can be `block`, `warn` or `off` per repo, and a human can lift the gate for an hour in an emergency. Every bypass is logged.
+- **Alerts, if you want them.** The agent can ring when it waits for you: a document ready for approval, a question, a finished handover. Each person turns this on for themselves.
 
 ### Rules the team agreed, written down and checked
 - **A constitution.** Principles, guardrails ("never…"), quality gates and amendments. Every RFC has a mandatory *Constitution check* in its Impact section, so a change that breaks a rule has to say so. The spec and the plan cite it rather than repeat it.
@@ -165,7 +167,7 @@ Fix *where* things live, *what* each document contains, and *who* approves. Leav
 - Other skills (like a frontend design skill) are treated as tools for the build step. They can't skip the process.
 
 ### Private, portable and easy to keep current
-- Runs entirely on your machine. No network requests, no telemetry, no accounts. It reads your local git name and email only to record who did what, and keeps that in your own project files.
+- Runs entirely on your machine. No network requests, no telemetry, no accounts. It reads your local git name and email only to record who did what, and keeps that in your own project files. If you turn alerts on, two small settings files are kept in `~/.groundwork/`.
 - Works on Linux, macOS and Windows. It needs Python 3.10 or newer and git, and nothing else.
 - Works in **Claude Code** and in **Devin** (CLI and Desktop). Both agents run the same hooks, skills and engine, so a team can mix them on one project.
 - Two commands to install. Auto-update, or one command to update.
@@ -187,13 +189,15 @@ One sample product is used throughout. **ShopFront** is a workspace called `shop
 | Style and defaults | 5.15 short replies · 5.16 other skills · 5.17 `uv` |
 | Agents | 5.29 running in Devin |
 | Code | 5.30 code layout · 5.31 code map · 5.32 credentials · 5.33 code quality |
+| Existing systems | 5.34 baselines, imported specs, retrospective decisions and as-built contracts |
+| Attention | 5.35 alerts |
 
 ### 5.1 The agent always knows where it is
 `groundwork init` in the empty workspace, then `groundwork doctor` *(real output)*:
 ```
 [shop]     workspace: created PROJECT.md, ARCHITECTURE.md, CONSTITUTION.md, AGENTS.md, CONTRACTS/, DECISIONS/
-[shop-api] repo: created ARCHITECTURE.md, AGENTS.md
-[shop-web] repo: created ARCHITECTURE.md, AGENTS.md
+[shop-api] repo: created ARCHITECTURE.md, AGENTS.md, CODEMAP.md, .gitignore entry for .env
+[shop-web] repo: created ARCHITECTURE.md, AGENTS.md, CODEMAP.md, .gitignore entry for .env
 
 Stage 1/5: Scaffolded  ●●○○○○
   documents exist but still have unresolved markers
@@ -284,8 +288,8 @@ groundwork.py note "Paused: waiting for the search API contract details. Next: w
 ```
 Next morning, the new session starts with this already in the agent's context *(real output)*:
 ```
-IN FLIGHT:
-  - [feature] 001-search-box — spec.md is draft, 14 unresolved marker(s) ← active;
+IN FLIGHT (resume with the resume skill; full list: groundwork.py board):
+  - [feature] 001-search-box — spec.md is draft, 14 unresolved marker(s) (14h ago) ← active;
     last note: Paused: waiting for the search API contract details ... Question for Ravi: max query length?
 ```
 She says "continue". The `resume` skill picks up at the spec and asks Ravi's question first. A teammate, or another agent, can do the same. The board lists every kind of item, with its next step:
@@ -468,12 +472,13 @@ groundwork-specflow: commit blocked. Fix the findings above, or bypass once with
 ### 5.14 Adding it to an existing project
 `groundwork init --dry-run` in a project that already has code, and nothing is written *(real output)*:
 ```
-[legacy] standalone: would create PROJECT.md, ARCHITECTURE.md, CONSTITUTION.md, AGENTS.md, DECISIONS/
+[legacy] standalone: would create PROJECT.md, ARCHITECTURE.md, CONSTITUTION.md, AGENTS.md, DECISIONS/, CODEMAP.md, .gitignore entry for .env
   languages:    Python (2)
   manifests:    requirements.txt
   entry points: src/app.py
   tests:        1 test file(s) in tests
   python:       uv not in use; other managers found: pip (ask before migrating)
+  code layout:  not decided; looks like a library rooted at src (ask: migrate to the standard layout, or keep the current structure)
 ```
 The agent then drafts the documents from this evidence and asks only what code cannot tell. It can adopt an existing constitution, ADRs and `CLAUDE.md`. `init --retrofit` adds missing sections to existing documents without touching your text.
 
@@ -588,7 +593,8 @@ With the contract written and two sign-offs required, Priya approves first *(rea
 ```
 > /groundwork-specflow:approve RFC-0001
 RFC-0001-product-search.md: in-review (1/2 sign-offs: Priya Nair)
-More sign-offs are required; each signer runs /groundwork-specflow:approve.
+Next step for RFC-0001-product-search.md: 1 more sign-off(s) needed. Either each remaining signer runs
+/groundwork-specflow:approve RFC-0001-product-search.md, or, if you are the only reviewer, lower ...
 ```
 The status shows it waiting, and that the new contract makes a foundation document stale:
 ```
@@ -646,7 +652,7 @@ Three closing verification tasks are always kept: the full checks pass, every re
 
 **One owner per fact.** Each document on the path owns one kind of information and cites the one before it: the RFC owns the need, the decision and the constitution check; the spec owns the requirements and the manual test; the plan owns the mechanism; the tasks own the order of work; the evals own the scenarios. A spec that pastes a paragraph of its RFC, a plan that pastes a requirement, or an ADR that re-tells an implemented RFC gets a warning *(illustration)*:
 ```
-WARNING GW092  shop-api/specs/001-product-search/spec.md: 3 sentences repeat text RFC-0001 owns; first: “a shopper types part of a product name and…”
+warning GW092  shop-api/specs/001-product-search/spec.md: 3 sentences repeat text RFC-0001 owns; first: “a shopper types part of a product name and…”
          → each fact has one owner (§4): cite RFC-0001 (for example "As RFC-0001 §9") instead of copying its words
 ```
 An RFC that was built as proposed needs no ADR; its row in the decisions index, marked *Implemented*, is the record.
@@ -722,6 +728,8 @@ Enforcement is `block` by default. A repo can set `warn` (the gate never blocks;
 ```
 > /groundwork-specflow:bypass typo in prod banner
 Gate bypassed for 60 minutes in shop-api. Logged to .groundwork/bypass.log.
+This lifts the code-edit gate only: it does not approve RFCs or specs, and it ends after 60 minutes.
+Update the spec afterwards for any behaviour change.
 ```
 The log says who and why:
 ```
@@ -939,11 +947,16 @@ DOCUMENTATION REVIEW (references, not work to build; baseline skill): 14 importe
   - 001-clients-and-tenants — imported — awaiting classification
   …
 ```
-A repo with no specs gets a **capability inventory** instead: the agent proposes capabilities from the code and docs, the user corrects the boundaries and picks which to baseline now, and the rest stay visible as *deferred* in a generated table in `specs/README.md`. For each selected capability the agent reads the code, interviews the user about purpose, intent and what must be preserved, and writes the baseline with an evidence table (which file, which test, inspected or executed) and a *Known discrepancies* list for guarantees the code currently breaks. A defect is never written down as the requirement. Approval is one human command for several documents; if any fails its check, none is recorded *(illustration)*:
+A repo with no specs gets a **capability inventory** instead: the agent proposes capabilities from the code and docs, the user corrects the boundaries and picks which to baseline now, and the rest stay visible as *deferred* in a generated table in `specs/README.md` (`groundwork.py capability` records them, `capabilities` rebuilds the table and keeps its Notes column). For each selected capability the agent reads the code, interviews the user about purpose, intent and what must be preserved, and writes the baseline (`groundwork.py new-baseline <slug>` creates it) with an evidence table (which file, by its path from the repo root, which test, inspected or executed) and a *Known discrepancies* list for guarantees the code currently breaks. A defect is never written down as the requirement. Approval is one human command for several documents; if any fails its check, none is recorded *(illustration)*:
 ```
 /groundwork-specflow:approve specs/002-case-search/spec.md specs/003-billing/spec.md
 002-case-search/spec.md: approved (1/1 sign-offs: meena@example.com)
 003-billing/spec.md: approved (1/1 sign-offs: meena@example.com)
+```
+Approval and source review are separate records, so `approve` reminds you when a baseline's sources were never reviewed *(real output)*:
+```
+Note: the sources of 002-case-search were never reviewed. Compare it with the files its Evidence
+table cites, then run: groundwork.py confirm --baseline 002-case-search
 ```
 A baseline also says which files it was observed from. `groundwork.py confirm --baseline 002-case-search` records that a person compared it with exactly those files; when one of them later changes, `fresh` flags the baseline for review, with the file named *(real output)*:
 ```
@@ -969,6 +982,19 @@ The agent offers at most a few, and a person records each one on purpose. `groun
 **Source:** retrospective explanation by Meena, 2026-10-09
 ```
 or `documented in docs/RETRIEVAL_BENCHMARK_FINDINGS.md`, or simply `historical rationale unknown`, which is a valid answer. A commit subject is a topic, never a reason or a date, and `check` refuses an ADR that presents one as such, that puts the label anywhere but first in section 3, or that names a person without a date. A surface that another repo already calls becomes an **as-built contract** (`new-contract … --as-built`) with named provider and consumer reviewers. Approval counts signers; `check` warns while a named reviewer has not signed, because two signatures do not prove both sides looked.
+
+### 5.35 Alerts: know when the agent is waiting for you
+Long runs mean people switch windows. With alerts on, the agent rings when it stops at one of GroundWork's gates: an RFC or spec is ready for approval, it is about to ask a question, or a feature's handover is written. Each alert is a sound, a desktop notification and a short spoken phrase. Each document version rings once, so an unchanged draft does not ring again.
+
+Alerts are off until a person turns them on, and the setting is theirs, in `~/.groundwork/settings.json`, for every project. Ask the agent to "turn alerts on", or run `groundwork.py alerts on`. The voice can be turned off on its own, keeping the sound and notification *(real output, alerts still off)*:
+```
+> groundwork.py alerts voice off
+Voice is off for you in every project (saved in ~/.groundwork/settings.json). Alerts themselves are off; `alerts on` turns them on.
+
+> groundwork.py alerts status
+Alerts are off, voice is off.
+```
+`alerts test` plays one. The sounds, notifications and speech come from the operating system's own tools on Windows (including WSL), macOS and Linux. Over SSH only the terminal bell rings. The alert hooks print nothing and never change what the agent may do.
 
 ## 6. How it helps
 
@@ -1023,26 +1049,30 @@ The step-by-step version is in `docs/manual-testing.md`.
 | `ownership` | Records and looks up who requested, owns, built, deployed and supports |
 | `code-layout` | Records each repo's choice (standard code folders, or keep its own structure), says where each kind of code goes, and keeps `CODEMAP.md` current |
 | `code-quality` | Records the repo's toolchain (standard or its own), runs `verify` after every task, and carries the ten coding rules |
+| `baseline` | Writes what existing code already does as baseline specs, and classifies legacy specs imported with `adopt-specs` |
 | `plain-writing` | Keeps replies and documents short, plain and decision-first |
 
-**6 hooks:** session start (awareness and in-flight work), every prompt (triage and style reminder), before edits and before shell commands (the gate, which can only deny and never approves anything), when another skill loads, and at reply end (optional length limit). The same hook file serves Claude Code and Devin. Its matchers name both agents' tools.
+**8 hooks:** session start (awareness, guardrails, the code map and in-flight work), every prompt (triage and style reminder), before edits and before shell commands (the gate, which can only deny and never approves anything), when another skill loads, at reply end (optional length limit), and two alert hooks, at reply end and before a question, that stay silent unless you turned alerts on. The same hook file serves Claude Code and Devin. Its matchers name both agents' tools.
 
-**Commands you type:** `/groundwork-specflow:approve`, `/groundwork-specflow:bypass` (emergencies, logged), `/groundwork-specflow:status`. They are the same in Claude Code and Devin. In Devin, only the user can run them. In a Devin project installed without the plugin system (5.29), they have no prefix: `/approve`, `/bypass`, `/status`.
+**Commands you type:** `/groundwork-specflow:approve` (one or more documents), `/groundwork-specflow:bypass` (emergencies, logged), `/groundwork-specflow:status`. They are the same in Claude Code and Devin. In Devin, only the user can run them. In a Devin project installed without the plugin system (5.29), they have no prefix: `/approve`, `/bypass`, `/status`.
 
 **A command-line engine** (`groundwork.py`), pure Python with no dependencies and no Claude needed:
 
 | Command | Purpose |
 | --- | --- |
-| `init`, `doctor` | onboard a project; show its stage and next steps |
-| `check`, `check --strict`, `check --json` | verify the 65 rules |
+| `init` (`--dry-run`, `--retrofit`, `--as repo\|workspace`), `doctor` | onboard a project; show its stage and next steps |
+| `check`, `check --strict`, `check --json` | verify the 83 rules |
 | `status`, `board`, `note`, `activate` | where things stand, what is in flight, where work stopped |
 | `new-rfc`, `new-feature`, `new-bug`, `activate-bug`, `plan-sync` | create documents; switch the active bug; pin the plan to the approved spec |
-| `approve`, `bypass` | human sign-off and the emergency bypass |
+| `new-contract` (`--as-built`), `new-adr` (`--rfc` or `--retrospective`) | a contract with named reviewers; a decision record after an RFC, or one found in existing code |
+| `adopt-specs`, `adopt-specs --classify`, `new-baseline`, `capability`, `capabilities` | import legacy specs and classify them; write a baseline spec; record capabilities and rebuild their table |
+| `approve`, `bypass` | human sign-off (several documents at once, all or none) and the emergency bypass |
 | `deps`, `who`, `record` | relations, responsibility, and recording who did what |
-| `fresh`, `confirm` | detect stale documents; record a verified baseline |
+| `fresh`, `confirm`, `confirm --baseline` | detect stale documents and baselines whose sources changed; record that a person checked them |
+| `alerts on\|off\|status\|test`, `alerts voice on\|off` | your own alert setting, for every project |
 | `hooks install`, `hooks status`, `hooks uninstall` | manage the git hook, with `--vendor`, `--pre-push`, `--strict` |
 | `layout`, `layout init`, `layout keep`, `layout map` | show or record the repo's code layout: standard folders, or keep the existing structure |
-| `quality`, `quality init`, `quality keep`, `quality set`, `quality ignore`, `verify` | record the repo's code quality toolchain; run format, lint, types and tests |
+| `quality`, `quality init`, `quality keep`, `quality set`, `quality ignore`, `verify` (`--fix`, `--step`) | record the repo's code quality toolchain; run format, lint, types and tests |
 | `codemap`, `codemap --check` | write `CODEMAP.md` (where each kind of code lives) from the code; check it is current |
 
 **Quality:** 292 automated tests cover the whole lifecycle, on Linux, macOS and Windows, on Python 3.10 and 3.12. Every numbered rule has a test that breaks exactly that rule.
@@ -1067,7 +1097,7 @@ The step-by-step version is in `docs/manual-testing.md`.
 
 **Can the agent cheat?** It can't approve, can't edit approval records, and shell writes are gated. It can still make mistakes of judgment, which is why humans approve the RFC and spec.
 
-**Will it follow our team's rules?** Put them in the constitution. The agent checks every RFC, spec and plan against it. For rules that must never be broken, add a command that fails when the rule is broken, and make it part of the repo's checks.
+**Will it follow our team's rules?** Put them in the constitution. Its guardrails are shown at every session start, every RFC records a check against it, and the spec, plan, evals and bug fixes read it before they are written. For rules that must never be broken, add a command that fails when the rule is broken, and make it part of the repo's checks.
 
 **Do we have to use it on every project?** No. Turn enforcement down to `warn` or `off` per repo, and adopt it gradually. `init` and `doctor` are made for existing projects.
 

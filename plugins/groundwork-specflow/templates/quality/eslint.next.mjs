@@ -1,12 +1,17 @@
-// GroundWork standard JS/TS lint rules (STANDARD.md §5i). Change a rule only on purpose, with a reason.
+// GroundWork standard JS/TS lint rules (STANDARD.md §5i), with Next.js's own rules. Change a rule only on purpose, with a reason.
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import prettier from "eslint-config-prettier";
+import next from "@next/eslint-plugin-next";
 
 export default tseslint.config(
-  { ignores: ["dist/", "build/", "coverage/", "node_modules/", ".next/", "next-env.d.ts"] },
+  { ignores: ["dist/", "build/", "coverage/", "node_modules/", ".next/", "out/", "next-env.d.ts"] },
   js.configs.recommended,
   ...tseslint.configs.strict,
+  {
+    plugins: { "@next/next": next },
+    rules: { ...next.configs.recommended.rules, ...next.configs["core-web-vitals"].rules },
+  },
   prettier,
   {
     rules: {

@@ -12,7 +12,7 @@ Baselines:  groundwork.py adopt-specs [--dry-run] [slug ...] | adopt-specs --cla
 Decisions:  groundwork.py new-adr <slug> [--title T] [--rfc RFC-000N | --retrospective [--source PATH] [--decided-at DATE]]
 Contracts:  groundwork.py new-contract <provider-topic> [--title T] [--provider P] [--consumers a,b] [--as-built]
             groundwork.py new-baseline <slug> [--title T] [--capability C] | capability set|link|unlink ... | capabilities
-Quality:    groundwork.py verify [--fix] [--step S] | quality [show|init [--create]|keep|set step=CMD]
+Quality:    groundwork.py verify [--fix] [--step S] | quality [show|init [--create]|keep|set step=CMD|ignore]
 Code:       groundwork.py codemap [--check] | layout [--json] | layout init --profile P [--root R] [--create] | layout keep | layout map role=path [--legacy P]
 """
 
@@ -517,6 +517,23 @@ def cmd_approve(a) -> None:
         )
         if st.status == "in-review":
             print(signoff_help(p, st))
+        note = _unreviewed_baseline_note(p, ctx)
+        if note:
+            print(note)
+
+
+def _unreviewed_baseline_note(p: Path, ctx: C.Ctx) -> str:
+    """Approval and source review are separate records; say so when a baseline has only the first."""
+    if p.name != "spec.md" or not ctx.repo or not C.is_baseline(C.spec_meta(p.parent)):
+        return ""
+    import groundwork_fresh as F
+
+    if F.load(ctx).get(F.BASELINE_NS + p.parent.name):
+        return ""
+    return (
+        f"Note: the sources of {p.parent.name} were never reviewed. Compare it with the files its Evidence "
+        f"table cites, then run: groundwork.py confirm --baseline {p.parent.name}"
+    )
 
 
 def signoff_help(p: Path, st: C.DocState) -> str:
@@ -786,6 +803,13 @@ def cmd_layout(a) -> None:
     if a.action == "show":
         print(L.as_json(current) if a.json else L.render(repo))
         return
+    if a.action == "ignore":
+        print(
+            "Added GroundWork's documents to .prettierignore."
+            if Q.ensure_prettier_ignore(repo)
+            else ".prettierignore already excludes GroundWork's documents."
+        )
+        return
     if a.action in ("init", "keep") and current is not None and not a.force:
         raise SystemExit(
             f"This repo already recorded its layout decision (mode: {current.mode}). "
@@ -936,6 +960,13 @@ def cmd_quality(a) -> None:
                 + (f"   (fix: {' · '.join(fix[s])})" if fix.get(s) else "")
             )
         return
+    if a.action == "ignore":
+        print(
+            "Added GroundWork's documents to .prettierignore."
+            if Q.ensure_prettier_ignore(repo)
+            else ".prettierignore already excludes GroundWork's documents."
+        )
+        return
     if a.action in ("init", "keep") and current is not None and not a.force:
         raise SystemExit(
             f"This repo already recorded its quality decision (mode: {current.mode}). "
@@ -952,7 +983,7 @@ def cmd_quality(a) -> None:
             + (f" Created: {', '.join(made)}." if made else "")
         )
         installs = [
-            Q.TOOLCHAIN[x]["install"]
+            Q.install_line(repo, x)
             for x in ("python", "javascript", "go")
             if x in langs
         ]
@@ -1667,10 +1698,13 @@ def main() -> None:
     p.set_defaults(fn=cmd_init)
     p = sub.add_parser(
         "quality",
-        help="the repo's code quality toolchain: show, init (standard), keep (own tools), set",
+        help="the repo's code quality toolchain: show, init (standard), keep (own tools), set, ignore (keep prettier off GroundWork's documents)",
     )
     p.add_argument(
-        "action", nargs="?", default="show", choices=["show", "init", "keep", "set"]
+        "action",
+        nargs="?",
+        default="show",
+        choices=["show", "init", "keep", "set", "ignore"],
     )
     p.add_argument(
         "assign", nargs="*", help='set: step="command", e.g. test="uv run pytest -q"'

@@ -14,6 +14,7 @@ Checks (warnings; GW120 is an error):
   GW121  standard: a language in the repo has no config for its standard tools
   GW122  a step every repo needs (lint, test) has no command
   GW123  standard: a code file is longer than `max_file_lines` (default 400)
+  GW124  prettier formats the repo but `.prettierignore` does not exclude GroundWork's documents
 """
 
 from __future__ import annotations
@@ -94,6 +95,21 @@ PRETTIER_CONFIGS = [
     ".prettierrc.yml",
     "biome.json",
 ]
+PRETTIER_IGNORE_MARK = "# groundwork: documents GroundWork owns"
+# Approvals and freshness snapshots hash these files' exact text, and groundwork.py regenerates
+# their tables, so a formatter rewriting them would make approved documents stale.
+PRETTIER_IGNORE_BLOCK = f"""{PRETTIER_IGNORE_MARK} (approvals hash their exact text)
+.groundwork/
+specs/
+bugs/
+DECISIONS/
+CONTRACTS/
+PROJECT.md
+ARCHITECTURE.md
+CONSTITUTION.md
+AGENTS.md
+CODEMAP.md
+"""
 
 
 @dataclass
@@ -257,6 +273,24 @@ def _scripts(repo: Path) -> dict[str, str]:
         return {}
 
 
+def uses_next(repo: Path) -> bool:
+    """A Next.js app: its code carries `@next/next/*` rule comments that plain eslint cannot resolve."""
+    try:
+        pkg = json.loads((repo / "package.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return isinstance(pkg, dict) and any(
+        "next" in (pkg.get(k) or {}) for k in ("dependencies", "devDependencies")
+    )
+
+
+def install_line(repo: Path, lang: str) -> str:
+    line = TOOLCHAIN[lang]["install"]
+    if lang == "javascript" and uses_next(repo):
+        line += " @next/eslint-plugin-next"
+    return line
+
+
 def _make_targets(repo: Path) -> set[str]:
     try:
         return set(
@@ -359,13 +393,44 @@ def write_configs(repo: Path, langs: dict[str, int]) -> list[str]:
                 continue
             if dest == ".golangci.yml" and configured(repo, "go"):
                 continue
+            if dest == "eslint.config.mjs" and uses_next(repo):
+                src = "eslint.next.mjs"
             if not (repo / dest).exists():
                 shutil.copyfile(QDIR / src, repo / dest)
                 made.append(dest)
+    if "javascript" in langs and ensure_prettier_ignore(repo):
+        made.append(".prettierignore")
     if not (repo / ".editorconfig").exists():
         shutil.copyfile(QDIR / "editorconfig", repo / ".editorconfig")
         made.append(".editorconfig")
     return made
+
+
+def prettier_ignores_docs(repo: Path) -> bool:
+    try:
+        text = (repo / ".prettierignore").read_text(encoding="utf-8")
+    except OSError:
+        return False
+    return PRETTIER_IGNORE_MARK in text
+
+
+def ensure_prettier_ignore(repo: Path) -> bool:
+    """Add GroundWork's documents to `.prettierignore`, keeping what is there. True when it changed."""
+    if prettier_ignores_docs(repo):
+        return False
+    pi = repo / ".prettierignore"
+    old = pi.read_text(encoding="utf-8") if pi.is_file() else ""
+    pi.write_text(
+        old.rstrip("\n") + "\n\n" + PRETTIER_IGNORE_BLOCK
+        if old.strip()
+        else PRETTIER_IGNORE_BLOCK,
+        encoding="utf-8",
+    )
+    return True
+
+
+def uses_prettier(cmds: dict[str, list[str]]) -> bool:
+    return any("prettier" in c for c in cmds.get("format", []) + cmds.get("lint", []))
 
 
 def effective(
@@ -414,6 +479,15 @@ def assess(repo: Path, cfg: dict | None = None) -> list[Finding]:
                 )
     if langs:
         cmds, _ = effective(repo, q)
+        if uses_prettier(cmds) and not prettier_ignores_docs(repo):
+            out.append(
+                Finding(
+                    "GW124",
+                    ".prettierignore",
+                    "prettier also formats GroundWork's documents; rewriting them makes approved specs stale",
+                    "run: groundwork.py quality ignore (adds them to .prettierignore; keeps your lines)",
+                )
+            )
         for step in REQUIRED_STEPS:
             if not cmds.get(step):
                 out.append(

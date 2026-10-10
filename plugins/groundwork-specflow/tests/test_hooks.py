@@ -145,6 +145,38 @@ class Hooks(CheckBase):
         self.assertIn("web:", out)
         self.assertTrue((self.ws / "web" / ".git" / "hooks" / "pre-commit").exists())
 
+    def test_plugin_cache_runs_the_newest_engine(self):
+        sys.path.insert(0, str(Path(__file__).parents[1] / "engine"))
+        import groundwork_hooks as H
+
+        cache = self.root / "cache"
+        for version in ("0.1.9", "0.1.10", "0.1.2"):
+            engine = cache / version / "engine" / "groundwork.py"
+            engine.parent.mkdir(parents=True)
+            engine.write_text(f"print('engine {version}')\n", encoding="utf-8")
+        hook = self.root / "pre-commit"
+        hook.write_text(
+            H.SCRIPT.format(
+                marker=H.MARKER,
+                verb="commit",
+                strict="",
+                engine=(cache / "0.1.2" / "engine" / "groundwork.py").as_posix(),
+                cache=cache.as_posix(),
+            ),
+            encoding="utf-8",
+        )
+        r = subprocess.run(
+            ["sh", str(hook)],
+            cwd=self.api,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            env=GENV,
+            check=False,
+        )
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout.strip(), "engine 0.1.10")  # numeric, not text, order
+
     def test_no_git_repo_is_a_clear_error(self):
         r = ca(self.root, "hooks", "install")
         self.assertNotEqual(r.returncode, 0)

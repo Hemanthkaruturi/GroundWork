@@ -487,7 +487,7 @@ def new_baseline(
     cap_set(
         rc,
         cap,
-        next_action="investigate, interview, fill the baseline, then ask for approval",
+        next_action=NEW_BASELINE_NEXT,
     )
     write_index(rc)
     return fdir
@@ -658,6 +658,10 @@ def coverage(rc: C.Ctx, specs: list[str]) -> str:
     return "uncovered (" + ", ".join(f"{n} {lab}" for lab, n in counts.items()) + ")"
 
 
+# Written when a baseline is drafted; once every linked baseline is approved it is history.
+NEW_BASELINE_NEXT = "investigate, interview, fill the baseline, then ask for approval"
+
+
 def rows(rc: C.Ctx) -> list[dict]:
     out = []
     for cap, rec in sorted(load_caps(rc).items()):
@@ -676,7 +680,10 @@ def rows(rc: C.Ctx) -> list[dict]:
                 or "—",
                 "sources": rec.get("sources", []),
                 "rationale": rec.get("rationale_ref", ""),
-                "next": rec.get("next_action", ""),
+                "next": ""
+                if rec.get("next_action") == NEW_BASELINE_NEXT
+                and coverage(rc, specs) == "baselined"
+                else rec.get("next_action", ""),
             }
         )
     return out
@@ -876,7 +883,7 @@ def review_summary(ctx: C.Ctx) -> str:
         elif "re-approve" in state:
             key = kind + " stale"
         elif "deferred" in state:
-            key = kind + " deferred"
+            key = kind if kind.endswith("deferred") else kind + " deferred"
         elif "awaiting sign-off" in state:
             key = kind + " awaiting sign-off"
         elif "reviewers incomplete" in state:

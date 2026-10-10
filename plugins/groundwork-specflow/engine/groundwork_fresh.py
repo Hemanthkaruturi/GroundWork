@@ -399,11 +399,46 @@ def stale_lines(ctx: C.Ctx) -> list[str]:
 
 BASELINE_NS = "baseline:"
 MAX_EVIDENCE_FILES = 300
-_PATH_TOKEN = re.compile(r"(?:[A-Za-z]:)?[A-Za-z0-9_./-]+")
+# Brackets, parentheses, @, + and $ appear in framework route files: app/[id]/page.tsx,
+# app/(site)/layout.tsx, routes/+page.svelte, routes/$id.tsx.
+_PATH_TOKEN = re.compile(r"(?:[A-Za-z]:)?[A-Za-z0-9_./@+$()\[\]-]+")
+_MD_LINK = re.compile(r"\[([^\]]*)\]\(([^)]*)\)")
+# A token without a slash is a file only with one of these extensions (or if it exists), so
+# symbols such as `Math.floor` or `res.cookies.set` are not taken for missing files.
+_EXTENSIONS = """py pyi ts tsx js jsx mjs cjs json jsonc md mdx rst txt yml yaml toml ini cfg conf
+env lock go mod sum rs java kt kts scala rb php cs fs swift m c h cc cpp hpp sql sh bash zsh ps1 css
+scss sass less html htm svelte vue astro xml gradle proto graphql gql tf hcl ex exs erl dart lua r
+ipynb csv tsv svg prisma sol zig"""
+FILE_EXTENSIONS = frozenset(_EXTENSIONS.split())
 
 
-def evidence_tokens(text: str) -> list[str]:
-    """Path-like tokens from the Evidence table's implementation and test columns."""
+def _trim(tok: str) -> str:
+    tok = tok.rstrip(".")
+    if tok.startswith("(") and tok.find(")") == len(tok) - 1:
+        tok = tok[1:-1]  # (src/a.ts) in prose
+    while tok.startswith("(") and tok.count("(") > tok.count(")"):
+        tok = tok[1:]
+    while tok.endswith(")") and tok.count(")") > tok.count("("):
+        tok = tok[:-1]
+    return tok.rstrip(".")
+
+
+def _looks_like_path(tok: str, dir_hint: bool, repo: Path | None) -> bool:
+    if not tok or tok.startswith("http"):
+        return False
+    if repo is not None and not tok.startswith("/") and (repo / tok).exists():
+        return True
+    if dir_hint:
+        return True
+    ext = tok.rsplit("/", 1)[-1].rpartition(".")[2]
+    return "." in tok.rsplit("/", 1)[-1] and ext.lower() in FILE_EXTENSIONS
+
+
+def evidence_tokens(text: str, repo: Path | None = None) -> list[str]:
+    """Path-like tokens from the Evidence table's implementation and test columns.
+
+    A token counts when it exists in ``repo``, ends with ``/`` (a directory) or ends in a file
+    extension. Route URLs (`/api/me`), status lists (`401/400/503`) and symbols are prose."""
     m = re.search(
         r"^## Evidence\b[^\n]*\n(.*?)(?=^## |\Z)", text, re.MULTILINE | re.DOTALL
     )
@@ -417,19 +452,12 @@ def evidence_tokens(text: str) -> list[str]:
         if len(cells) < 3 or cells[0].startswith("---") or cells[0] == "Requirement":
             continue
         for cell in cells[1:3]:
-            for tok in _PATH_TOKEN.findall(cell.replace("`", " ")):
-                tok = tok.rstrip(".")
-                is_dir_hint = tok.endswith("/")
+            cell = _MD_LINK.sub(r"\1 \2", cell).replace("`", " ")
+            for tok in _PATH_TOKEN.findall(cell):
+                tok = _trim(tok)
+                dir_hint = tok.endswith("/")
                 tok = tok.rstrip("/")
-                looks_like_path = (
-                    is_dir_hint or "/" in tok or re.search(r"\.[A-Za-z0-9]{1,6}$", tok)
-                )
-                if (
-                    looks_like_path
-                    and tok
-                    and tok not in out
-                    and not tok.startswith("http")
-                ):
+                if _looks_like_path(tok, dir_hint, repo) and tok not in out:
                     out.append(tok)
     return out
 
@@ -444,7 +472,7 @@ def baseline_snapshot(repo: Path, text: str) -> dict:
     truncated: list[str] = []
     root = repo.resolve()
     ctx = C.Ctx("standalone", root, repo=root)
-    for tok in evidence_tokens(text):
+    for tok in evidence_tokens(text, root):
         p = root / tok
         if BL.path_problem(ctx, p):
             skipped.append(tok)

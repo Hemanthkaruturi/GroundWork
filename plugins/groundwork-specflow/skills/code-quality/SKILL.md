@@ -43,6 +43,7 @@ Both `init` and `keep` write the *Code quality* section of AGENTS.md. Agents wit
 - A task is done only when verify passes. Report failures with their output, never "should pass".
 - **Never make it green by weakening it:** no new `# noqa`, `# type: ignore`, `eslint-disable`, `//nolint`, `@ts-ignore` or skipped test. The one exception is a rule that is genuinely wrong for that line: then the suppression carries the specific rule and the reason on the same line, and you tell the user.
 - Don't edit tool configs to silence findings. Changing a team rule is a decision for the user.
+- Never let a formatter rewrite GroundWork's documents (specs, decisions, foundation docs, `.groundwork/`): approvals hash their exact text, so a reformat makes approved specs stale. With prettier, `groundwork.py quality ignore` adds them to `.prettierignore` (check warns GW124 until it does).
 
 ## Python: ruff format and ruff check on every file you touch
 Many teams run `ruff format --check` and `ruff check` in CI on all Python code, so Python you write must pass both **whatever the decision above**.

@@ -304,10 +304,10 @@ Code comes out the same whoever writes it, and whichever agent, because quality 
 
 | `mode` | Meaning |
 | --- | --- |
-| `standard` | GroundWork's toolchain. Python (via `uv`): `ruff format`, `ruff check`, `mypy` (strict), `pytest`. JS/TS: `prettier`, `eslint` with `typescript-eslint` strict, `tsc --noEmit`, `npm test`/`vitest`. Go: `golangci-lint fmt`, `golangci-lint run`, `go vet`, `go test`. The configs ship with GroundWork (`quality init --create` writes them and never overwrites one), and the commands follow the languages present. |
+| `standard` | GroundWork's toolchain. Python (via `uv`): `ruff format`, `ruff check`, `mypy` (strict), `pytest`. JS/TS: `prettier`, `eslint` with `typescript-eslint` strict (a Next.js app also gets `@next/eslint-plugin-next`), `tsc --noEmit`, `npm test`/`vitest`. Go: `golangci-lint fmt`, `golangci-lint run`, `go vet`, `go test`. The configs ship with GroundWork (`quality init --create` writes them and never overwrites one), and the commands follow the languages present. |
 | `keep` | The repo's own tools, recorded as they are (`quality keep` reads Makefile targets, package.json scripts and tool configs). No config is added and no file is reformatted. |
 
-An existing repo is asked before any tool config is added, because a new formatter rewrites every file; adopting the standard makes the reformat its own change. `commands` (and optional `fix`) entries override single steps.
+An existing repo is asked before any tool config is added, because a new formatter rewrites every file; adopting the standard makes the reformat its own change. A formatter never rewrites GroundWork's documents: approvals and freshness snapshots hash their exact text, so `quality init --create` adds them to `.prettierignore` (`quality ignore` does it for a repo that already uses prettier). `commands` (and optional `fix`) entries override single steps.
 
 - **`groundwork.py verify`** runs format check, lint, types and tests, and exits 1 if any fails (`--fix` runs the formatter and lint autofix first; `--step` runs one). It runs only when invoked by a person, an agent or CI; no hook executes project tools. A task is done only when verify passes (T900). A rule is never weakened, ignored or skipped to make it pass; a justified suppression names the rule and the reason on the same line.
 - **The coding rules** every agent follows are written into AGENTS.md → *Code quality* by `quality init`/`keep`, so agents without the plugin read them too: reuse before writing; smallest change that meets the spec; never swallow errors; validate input at entry points; dependencies only via the package manager; comments say why; domain names; tests that test behaviour and mock only connectors; the project's logger and no secrets in logs; small files.
@@ -442,6 +442,7 @@ sections; they never invalidate a conforming project.
 | GW121 | W | Standard toolchain: a language in the repo has no config for its standard tools |
 | GW122 | W | No `lint` or no `test` command, so `verify` cannot check it |
 | GW123 | W | Standard toolchain: a code file is longer than `max_file_lines` (default 400; tests exempt) |
+| GW124 | W | `prettier` formats the repo but `.prettierignore` does not exclude GroundWork's documents (`groundwork.py quality ignore`) |
 
 Unfinished documents are reported once (GW002/GW025) and otherwise skipped: a scaffold cannot
 yet be judged on shape. A finished document is held to the standard in full.

@@ -81,6 +81,7 @@ class Decision(Base):
             "mypy.ini",
             "eslint.config.mjs",
             ".prettierrc.json",
+            ".prettierignore",
             ".editorconfig",
         ):
             self.assertTrue((self.repo / made).is_file(), made)
@@ -97,6 +98,38 @@ class Decision(Base):
         ):
             self.assertIn(cmd, shown)
         self.assertEqual(rules(self.repo, "GW121", "GW122"), [])
+
+    def test_prettier_leaves_groundwork_documents_alone(self):
+        write(self.repo, "src/b.ts", "export const b = 1\n")
+        write(self.repo, ".prettierignore", "coverage/\n")
+        ca(self.repo, "init")
+        ca(self.repo, "quality", "keep")
+        ca(self.repo, "quality", "set", "format=npx prettier --check .")
+        found = rules(self.repo, "GW124")
+        self.assertEqual(len(found), 1)
+        self.assertTrue(found[0]["path"].endswith(".prettierignore"))
+        r = ca(self.repo, "quality", "ignore")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        text = (self.repo / ".prettierignore").read_text(encoding="utf-8")
+        self.assertTrue(text.startswith("coverage/\n"))  # the repo's own lines are kept
+        for path in ("specs/", ".groundwork/", "DECISIONS/", "CODEMAP.md"):
+            self.assertIn(path, text.splitlines())
+        self.assertEqual(rules(self.repo, "GW124"), [])
+        ca(self.repo, "quality", "ignore")
+        self.assertEqual(
+            (self.repo / ".prettierignore").read_text(encoding="utf-8"), text
+        )
+
+    def test_nextjs_app_gets_the_next_lint_rules(self):
+        write(self.repo, "src/page.tsx", "export const p = 1\n")
+        write(self.repo, "package.json", '{"dependencies": {"next": "15.1.6"}}')
+        ca(self.repo, "init")
+        r = ca(self.repo, "quality", "init", "--create")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        config = (self.repo / "eslint.config.mjs").read_text(encoding="utf-8")
+        self.assertIn("@next/eslint-plugin-next", config)
+        self.assertIn("next-env.d.ts", config)
+        self.assertIn("@next/eslint-plugin-next", r.stdout)  # in the install line
 
     def test_standard_commands_follow_the_languages_present(self):
         ca(self.repo, "init")

@@ -938,6 +938,21 @@ class SourceReview(CheckBase):
         )  # edited after approval
         self.assertIn("re-approve", ca(self.api, "board").stdout)
 
+    def test_approving_an_unreviewed_baseline_says_so(self):
+        fdir = BaselineRules.baseline(self, approve=False)
+        r = ca(self.api, "approve", str(fdir / "spec.md"), "--as", "lead")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("confirm --baseline 002-auth", r.stdout)
+        ca(self.api, "confirm", "--baseline", fdir.name)
+        self.edit(
+            fdir / "spec.md",
+            lambda t: t.replace(
+                "## Changes\n_None yet._", "## Changes\n- 2026-10-09: wording"
+            ),
+        )
+        r = ca(self.api, "approve", str(fdir / "spec.md"), "--as", "lead")
+        self.assertNotIn("never reviewed", r.stdout)
+
     def test_directory_evidence_expands_to_files(self):
         fdir = BaselineRules.baseline(self, review=False)
         self.edit(fdir / "spec.md", lambda t: t.replace("src/auth.py", "src/"))
@@ -1070,6 +1085,28 @@ class SnapshotSafety(unittest.TestCase):
         self.sp.write_text(text)
         F.confirm_baseline(self.ctx, ["001-example"], who="reviewer")
         self.assertEqual(F.baseline_review(self.ctx, "001-example").status, "review")
+
+    def test_symbols_routes_and_status_lists_are_not_evidence_paths(self):
+        import groundwork_fresh as F
+
+        route = self.repo / "src" / "app" / "api" / "[...path]" / "route.ts"
+        route.parent.mkdir(parents=True)
+        route.write_text("export {}\n")
+        snap = F.baseline_snapshot(
+            self.repo,
+            self.document(
+                "`src/app/api/[...path]/route.ts` handle(); `res.cookies.set(...)`; "
+                "(src/app.py); Header.tsx",
+                "Math.floor on credits; 401/400/503 branches; `/api/me`; e.g. by hand",
+            ),
+        )
+        self.assertEqual(
+            set(snap["sources"]), {"src/app/api/[...path]/route.ts", "src/app.py"}
+        )
+        self.assertEqual(
+            snap["missing"], ["Header.tsx"]
+        )  # a bare name is still flagged
+        self.assertEqual(snap["skipped"], [])
 
     def test_truncated_directory_requires_narrower_evidence(self):
         import groundwork_fresh as F
@@ -1266,6 +1303,18 @@ class Capabilities(CheckBase):
             )
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(records_path.read_bytes(), before)
+
+    def test_approved_baseline_drops_the_drafting_next_action(self):
+        fdir = BaselineRules.baseline(self)
+        ca(self.api, "capabilities")
+        index = (self.api / "specs" / "README.md").read_text(encoding="utf-8")
+        row = next(ln for ln in index.splitlines() if ln.startswith("| `auth`"))
+        self.assertNotIn("investigate, interview", row)
+        ca(self.api, "capability", "set", "search", "title=Search", "lifecycle=active")
+        status = ca(self.api, "status").stdout
+        self.assertIn("1 capability deferred", status)
+        self.assertNotIn("deferred deferred", status)
+        del fdir
 
     def test_records_table_and_links(self):
         ca(

@@ -1049,7 +1049,7 @@ def check_secrets(ctx: C.Ctx, r: Report) -> None:
 
 
 def check_quality(ctx: C.Ctx, r: Report) -> None:
-    """GW120–GW123: a recorded toolchain with configs and commands, and files of a readable size (§5i)."""
+    """GW120–GW124: a recorded toolchain with configs and commands, files of a readable size, and a formatter that leaves GroundWork's documents alone (§5i)."""
     for f in Q.assess(ctx.repo, ctx.config):
         (r.err if f.rule == "GW120" else r.warn)(
             f.rule, ctx.repo / f.path, f.message, f.hint

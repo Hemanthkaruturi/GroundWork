@@ -6,6 +6,7 @@ renamed ``<hook>.groundwork-orig`` and called first; ``uninstall`` puts it back.
 
 from __future__ import annotations
 
+import re
 import shutil
 import stat
 import subprocess
@@ -14,6 +15,7 @@ from pathlib import Path
 import groundwork_core as C
 
 MARKER = "# groundwork-hook v1"
+VERSION_DIR = re.compile(r"\d+\.\d+\.\d+")
 
 SCRIPT = """#!/bin/sh
 {marker}
@@ -24,6 +26,12 @@ ROOT=$(git rev-parse --show-toplevel) || exit 0
 ORIG="$0.groundwork-orig"
 if [ -x "$ORIG" ]; then "$ORIG" "$@" || exit $?; fi
 GW="$ROOT/.groundwork/engine/groundwork.py"
+CACHE="{cache}"
+if [ ! -f "$GW" ] && [ -n "$CACHE" ] && [ -d "$CACHE" ]; then
+  # the plugin cache keeps one folder per version: use the newest, not the one installed with the hook
+  V=$(ls "$CACHE" | sort -t. -k1,1n -k2,2n -k3,3n | tail -n 1)
+  GW="$CACHE/$V/engine/groundwork.py"
+fi
 [ -f "$GW" ] || GW="{engine}"
 if [ ! -f "$GW" ]; then
   echo "groundwork-specflow: engine not found ($GW); skipping check. Vendor it: groundwork.py hooks install --vendor" >&2
@@ -111,6 +119,9 @@ def install(
             verb=verb,
             strict="--strict " if strict else "",
             engine=(C.PLUGIN_ROOT / "engine" / "groundwork.py").as_posix(),
+            cache=C.PLUGIN_ROOT.parent.as_posix()
+            if VERSION_DIR.fullmatch(C.PLUGIN_ROOT.name)
+            else "",
         )
         path.write_bytes(
             script.encode("utf-8")

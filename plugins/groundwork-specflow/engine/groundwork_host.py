@@ -48,6 +48,11 @@ PATCH_FILE = re.compile(
 )
 
 
+# setup/install.py --codex puts the engine in <project>/.codex/groundwork and the skills in .agents/skills, with no
+# plugin. Project hooks get no PLUGIN_ROOT, and SessionStart has no turn_id, so the install location says Codex.
+CODEX_PROJECT = PLUGIN_ROOT.parent.name == ".codex"
+
+
 def is_devin_env() -> bool:
     return bool(
         os.environ.get("DEVIN_PLUGIN_ROOT") or os.environ.get("DEVIN_PROJECT_DIR")
@@ -64,6 +69,8 @@ def name(full: dict | None = None) -> str:
     forced = os.environ.get("GROUNDWORK_HOST", "").strip().lower()
     if forced in ("claude", "devin", "codex"):
         return forced
+    if CODEX_PROJECT:
+        return "codex"
     full = full or {}
     if "turn_id" in full or (os.environ.get("PLUGIN_ROOT") and not is_devin_env()):
         return "codex"
@@ -97,6 +104,8 @@ SLASH_CMD = re.compile(r"/groundwork-specflow:([a-z-]+)")
 
 
 def codex_command(cmd: str) -> str:
+    if CODEX_PROJECT:  # project skills keep their own names: $approve, $bootstrap
+        return f"${cmd}"
     if cmd in HUMAN_ACTS:
         return f"$source-command-{cmd}"
     return (
@@ -179,8 +188,8 @@ HOST: Codex. The groundwork skills were written for Claude Code; read them with 
 - There is no AskUserQuestion or ToolSearch tool here. Wherever a skill says AskUserQuestion or "picker", ask ONE round: each question with a short numbered list of options, your recommendation first and marked (Recommended), then end your turn and wait. Never bury questions inside a long reply.
 - Write/Edit/MultiEdit mean apply_patch; Bash is the shell. The gates apply to both.
 - Record your work with `--via codex`, not `--via claude-code`.
-- Codex has no /groundwork-specflow:<name> commands; it rejects them as unrecognised. Wherever a skill or the engine's output says /groundwork-specflow:approve or :bypass, the user types `$source-command-approve` or `$source-command-bypass`; for :status, `$groundwork-specflow:source-command-status`; for any other /groundwork-specflow:<name>, `$groundwork-specflow:<name>`. Always tell the user the `$` form.
-- Approval and bypass are human acts: the user types `$source-command-approve <doc>` or `$source-command-bypass <reason>`. If that reports no result, the user runs `python3 "{engine}" approve <doc>` in their own terminal. Never run it yourself."""
+- Codex has no /groundwork-specflow:<name> commands; it rejects them as unrecognised. Wherever a skill or the engine's output says /groundwork-specflow:<name>, {forms}. Always tell the user the `$` form.
+- Approval and bypass are human acts: the user types `{approve} <doc>` or `{bypass} <reason>`. If that reports no result, the user runs `python3 "{engine}" approve <doc>` in their own terminal. Never run it yourself."""
 
 DEVIN_NOTE = """\
 HOST: Devin. The groundwork skills were written for Claude Code; read them with these substitutions:
@@ -210,6 +219,16 @@ BOOTSTRAP_NOTE = (
 )
 
 
+CODEX_PLUGIN_FORMS = (
+    "the user types `$source-command-approve` or `$source-command-bypass` for approve and bypass, "
+    "`$groundwork-specflow:source-command-status` for status, and `$groundwork-specflow:<name>` for any other"
+)
+CODEX_PROJECT_FORMS = (
+    "the user types `$<name>`: GroundWork is installed in this project's .codex/ and .agents/skills/ folders, not as "
+    "a plugin, so its skills have no prefix: `$approve`, `$bypass`, `$status`, `$bootstrap`"
+)
+
+
 def adapt_rules(rules: str, host: str) -> str:
     """The session rules, worded for the harness that will read them."""
     if host not in ("devin", "codex"):
@@ -222,7 +241,11 @@ def adapt_rules(rules: str, host: str) -> str:
     if host == "codex":
         rules = codex_commands(rules)
     note = (CODEX_NOTE if host == "codex" else DEVIN_NOTE).format(
-        root=PLUGIN_ROOT.as_posix(), engine=engine
+        root=PLUGIN_ROOT.as_posix(),
+        engine=engine,
+        forms=CODEX_PROJECT_FORMS if CODEX_PROJECT else CODEX_PLUGIN_FORMS,
+        approve=codex_command("approve"),
+        bypass=codex_command("bypass"),
     )
     if BOOTSTRAPPED and host == "devin":
         rules, note = (

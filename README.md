@@ -211,7 +211,9 @@ What's different on Devin:
 
 ### Using Codex instead
 
-GroundWork also runs in [Codex](https://developers.openai.com/codex) (the Codex CLI and the ChatGPT desktop app), from this same repository. Codex reads this repo's Claude plugin marketplace as it is. You need Python 3.10+ and git, as above.
+GroundWork also runs in [Codex](https://developers.openai.com/codex) (the Codex CLI and the ChatGPT desktop app), from this same repository. You need Python 3.10+ and git, as above. Install it as a plugin for you, or into the project for everyone who works on it. Use one or the other, not both, or its hooks run twice.
+
+**As a plugin**, for you in every project. Codex reads this repo's Claude plugin marketplace as it is:
 
 ```
 codex plugin marketplace add Hemanthkaruturi/GroundWork
@@ -222,9 +224,20 @@ codex plugin add groundwork-specflow@groundwork-specflow
 
 Then run bootstrap: type `$groundwork-specflow:bootstrap`, or ask Codex to "use the groundwork bootstrap skill".
 
+**Or install it into the project**, for everyone who opens it in Codex, and where your company has turned plugins off. Codex doesn't install plugins from a repo's own settings in the CLI, so this copies GroundWork in as Codex project skills and hooks instead, like the Devin install. From your project's root:
+
+```
+git clone -q --depth 1 https://github.com/Hemanthkaruturi/GroundWork.git .groundwork-install
+python3 .groundwork-install/setup/install.py --codex
+```
+
+On Windows, use `py -3` or `python` if `python3` isn't found. You can also ask Codex to run these two commands; it needs to leave its sandbox for the network, so it will ask first.
+
+This puts the engine in `.codex/groundwork/`, the skills in `.agents/skills/` and the hooks in `.codex/hooks.json`, keeping any hooks of your own. Commit `.codex/` and `.agents/`. The installer checks its work by running the session-start hook the way Codex will. Each person then opens `codex` in the project, trusts the project if asked, types `/hooks` and trusts the GroundWork hooks, and starts a new session. Commands have no prefix in this install: `$bootstrap`, `$approve`, `$bypass` and `$status`. To update, run the same two commands again and re-trust the hooks; `.codex/groundwork-version` shows the installed version. To remove it, run the installer with `--codex --uninstall`.
+
 What's different on Codex:
 
-- **Commands start with `$`, not `/`.** Codex has no plugin slash commands and rejects `/groundwork-specflow:approve` as unrecognised. Approve with `$source-command-approve <doc>`, bypass with `$source-command-bypass <reason>`, and see where you are with `$groundwork-specflow:source-command-status`. The names come from Codex, which turns each GroundWork command into a skill called `source-command-<name>`, and puts `groundwork-specflow:` in front of every GroundWork skill.
+- **Commands start with `$`, not `/`.** Codex has no plugin slash commands and rejects `/groundwork-specflow:approve` as unrecognised. With the plugin, approve with `$source-command-approve <doc>`, bypass with `$source-command-bypass <reason>`, and see where you are with `$groundwork-specflow:source-command-status`. The names come from Codex, which turns each GroundWork command into a skill called `source-command-<name>`, and puts `groundwork-specflow:` in front of every GroundWork skill.
 - **Questions come as numbered options in the reply**, as on Devin, because Codex has no picker tool outside plan mode.
 - **One edit can touch several files.** Codex writes files with `apply_patch`, which can change many at once. If one of them isn't allowed yet, the whole patch is held, and the message names that file.
 - **The sandbox has no network by default**, so installing the quality tools (ruff, mypy, pytest) fails until you allow it, for example with `-c sandbox_workspace_write.network_access=true`.

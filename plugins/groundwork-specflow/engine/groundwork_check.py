@@ -315,10 +315,9 @@ def check_rfcs(ctx: C.Ctx, r: Report) -> None:
             body = strip_comments(section_body(text, 8))
             if not body or body.lower().startswith("n/a"):
                 r.err("GW012", p, "api RFC has no cross-repo contract in §8")
-            if (
-                str(meta["signoffs_required"]).isdigit()
-                and int(meta["signoffs_required"]) < 2
-            ):
+            if str(meta["signoffs_required"]).isdigit() and int(
+                meta["signoffs_required"]
+            ) < C.min_signoffs(meta):
                 r.err(
                     "GW012",
                     p,

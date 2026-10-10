@@ -13,7 +13,7 @@ GroundWork is a plugin for Claude Code and Devin. It makes the agent follow a sh
 | 19 skills | one for each step of the path, plus resume, refresh, bugs, ownership, code layout, code quality, baseline and plain writing |
 | 8 hooks | the gate before edits and shell commands, session awareness, reminders, reply length, and optional alerts when the agent waits for you |
 | 83 numbered rules | checked with no AI and no network, on a laptop, in a git hook and in CI |
-| 292 automated tests | the whole lifecycle, and every rule has a test that breaks exactly that rule |
+| 293 automated tests | the whole lifecycle, and every rule has a test that breaks exactly that rule |
 | 2 coding agents | Claude Code, and Devin (CLI and Desktop), from the same plugin |
 | 3 platforms | Linux, macOS and Windows, tested on Python 3.10 and 3.12 |
 | 0 network calls | it runs on your machine, collects nothing and sends nothing |
@@ -593,8 +593,9 @@ With the contract written and two sign-offs required, Priya approves first *(rea
 ```
 > /groundwork-specflow:approve RFC-0001
 RFC-0001-product-search.md: in-review (1/2 sign-offs: Priya Nair)
-Next step for RFC-0001-product-search.md: 1 more sign-off(s) needed. Either each remaining signer runs
-/groundwork-specflow:approve RFC-0001-product-search.md, or, if you are the only reviewer, lower ...
+Next step for RFC-0001-product-search.md: 1 more sign-off(s) needed. Each remaining signer runs
+/groundwork-specflow:approve RFC-0001-product-search.md; an api RFC needs every lead it touches,
+at least 2, so the count cannot be lowered. A bypass does not replace sign-offs.
 ```
 The status shows it waiting, and that the new contract makes a foundation document stale:
 ```
@@ -1075,7 +1076,7 @@ The step-by-step version is in `docs/manual-testing.md`.
 | `quality`, `quality init`, `quality keep`, `quality set`, `quality ignore`, `verify` (`--fix`, `--step`) | record the repo's code quality toolchain; run format, lint, types and tests |
 | `codemap`, `codemap --check` | write `CODEMAP.md` (where each kind of code lives) from the code; check it is current |
 
-**Quality:** 292 automated tests cover the whole lifecycle, on Linux, macOS and Windows, on Python 3.10 and 3.12. Every numbered rule has a test that breaks exactly that rule.
+**Quality:** 293 automated tests cover the whole lifecycle, on Linux, macOS and Windows, on Python 3.10 and 3.12. Every numbered rule has a test that breaks exactly that rule.
 
 **Privacy:** it runs locally, makes no network requests, has no telemetry, and never uses, stores or sends credentials. The key check reports only where a key is, never the key itself, and never opens `.env`. See `PRIVACY.md`.
 

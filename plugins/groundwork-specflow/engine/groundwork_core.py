@@ -292,6 +292,11 @@ def signoffs_needed(meta: dict) -> int | None:
     return int(v) if v.isdigit() and int(v) > 0 else None
 
 
+def min_signoffs(meta: dict) -> int:
+    """The fewest sign-offs a document may require: an `api` RFC needs every lead it touches (GW012)."""
+    return 2 if str(meta.get("classification") or "").strip() == "api" else 1
+
+
 def signoffs_label(st: DocState) -> str:
     """'1/2' for display, or '1/? (signoffs_required invalid)'."""
     n = len(set(st.signers))

@@ -329,6 +329,26 @@ class Lifecycle(Base):
         self.assertIn(f"Next step for {rfc.name}", out)
         self.assertIn("approved", ca(self.ws, "approve", str(rfc), "--as", "b").stdout)
 
+    def test_api_rfc_hint_never_suggests_fewer_than_two_signoffs(self):
+        ca(self.ws, "scaffold")
+        rfc = Path(ca(self.ws, "new-rfc", "x").stdout.strip())
+        fill(rfc)
+
+        def front(old, new):
+            rfc.write_text(
+                rfc.read_text(encoding="utf-8").replace(old, new, 1), encoding="utf-8"
+            )
+
+        front("classification: internal", "classification: api")
+        front("signoffs_required: 1", "signoffs_required: 2")
+        out = ca(self.ws, "approve", str(rfc), "--as", "a").stdout
+        self.assertIn("1 more sign-off(s) needed", out)
+        self.assertNotIn("lower `signoffs_required", out)
+        self.assertIn("cannot be lowered", out)
+        front("signoffs_required: 2", "signoffs_required: 3")
+        out = ca(self.ws, "approve", str(rfc), "--as", "a").stdout
+        self.assertIn("to 2 in its front matter", out)  # down to the api minimum, not 1
+
     def test_bypass_is_logged_and_expires_into_gate(self):
         ca(self.api, "scaffold")
         ca(self.ws, "scaffold")

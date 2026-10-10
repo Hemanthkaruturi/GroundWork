@@ -544,11 +544,22 @@ def signoff_help(p: Path, st: C.DocState) -> str:
             "can satisfy it. Set it to the number of reviewers (1 or more) and approve again."
         )
     left = st.needed - len(set(st.signers))
+    floor = C.min_signoffs(st.meta)
+    lower_to = max(len(set(st.signers)), floor)
+    if lower_to < st.needed:
+        alternative = (
+            f", or, if you are the only reviewer, lower `signoffs_required: {st.needed}` to {lower_to} in its "
+            f"front matter and run /groundwork-specflow:approve {p.name} again (existing sign-offs still count)"
+        )
+    else:
+        alternative = (
+            f"; an api RFC needs every lead it touches, at least {floor}, so the count cannot be lowered"
+            if floor > 1
+            else ""
+        )
     return (
-        f"Next step for {p.name}: {left} more sign-off(s) needed. Either each remaining signer runs "
-        f"/groundwork-specflow:approve {p.name}, or, if you are the only reviewer, lower `signoffs_required: "
-        f"{st.needed}` to {len(set(st.signers)) or 1} in its front matter and run /groundwork-specflow:approve "
-        f"{p.name} again (existing sign-offs still count). A bypass does not replace sign-offs."
+        f"Next step for {p.name}: {left} more sign-off(s) needed. Each remaining signer runs "
+        f"/groundwork-specflow:approve {p.name}{alternative}. A bypass does not replace sign-offs."
     )
 
 

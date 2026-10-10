@@ -12,8 +12,8 @@ GroundWork is a plugin for Claude Code and Devin. It makes the agent follow a sh
 | --- | --- |
 | 19 skills | one for each step of the path, plus resume, refresh, bugs, ownership, code layout, code quality, baseline and plain writing |
 | 6 hooks | the gate before edits and shell commands, session awareness, reminders, reply length |
-| 82 numbered rules | checked with no AI and no network, on a laptop, in a git hook and in CI |
-| 286 automated tests | the whole lifecycle, and every rule has a test that breaks exactly that rule |
+| 83 numbered rules | checked with no AI and no network, on a laptop, in a git hook and in CI |
+| 292 automated tests | the whole lifecycle, and every rule has a test that breaks exactly that rule |
 | 2 coding agents | Claude Code, and Devin (CLI and Desktop), from the same plugin |
 | 3 platforms | Linux, macOS and Windows, tested on Python 3.10 and 3.12 |
 | 0 network calls | it runs on your machine, collects nothing and sends nothing |
@@ -107,7 +107,7 @@ Fix *where* things live, *what* each document contains, and *who* approves. Leav
 ### Structure everyone shares
 - **Two levels, plus standalone.** A *workspace* holds the product-level truth (project brief, architecture, rules, contracts, decisions). Each *repo* holds its own code, specs and internals. A single repo with no workspace above it is *standalone* and carries both sets of documents. The agent always knows which level it is on, and a directory that is neither is *unknown*: nothing may be built there.
 - **Standard documents:** `PROJECT`, `ARCHITECTURE`, `CONSTITUTION` (the non-negotiable rules), `AGENTS`, RFCs, contracts, specs, plans, tasks, evals, bug records, handovers.
-- **A written standard** (`STANDARD.md`) with 82 numbered rules. `groundwork check` verifies them with no AI and no network, so it runs the same on a laptop, in a git hook and in CI.
+- **A written standard** (`STANDARD.md`) with 83 numbered rules. `groundwork check` verifies them with no AI and no network, so it runs the same on a laptop, in a git hook and in CI.
 
 ### Every repo looks the same inside
 - **A standard code layout.** Business logic lives in `core/`. Code that talks to an outside system (an LLM, a database, an HTTP API, a queue, email) lives in `connectors/`, one folder per system. Routes, commands and workers live in `entrypoints/`, and settings are read only in `config/`. A small wiring file plugs connectors into core. There are profiles for services, command-line tools, web front ends and libraries.
@@ -739,7 +739,7 @@ installed pre-commit (strict: warnings also block); installed pre-push (strict: 
 > groundwork.py hooks status
 shop-api: pre-commit [strict], pre-push [strict] + vendored engine
 ```
-After committing `.groundwork/engine/`, every teammate can run `python3 .groundwork/engine/groundwork.py hooks install`, with no plugin. An existing hook of theirs is chained and restored on uninstall. The same copy runs in CI *(illustration)*:
+Without a vendored copy, the hook runs the newest engine in the plugin cache, so a plugin upgrade never leaves it pointing at a removed version. After committing `.groundwork/engine/`, every teammate can run `python3 .groundwork/engine/groundwork.py hooks install`, with no plugin. An existing hook of theirs is chained and restored on uninstall. The same copy runs in CI *(illustration)*:
 ```yaml
 # .github/workflows/groundwork.yml
 on: [pull_request]
@@ -897,7 +897,7 @@ Commands the repo's files show (evidence, not a decision):
   lint    make lint
   test    make test
 ```
-Meena keeps the team's own tools, so no file is reformatted. A new repo instead gets GroundWork's standard toolchain: ruff, mypy and pytest for Python; prettier, eslint and tsc for TypeScript; golangci-lint and go test for Go. Its configs ship with the plugin. Either way, after every task the agent runs `groundwork.py verify`, and a task can't be marked done while it fails *(real output)*:
+Meena keeps the team's own tools, so no file is reformatted. A new repo instead gets GroundWork's standard toolchain: ruff, mypy and pytest for Python; prettier, eslint and tsc for TypeScript (plus Next.js's own lint rules in a Next.js app); golangci-lint and go test for Go. Its configs ship with the plugin. The formatter is kept off GroundWork's own documents through `.prettierignore`, because approvals hash their exact text and a reformat would make approved specs stale; `quality ignore` adds those lines to a repo that already uses prettier. Either way, after every task the agent runs `groundwork.py verify`, and a task can't be marked done while it fails *(real output)*:
 ```
 PASS  lint    make lint  (0.0s)
 FAIL  test    make test  (0.0s)
@@ -1042,10 +1042,10 @@ The step-by-step version is in `docs/manual-testing.md`.
 | `fresh`, `confirm` | detect stale documents; record a verified baseline |
 | `hooks install`, `hooks status`, `hooks uninstall` | manage the git hook, with `--vendor`, `--pre-push`, `--strict` |
 | `layout`, `layout init`, `layout keep`, `layout map` | show or record the repo's code layout: standard folders, or keep the existing structure |
-| `quality`, `quality init`, `quality keep`, `quality set`, `verify` | record the repo's code quality toolchain; run format, lint, types and tests |
+| `quality`, `quality init`, `quality keep`, `quality set`, `quality ignore`, `verify` | record the repo's code quality toolchain; run format, lint, types and tests |
 | `codemap`, `codemap --check` | write `CODEMAP.md` (where each kind of code lives) from the code; check it is current |
 
-**Quality:** 286 automated tests cover the whole lifecycle, on Linux, macOS and Windows, on Python 3.10 and 3.12. Every numbered rule has a test that breaks exactly that rule.
+**Quality:** 292 automated tests cover the whole lifecycle, on Linux, macOS and Windows, on Python 3.10 and 3.12. Every numbered rule has a test that breaks exactly that rule.
 
 **Privacy:** it runs locally, makes no network requests, has no telemetry, and never uses, stores or sends credentials. The key check reports only where a key is, never the key itself, and never opens `.env`. See `PRIVACY.md`.
 

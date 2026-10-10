@@ -14,13 +14,14 @@ description: Write plan.md (how) for the active feature, citing the spec's requi
 - If `AskUserQuestion` is not loaded yet, load it first with `ToolSearch` query `select:AskUserQuestion`, then call it. Only if the tool truly does not exist in this session (e.g. non-interactive `-p` mode) may you fall back to plain text, and then ask at most one short round, numbered.
 - Confirmations count as questions too ("Is this PROJECT.md right?" → ask with options: Looks right / Change something).
 
-Precondition: spec.md is approved. Read the spec, the repo's ARCHITECTURE.md and the code you will touch.
+Precondition: spec.md is approved. Read the spec, the repo's ARCHITECTURE.md, CONSTITUTION.md (repo and workspace) and the code you will touch. The mechanism you choose must keep every guardrail; where a guardrail shapes a decision, cite it next to the requirement id. If the only way to meet the spec breaks a rule, stop: that is a discovery for the user, not a workaround.
 
 Fill `specs/<active>/plan.md`. (Python projects: dependencies and commands in the plan use `uv`, never pip.) It is the **how**: modules and files, data model and migrations, interfaces
-(pin the CONTRACTS/ version if cross-repo), failure modes, test strategy (which layer proves which AC), rollout and
-rollback, constitution check.
+(pin the CONTRACTS/ version if cross-repo), failure modes, test strategy (tools and layers), rollout and
+rollback. There is no constitution check here: the RFC's §7 owns it.
 
 - Cite `FR-n`/`NFR-n` next to every decision. A decision with no requirement behind it is scope creep.
+- **Cite the spec; never repeat it** (`check` warns with GW092). §5 says what the *code* does on each failure and cites spec §7 for what the user sees. §6 names the test tools, the layers and what cannot be automated; the scenarios themselves belong in evals.md. §2 names files and their role; which requirement each piece of work covers is tasks.md's job.
 - Follow the patterns already in the repo; say where you deliberately depart and why.
 - **Code layout** (`groundwork.py layout`, **code-layout** skill): in §2 name each file's role folder. Standard layout: business logic in `core/`, every outside call in `connectors/<system>/` behind an interface core defines, thin `entrypoints/`, env reads only in `config/`. Repo that keeps its own structure: name the existing folder that already holds that kind of code, and never plan new layout folders or moves. Moving existing code is planned only when the user asked for a migration.
 - Anything you cannot decide alone: `[NEEDS CLARIFICATION: …]` and ask.

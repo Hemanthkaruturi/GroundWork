@@ -42,7 +42,7 @@ Doc update, Out of scope. -->
 - **Docs to update after approval:** [TODO: or "None"]
 
 ## 4. Proposal
-[TODO: the approach, at the level of components and behaviour — not code]
+[TODO: the chosen option, as behaviour a user would notice — no numbered requirements (spec), no exact wording of UI text (spec), no mechanism such as attributes, components or libraries (plan)]
 
 ## 5. Alternatives considered
 [TODO: at least one alternative and why it was rejected]
@@ -59,7 +59,7 @@ Doc update, Out of scope. -->
 [TODO: shapes, examples, failure behaviour — or write "N/A, internal"]
 
 ## 9. Out of scope
-[TODO]
+[TODO: the boundary of this decision; the spec cites this list and adds only what the repo leaves out further]
 
 ## 10. Open questions
 _None. (List any as unresolved markers; approval is blocked while any remain.)_

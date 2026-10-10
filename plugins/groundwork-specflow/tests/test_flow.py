@@ -76,6 +76,41 @@ class Base(unittest.TestCase):
         self.root = Path(self.tmp.name).resolve()
 
 
+class ConstitutionAwareness(Base):
+    """The guardrails themselves reach the agent at every session start, from the repo and the workspace."""
+
+    def test_guardrails_shown_from_repo_and_workspace(self):
+        ws, api = self.root / "ws", self.root / "ws" / "api"
+        git_init(api)
+        (ws / "PROJECT.md").write_text(
+            "# marker", encoding="utf-8"
+        )  # makes ws a workspace
+        (ws / "CONSTITUTION.md").write_text(
+            "# C\n\n## Principles\n1. x\n\n## Guardrails (things that must never happen)\n"
+            "- No secrets, keys or provider credentials in any repository.\n"
+            "- [TODO: an unfinished rule]\n\n## Quality gates\n- tests pass\n\n## Amendments\n_None._\n",
+            encoding="utf-8",
+        )
+        (api / "CONSTITUTION.md").write_text(
+            "# C\n\n## Guardrails\n* Card numbers are never stored or logged.\n\n## Quality gates\n- x\n",
+            encoding="utf-8",
+        )
+        ctx = hook(api, "session-context", {})["additionalContext"]
+        self.assertIn("CONSTITUTION GUARDRAILS", ctx)
+        self.assertIn(
+            "[workspace] No secrets, keys or provider credentials in any repository.",
+            ctx,
+        )
+        self.assertIn("[repo] Card numbers are never stored or logged.", ctx)
+        self.assertNotIn("unfinished rule", ctx)
+        self.assertIn("23. CONSTITUTION", ctx)
+
+    def test_no_guardrails_no_block(self):
+        git_init(self.root / "r")
+        ctx = hook(self.root / "r", "session-context", {})["additionalContext"]
+        self.assertNotIn("CONSTITUTION GUARDRAILS", ctx)
+
+
 class Detection(Base):
     def level(self, p):
         o = hook(p, "session-context", {})

@@ -23,10 +23,12 @@ amends: []
 MUST get a dated line under its '## Changes' section naming this feature, and be re-approved. Leave all empty if independent.
 WHAT and WHY only, in domain language. No class names, table schemas or library choices —
 those belong in plan.md. Number every requirement so plans, tasks, evals and tests can cite
-them. Every unknown is an unresolved marker; never guess. Keep it to about a page. -->
+them. Every unknown is an unresolved marker; never guess. Keep it to about a page.
+One owner per fact: the RFC owns the need, the decision, the alternatives, the risks and the
+constitution check. Cite it ("RFC-000N §2"); never copy its sentences. -->
 
 ## 1. Problem
-[TODO]
+[TODO: one or two lines — this repo's share of the need in RFC-000N §2, not a restatement of it]
 
 ## 2. Users and context
 [TODO]
@@ -51,7 +53,4 @@ them. Every unknown is an unresolved marker; never guess. Keep it to about a pag
 1. [TODO]
 
 ## 9. Out of scope
-[TODO]
-
-## 10. Constitution check
-[TODO: principle → how this spec complies]
+[TODO: only what this repo leaves out beyond RFC-000N §9 — or "As RFC-000N §9."]

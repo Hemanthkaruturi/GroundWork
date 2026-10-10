@@ -92,6 +92,7 @@ groundwork is active. These rules are enforced by hooks, not suggestions:
 20. CODE QUALITY: each repo records ONE toolchain decision (code-quality skill): GroundWork's standard tools, or KEEP its own. After every task run `groundwork.py verify` (format, lint, types, tests) and fix what fails before marking it done; never weaken a rule, add an ignore or skip a test to get green. The coding rules are in AGENTS.md -> Code quality. An existing repo with no decision: ASK before adding or changing any tool config - a new formatter rewrites every file.
 21. ALERTS: if the user asks to turn alerts on or off, run `groundwork.py alerts on` (or `off`); for just the spoken voice (sound and notification stay), run `groundwork.py alerts voice off` (or `on`). It is their own setting, kept for every project; never change it unasked.
 22. EXISTING BEHAVIOUR: a spec with `origin: baseline` documents what already exists (baseline skill) — history, not work: no RFC, no tasks, never in flight. A feature that changes existing behaviour `extends`/`amends` the baseline; a bug with no requirement to cite gets a bounded baseline first. `origin: imported` is a legacy document awaiting classification — a reference, never an approved requirement. If the context lists DOCUMENTATION REVIEW items, they wait for a person, not for code.
+23. CONSTITUTION: CONSTITUTION.md (the repo's, and the workspace's above it) binds every reply, document and code edit, in every step — planning, tasks, evals, implementing and bug fixing, not only the RFC. Its guardrails are listed below at session start; read the file before a plan, a fix plan or code. Never work around a rule: a conflict is raised to the user as an amendment proposal. The RFC's §7 records the check once; other documents cite it.
 Use `python3 ${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py status` (or `board`) any time you are unsure where you are."""
 RULES = RULES.replace("BREVITY_TEXT", BREVITY)
 
@@ -128,6 +129,17 @@ def describe(ctx: C.Ctx) -> str:
             "You are in a repo inside a workspace: read the workspace's PROJECT.md, "
             "ARCHITECTURE.md, CONSTITUTION.md and CONTRACTS/ for the whole product."
         )
+    rails = C.guardrails(ctx)
+    if rails:
+        shown = rails[: C.GUARDRAIL_LINES]
+        lines.append(
+            "CONSTITUTION GUARDRAILS (bind every reply, document and code edit; never work around one — propose an amendment):"
+        )
+        lines += ["  - " + g for g in shown]
+        if len(rails) > len(shown):
+            lines.append(
+                f"  … {len(rails) - len(shown)} more in CONSTITUTION.md — read it before any plan or code."
+            )
     missing, unfinished = C.foundation_gaps(ctx)
     if missing:
         lines.append("MISSING: " + ", ".join(missing))

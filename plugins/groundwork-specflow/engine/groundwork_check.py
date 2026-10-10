@@ -24,6 +24,7 @@ import groundwork_core as C
 import groundwork_decisions as AD
 import groundwork_fresh as F
 import groundwork_layout as L
+import groundwork_overlap as O
 import groundwork_people as PP
 import groundwork_quality as Q
 import groundwork_relations as R
@@ -76,7 +77,6 @@ SPEC_SECTIONS = [
     "Failure behaviour",
     "Manual test",
     "Out of scope",
-    "Constitution check",
 ]
 PLAN_SECTIONS = [
     "Approach",
@@ -86,7 +86,6 @@ PLAN_SECTIONS = [
     "Failure modes and edge cases",
     "Test strategy",
     "Rollout and rollback",
-    "Constitution check",
 ]
 RFC_FIELDS = [
     "id",
@@ -950,6 +949,66 @@ def check_brevity(ctx: C.Ctx, r: Report) -> None:
             )
 
 
+def _finished_text(path: Path, ctx: C.Ctx) -> str | None:
+    """A finished document's text, or None when it is absent or still unfinished."""
+    if not path.is_file():
+        return None
+    text = path.read_text(encoding="utf-8")
+    if C.PLACEHOLDER.search(C.split_fm(text)[1]):
+        return None
+    return text
+
+
+def _repeats(
+    r: Report, copy: Path, copy_text: str, owner: str, owner_text: str
+) -> None:
+    hits = O.shared_units(owner_text, copy_text)
+    if hits:
+        r.warn(
+            "GW092",
+            copy,
+            O.describe(hits, owner),
+            f'each fact has one owner (§4): cite {owner} (for example "As {owner} §9") instead of copying its words',
+        )
+
+
+def check_overlap(ctx: C.Ctx, r: Report) -> None:
+    """GW092: a downstream document cites its upstream; it does not repeat it (§4, one owner per fact)."""
+    if ctx.level in ("workspace", "standalone"):
+        for p in AD.paths(ctx):
+            text = _finished_text(p, ctx)
+            if text is None:
+                continue
+            meta, _ = C.split_fm(text)
+            ref = str(meta.get("rfc", "") or "").strip()
+            rfc_path = C.find_rfc(ctx, ref) if meta and ref else None
+            if rfc_path is None:
+                continue
+            _repeats(r, p, text, ref, rfc_path.read_text(encoding="utf-8"))
+    if ctx.level in ("repo", "standalone"):
+        for fdir in C.feature_dirs(ctx):
+            meta = C.spec_meta(fdir)
+            if C.is_imported(meta) or C.is_baseline(meta):
+                continue
+            stext = _finished_text(fdir / "spec.md", ctx)
+            if stext is None:
+                continue
+            ref = str(meta.get("rfc", "") or "").strip()
+            rfc_path = C.find_rfc(ctx, ref) if ref else None
+            if rfc_path is not None:
+                _repeats(
+                    r,
+                    fdir / "spec.md",
+                    stext,
+                    ref,
+                    rfc_path.read_text(encoding="utf-8"),
+                )
+            for name in ("plan", "tasks", "evals"):
+                dtext = _finished_text(fdir / f"{name}.md", ctx)
+                if dtext is not None:
+                    _repeats(r, fdir / f"{name}.md", dtext, "spec.md", stext)
+
+
 def check_layout(ctx: C.Ctx, r: Report) -> None:
     """GW100–GW107: code sits in the folders the repo's layout decision names (§5f). Nothing when undecided or `keep`."""
     for f in L.assess(ctx.repo, ctx.config):
@@ -1102,6 +1161,7 @@ def check_ctx(ctx: C.Ctx, r: Report, seen: set[Path]) -> None:
     check_freshness(ctx, r)
     check_ownership(ctx, r)
     check_brevity(ctx, r)
+    check_overlap(ctx, r)
     check_approval_records(ctx, r)
     if ctx.level == "workspace":
         check_rfcs(ctx, r)

@@ -12,8 +12,8 @@ GroundWork is a plugin for Claude Code and Devin. It makes the agent follow a sh
 | --- | --- |
 | 19 skills | one for each step of the path, plus resume, refresh, bugs, ownership, code layout, code quality, baseline and plain writing |
 | 6 hooks | the gate before edits and shell commands, session awareness, reminders, reply length |
-| 81 numbered rules | checked with no AI and no network, on a laptop, in a git hook and in CI |
-| 279 automated tests | the whole lifecycle, and every rule has a test that breaks exactly that rule |
+| 82 numbered rules | checked with no AI and no network, on a laptop, in a git hook and in CI |
+| 283 automated tests | the whole lifecycle, and every rule has a test that breaks exactly that rule |
 | 2 coding agents | Claude Code, and Devin (CLI and Desktop), from the same plugin |
 | 3 platforms | Linux, macOS and Windows, tested on Python 3.10 and 3.12 |
 | 0 network calls | it runs on your machine, collects nothing and sends nothing |
@@ -33,7 +33,8 @@ Every feature, in one line, with where to see it.
 | **Nothing is guessed** | Unknowns become visible markers that block approval | 5.6 |
 | **Amendments** | A plan that finds a spec problem must show evidence, let you choose, log the change, and get re-approval | 5.7, 5.24 |
 | **Workspaces and repos** | Product-level truth in one place, each repo owns its own craft | 5.1, 5.18 |
-| **Constitution and guardrails** | Non-negotiable rules, checked in every RFC, spec and plan | 5.20 |
+| **Constitution and guardrails** | Non-negotiable rules, checked once per change, in the RFC | 5.20 |
+| **One owner per fact** | Each document on the path adds its own kind of information and cites the one before it; the check warns when a spec repeats its RFC, a plan repeats its spec, or an ADR repeats its RFC | 5.20, 5.23 |
 | **Cross-repo RFCs and contracts** | A change that crosses repos needs a versioned contract and more than one sign-off | 5.21, 5.22 |
 | **Evals and traceability** | Every requirement has a task, every acceptance criterion has a test scenario, written before code | 5.23 |
 | **Feature and RFC relationships** | depends on, builds against, extends, amends, supersedes, with cycle and clash detection | 5.10, 5.25 |
@@ -106,7 +107,7 @@ Fix *where* things live, *what* each document contains, and *who* approves. Leav
 ### Structure everyone shares
 - **Two levels, plus standalone.** A *workspace* holds the product-level truth (project brief, architecture, rules, contracts, decisions). Each *repo* holds its own code, specs and internals. A single repo with no workspace above it is *standalone* and carries both sets of documents. The agent always knows which level it is on, and a directory that is neither is *unknown*: nothing may be built there.
 - **Standard documents:** `PROJECT`, `ARCHITECTURE`, `CONSTITUTION` (the non-negotiable rules), `AGENTS`, RFCs, contracts, specs, plans, tasks, evals, bug records, handovers.
-- **A written standard** (`STANDARD.md`) with 81 numbered rules. `groundwork check` verifies them with no AI and no network, so it runs the same on a laptop, in a git hook and in CI.
+- **A written standard** (`STANDARD.md`) with 82 numbered rules. `groundwork check` verifies them with no AI and no network, so it runs the same on a laptop, in a git hook and in CI.
 
 ### Every repo looks the same inside
 - **A standard code layout.** Business logic lives in `core/`. Code that talks to an outside system (an LLM, a database, an HTTP API, a queue, email) lives in `connectors/`, one folder per system. Routes, commands and workers live in `entrypoints/`, and settings are read only in `config/`. A small wiring file plugs connectors into core. There are profiles for services, command-line tools, web front ends and libraries.
@@ -123,7 +124,7 @@ Fix *where* things live, *what* each document contains, and *who* approves. Leav
 - **A dial, not a wall.** Enforcement can be `block`, `warn` or `off` per repo, and a human can lift the gate for an hour in an emergency. Every bypass is logged.
 
 ### Rules the team agreed, written down and checked
-- **A constitution.** Principles, guardrails ("never…"), quality gates and amendments. Every RFC, spec and plan has a mandatory *Constitution check* section, so a change that breaks a rule has to say so.
+- **A constitution.** Principles, guardrails ("never…"), quality gates and amendments. Every RFC has a mandatory *Constitution check* in its Impact section, so a change that breaks a rule has to say so. The spec and the plan cite it rather than repeat it.
 - **Checkable rules.** The best guardrails come with a command that fails when the rule is broken, so the agent finds out at once.
 
 ### Changes that cross repos
@@ -553,7 +554,7 @@ Each answer in the RFC's interview record carries an effect label, so the reader
 The five labels are **Confirmed**, **Tension**, **Open decision**, **Doc update** and **Out of scope**. An open decision goes into the RFC's open questions, which block approval. When an answer clashes with an earlier one, a document or the constitution, the agent must say so and ask which way to go. It never smooths it over. While interviewing, the only file it changes is the RFC draft.
 
 ### 5.20 The constitution: rules the whole team agreed
-`CONSTITUTION.md` holds *Principles*, *Guardrails* (things that must never happen), *Quality gates* and *Amendments*. Every RFC, spec and plan has a mandatory **Constitution check** section, where the change says how it complies, or says that it does not *(illustration)*:
+`CONSTITUTION.md` holds *Principles*, *Guardrails* (things that must never happen), *Quality gates* and *Amendments*. Every RFC has a mandatory **Constitution check** in its Impact section, where the change says how it complies, or says that it does not. The spec and plan that follow cite the RFC; they do not carry a second and third copy of the check *(illustration)*:
 ```
 ## Guardrails (things that must never happen)
 - Card numbers are never stored or logged. Payments go through the payment provider only.
@@ -564,11 +565,17 @@ The five labels are **Confirmed**, **Tension**, **Open decision**, **Doc update*
 - `uv run pytest` and `uv run ruff check` pass.
 - `grep -rn "import anthropic\|import openai" shop_api | grep -v llm/client.py` finds nothing.
 ```
-The tool checks that the section exists in every plan *(real output)*:
+The tool checks that every required section exists in every document *(real output)*:
 ```
-ERROR   GW030  shop-api/specs/001-product-search/plan.md: missing/misordered section(s): 8. Constitution check
+ERROR   GW030  shop-api/specs/001-product-search/plan.md: missing/misordered section(s): 6. Test strategy
 ```
-**How the rule is upheld:** the agent reads the constitution during the interview and checks each RFC, spec and plan against it, and the implement step tells it to follow it. The tool checks that the check was done, not that the reasoning is right. To make a rule hold hard, write it as something a reviewer can check in a diff, and put the command that proves it in the quality gates and in `AGENTS.md`. The agent runs the repo's checks and may not mark a task done while one fails. Changing the constitution is always deliberate: the agent proposes an amendment, and never edits it on its own.
+**How the rule is upheld:** at every session start the tool lists the constitution's guardrails, from the repo and from the workspace above it, so the agent sees the rules themselves and not just a file name *(illustration)*:
+```
+CONSTITUTION GUARDRAILS (bind every reply, document and code edit; never work around one — propose an amendment):
+  - [workspace] No secrets, keys or provider credentials in any repository.
+  - [repo] Card numbers are never stored or logged. Payments go through the payment provider only.
+```
+The agent reads the constitution during the interview and checks the RFC against it; the spec, plan, evals and bug-fix steps read it again before they write, the evals carry a scenario for each guardrail the feature could break, and the implement step tells the agent to follow it. The tool checks that the check was done, not that the reasoning is right. To make a rule hold hard, write it as something a reviewer can check in a diff, and put the command that proves it in the quality gates and in `AGENTS.md`. The agent runs the repo's checks and may not mark a task done while one fails. Changing the constitution is always deliberate: the agent proposes an amendment, and never edits it on its own.
 
 ### 5.21 A change across repos: a cross-repo RFC needs a contract and two sign-offs
 Search touches `shop-api` and `shop-web`, so the RFC is classified `api`. If it has no contract, or asks for only one sign-off, the check refuses it *(real output)*:
@@ -629,13 +636,20 @@ Requirements, tasks and evals are numbered and linked, so nothing is built witho
 | E3 | Empty search | q=                             | 400 query_required       | AC-3   | test_empty_query      |
 | E4 | Speed        | 10,000 products, search "mug"  | answers in under 300 ms  | NFR-1  | test_search_speed     |
 ```
-The evals are written before the code. Each task lists its **Files**, what **Done when** means, and which requirement it **Covers**. Every requirement must be covered, and the tool refuses gaps (each line below is from a separate run) *(real output)*:
+The evals are written before the code. Each task lists its **Files**, what **Done when** means (the eval ids and the command that proves them), and which requirement it **Covers**. Every requirement must be covered, and the tool refuses gaps (each line below is from a separate run) *(real output)*:
 ```
 ERROR   GW033  shop-api/specs/001-product-search/evals.md: AC-2 has no evaluation scenario
 ERROR   GW032  shop-api/specs/001-product-search/tasks.md: FR-2 is not covered by any task
 ERROR   GW031  shop-api/specs/001-product-search/tasks.md: T003 has no 'Covers'
 ```
 Three closing verification tasks are always kept: the full checks pass, every requirement maps to a completed task, and the spec's manual test was run by hand. A refresh of the foundation documents is part of finishing.
+
+**One owner per fact.** Each document on the path owns one kind of information and cites the one before it: the RFC owns the need, the decision and the constitution check; the spec owns the requirements and the manual test; the plan owns the mechanism; the tasks own the order of work; the evals own the scenarios. A spec that pastes a paragraph of its RFC, a plan that pastes a requirement, or an ADR that re-tells an implemented RFC gets a warning *(illustration)*:
+```
+WARNING GW092  shop-api/specs/001-product-search/spec.md: 3 sentences repeat text RFC-0001 owns; first: “a shopper types part of a product name and…”
+         → each fact has one owner (§4): cite RFC-0001 (for example "As RFC-0001 §9") instead of copying its words
+```
+An RFC that was built as proposed needs no ADR; its row in the decisions index, marked *Implemented*, is the record.
 
 ### 5.24 A spec edited after approval turns everything downstream red
 Someone changes "300 ms" to "200 ms" in an approved spec. The approval is invalid, and the plan, tasks and evals are flagged, because they were written against the old text *(real output)*:
@@ -968,7 +982,7 @@ or `documented in docs/RETRIEVAL_BENCHMARK_FINDINGS.md`, or simply `historical r
 4. **Request a feature.** It asks its questions, labels your answers, writes an RFC with a read-back, and stops for your approval. Try to get it to approve for itself: it refuses.
 5. **The shell trick.** Ask it to write a file with a shell heredoc. Denied.
 6. **A plan finds a problem.** It shows the evidence and lets you choose. The spec gets a logged change and needs your re-approval.
-7. **A rule of the team.** Add a guardrail to the constitution. Watch it show up in the RFC's Constitution check.
+7. **A rule of the team.** Add a guardrail to the constitution. Watch it show up in the RFC's Constitution check, and watch the spec cite it instead of repeating it.
 8. **Close the session, open a new one.** It shows what's in flight and resumes.
 9. **Ask "who owns this?"** One screen with names and contacts.
 10. **`groundwork doctor`.** The project's stage and next steps.
@@ -1022,7 +1036,7 @@ The step-by-step version is in `docs/manual-testing.md`.
 | `quality`, `quality init`, `quality keep`, `quality set`, `verify` | record the repo's code quality toolchain; run format, lint, types and tests |
 | `codemap`, `codemap --check` | write `CODEMAP.md` (where each kind of code lives) from the code; check it is current |
 
-**Quality:** 279 automated tests cover the whole lifecycle, on Linux, macOS and Windows, on Python 3.10 and 3.12. Every numbered rule has a test that breaks exactly that rule.
+**Quality:** 283 automated tests cover the whole lifecycle, on Linux, macOS and Windows, on Python 3.10 and 3.12. Every numbered rule has a test that breaks exactly that rule.
 
 **Privacy:** it runs locally, makes no network requests, has no telemetry, and never uses, stores or sends credentials. The key check reports only where a key is, never the key itself, and never opens `.env`. See `PRIVACY.md`.
 

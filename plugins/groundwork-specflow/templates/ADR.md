@@ -16,7 +16,10 @@ related: []
 # {{id}} — {{title}}
 
 <!-- An ADR keeps the outcome of a decision. Two kinds:
-- after an approved RFC was built (`rfc:` set, status proposed → accepted): the RFC holds the interview and alternatives;
+- after an approved RFC was built (`rfc:` set, status proposed → accepted): written only when the outcome departed from
+  the RFC's proposal, or a decision was taken during the build that the RFC does not record — and it records only that.
+  The RFC holds the need, the interview and the alternatives; an RFC built as proposed needs no ADR (its row in
+  DECISIONS/README.md is the record);
 - RETROSPECTIVE (`origin: baseline`, status recorded): a choice found in an existing codebase. Say where the reason
   comes from, and nothing more than that: a commit subject or a folder name proves a topic, never the reason, who
   approved it, or when. `**Source:**` in §3 must be one of: documented in <path or commit> · retrospective explanation

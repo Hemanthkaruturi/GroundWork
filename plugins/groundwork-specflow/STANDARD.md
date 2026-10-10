@@ -1,6 +1,6 @@
 # The Groundwork Standard
 
-**Version 0.8.0** · the specification that `groundwork check` enforces and the templates implement.
+**Version 0.9.0** · the specification that `groundwork check` enforces and the templates implement.
 
 Everything a team or an agent needs to know to work "the Groundwork way" is here. If two
 projects follow the same version of this document, a person or an agent moving between them
@@ -64,28 +64,49 @@ A document is **unfinished** while it contains `[TODO…]` or `[NEEDS CLARIFICAT
 documents cannot be approved. Section names below are matched case-insensitively as prefixes, so
 `## 8. Cross-repo contract (only if …)` satisfies "Cross-repo contract".
 
+**One owner per fact.** Every fact about a feature is written in exactly one document; every other
+document cites it (`RFC-0001 §2`, `FR-3`, `spec §8 step 2`, `E4`) and MUST NOT repeat its words. A
+downstream document adds only what its own role owns:
+
+| Document | Owns | Cites, never repeats |
+| --- | --- | --- |
+| RFC | the need, the interview, the decision and why, the alternatives, the risks, the impact and the constitution check, the boundary of the decision | — |
+| spec | who uses it, the numbered requirements and acceptance criteria, what the user sees when it fails, the manual test | the RFC's need (§1 is one or two lines pointing at RFC §2) and boundary (§9 adds only what the repo leaves out further) |
+| plan | the mechanism: files, data, interfaces, what the code does on failure, test tools and layers, rollout | requirement ids; spec §7 for the user-visible outcome; evals for the scenarios |
+| tasks | the order of work and the files each step touches | eval ids and the command that proves a step ("Done when: E1, E4 pass") |
+| evals | one row per scenario with concrete input and concrete expected value, including the cases nobody wrote down | AC ids; the spec's manual-test step for a manual row |
+| log | dated notes: where work stopped, what was decided on the way | — |
+| ADR | a decision found in existing code (retrospective), or where a built outcome departed from its RFC | the RFC for everything the RFC already records |
+
+`groundwork check` warns (GW092) when a finished spec repeats sentences of its RFC, a plan, tasks or
+evals file repeats sentences of its spec, or an ADR repeats sentences of the RFC it cites. A pointer
+("As RFC-0001 §9.") is never a repeat.
+
 **PROJECT.md** — business, not technical; who works on what. `##` sections: *What this is · Who it is for · Why now / what success looks like · Scope · Who works on what · Stakeholders and decision makers · Repositories in this product · Glossary*.
 
 **ARCHITECTURE.md** — *Overview · Components and repositories · Data flow · Tech stack and tools · Deployment and environments · Boundaries and contracts · Cross-cutting concerns · Local development*.
 
-**CONSTITUTION.md** — the non-negotiable rules; every RFC and spec is checked against it. *Principles · Guardrails · Quality gates · Amendments*.
+**CONSTITUTION.md** — the non-negotiable rules. *Principles · Guardrails · Quality gates · Amendments*. It binds every reply, document and code edit at every step. The session start shows the agent the finished *Guardrails* bullets of the repo's and the workspace's constitution (up to 12, with a pointer to the rest), so awareness does not depend on a document section. The RFC's §7 records the check once; the spec and plan cite it; the evals carry a scenario for each guardrail the feature could break; a bug record names the guardrail a defect breaks. An agent never works around a rule: a conflict is proposed to the user as an amendment.
 
 **AGENTS.md** — instructions for agents: what to read first, exact commands, conventions. Free-form, but MUST be finished.
 
 **RFC** (`DECISIONS/RFC-NNNN-slug.md`) — records a decision. Front matter: `id, title, status, classification (internal|api), signoffs_required, author, created`. Numbered `##` sections, in order: *1 Summary · 2 The need · 3 Interview record · 4 Proposal · 5 Alternatives considered · 6 Risks and objections · 7 Impact · 8 Cross-repo contract · 9 Out of scope · 10 Open questions*.
+§4 states the chosen option as behaviour a user would notice; it MUST NOT hold numbered requirements, the exact wording of UI text (spec) or the mechanism — attributes, components, libraries (plan). §7 holds the feature's **constitution check**: the only one on the path. §9 is the boundary of the decision that the spec cites.
 An `api` RFC (one that crosses a repository boundary) MUST fill §8 and MUST require at least two sign-offs — one for every lead it touches.
 
-**Spec** (`specs/NNN-slug/spec.md`) — *what and why*, never *how*. Front matter: `id` (= directory name), `rfc`, `title`, `status`, `created`, `author`, the ownership roles (§5e), the relations `extends`, `depends_on`, `builds_against`, `amends` (§5c), and optionally `origin` (§5j: absent for a planned feature, `baseline` for existing behaviour, `imported` for a legacy document, which also carries `adoption_state`). An amended spec gains a `## Changes` section after the required ones. Numbered sections: *1 Problem · 2 Users and context · 3 User stories · 4 Functional requirements · 5 Non-functional requirements · 6 Acceptance criteria · 7 Failure behaviour · 8 Manual test · 9 Out of scope · 10 Constitution check*.
+**Spec** (`specs/NNN-slug/spec.md`) — *what and why*, never *how*. Front matter: `id` (= directory name), `rfc`, `title`, `status`, `created`, `author`, the ownership roles (§5e), the relations `extends`, `depends_on`, `builds_against`, `amends` (§5c), and optionally `origin` (§5j: absent for a planned feature, `baseline` for existing behaviour, `imported` for a legacy document, which also carries `adoption_state`). An amended spec gains a `## Changes` section after the required ones. Numbered sections: *1 Problem · 2 Users and context · 3 User stories · 4 Functional requirements · 5 Non-functional requirements · 6 Acceptance criteria · 7 Failure behaviour · 8 Manual test · 9 Out of scope*.
+§1 is one or two lines naming this repo's share of RFC §2, not a restatement of it. §9 lists only what the repo leaves out beyond RFC §9, else "As RFC-000N §9." The spec has no constitution check: a requirement that touches a rule the RFC's §7 did not consider is a discovery (§5a′) that goes back to the RFC.
 
-**Baseline spec** (`origin: baseline`) — the same ten sections, written for behaviour that already exists, followed by `## Intent and rationale` (the interview record: question, answer, source or person, effect), `## Known discrepancies` (confirmed guarantees the code currently breaks, `- [ ]` open / `- [x]` resolved, each naming a bug record), `## Evidence` (one row per FR/NFR/AC: implementation paths, tests or observations, verification state *inspected · executed/passed · executed/failed · not verified*, date) and `## Changes`. Extra front matter: `observed_at`, optional `source_revision`, and for a reconciled import `adopted_from`, `adopted_status`, `adopted_at`, `historical_companions`.
+**Baseline spec** (`origin: baseline`) — the same nine sections, written for behaviour that already exists (a constitution rule the behaviour breaks is a known discrepancy, not a section), followed by `## Intent and rationale` (the interview record: question, answer, source or person, effect), `## Known discrepancies` (confirmed guarantees the code currently breaks, `- [ ]` open / `- [x]` resolved, each naming a bug record), `## Evidence` (one row per FR/NFR/AC: implementation paths, tests or observations, verification state *inspected · executed/passed · executed/failed · not verified*, date) and `## Changes`. Extra front matter: `observed_at`, optional `source_revision`, and for a reconciled import `adopted_from`, `adopted_status`, `adopted_at`, `historical_companions`.
 
-**Plan** (`plan.md`) — *how*. Numbered: *1 Approach · 2 Affected modules and files · 3 Data model and migrations · 4 Interfaces and contracts · 5 Failure modes and edge cases · 6 Test strategy · 7 Rollout and rollback · 8 Constitution check*.
+**Plan** (`plan.md`) — *how*. Numbered: *1 Approach · 2 Affected modules and files · 3 Data model and migrations · 4 Interfaces and contracts · 5 Failure modes and edge cases · 6 Test strategy · 7 Rollout and rollback*.
+§2 names files and their role folder; the requirement-to-work mapping is tasks.md's job. §5 says what the code does on each failure and cites spec §7 for what the user sees. §6 names the tools, the test layers and what cannot be automated; the scenarios themselves live in evals.md. The plan has no constitution check (RFC §7 owns it).
 
-**Tasks** (`tasks.md`) — closing tasks `T900+` include T903, the docs-refresh check. Each task `- [ ] **T001** — title` followed by `**Files:**`, `**Done when:**`, `**Covers:** FR-n`. Verification tasks are numbered `T900+` and need no `Covers`.
+**Tasks** (`tasks.md`) — closing tasks `T900+` include T903, the docs-refresh check. Each task `- [ ] **T001** — title` followed by `**Files:**`, `**Done when:**`, `**Covers:** FR-n`. `Done when` names the proof — eval ids and the command that runs them — never the behaviour again. Verification tasks are numbered `T900+` and need no `Covers`.
 
-**Evals** (`evals.md`) — written *before* the code: scenarios with input, expected result, the requirement covered, how it is checked.
+**Evals** (`evals.md`) — written *before* the code: scenarios with concrete input, concrete expected result, the requirement covered, how it is checked. A row cites its AC and never pastes the AC's sentence; a manual row cites the spec's manual-test step. For each constitution guardrail the feature could break there is a row proving it holds (`Covers: guardrail: …`).
 
-**ADR** (`DECISIONS/ADR-NNNN-slug.md`) — the outcome of a decision. Front matter: `id`, `title`, `status` (`proposed · accepted · superseded`, or `recorded` for a retrospective one), `created`, `rationale_source` (`documented · retrospective · unknown`, required) with `source`, optional `rfc`, `decided_at` (`unknown` unless a document states it), `recorded_by`, `supersedes`, `related`; a **retrospective** ADR (a choice found in existing code, no RFC) carries `origin: baseline`. Numbered sections: *1 Context · 2 Decision · 3 Rationale · 4 Consequences · 5 Evidence*, then `## Changes`. §3 MUST begin, as its first content line, with `**Source:**` followed by the complete label: *documented in <path or commit>* · *retrospective explanation by <person>, <YYYY-MM-DD>* · *historical rationale unknown*, matching `rationale_source`. An ADR made with `--rfc` needs an approved RFC; `decided_at` is `unknown` unless a document states the date. A commit subject or a folder name is a lead to a topic, never the reason, the approver or the date. ADRs are not approved documents; they are records a person chose to write, one at a time, never in bulk. A hand-written ADR without front matter is not checked.
+**ADR** (`DECISIONS/ADR-NNNN-slug.md`) — the outcome of a decision. Front matter: `id`, `title`, `status` (`proposed · accepted · superseded`, or `recorded` for a retrospective one), `created`, `rationale_source` (`documented · retrospective · unknown`, required) with `source`, optional `rfc`, `decided_at` (`unknown` unless a document states it), `recorded_by`, `supersedes`, `related`; a **retrospective** ADR (a choice found in existing code, no RFC) carries `origin: baseline`. Numbered sections: *1 Context · 2 Decision · 3 Rationale · 4 Consequences · 5 Evidence*, then `## Changes`. §3 MUST begin, as its first content line, with `**Source:**` followed by the complete label: *documented in <path or commit>* · *retrospective explanation by <person>, <YYYY-MM-DD>* · *historical rationale unknown*, matching `rationale_source`. An ADR made with `--rfc` needs an approved RFC and is written only when the built outcome departed from the RFC's proposal, or a decision was taken during the build that the RFC does not record; it records only that departure and cites the RFC for the rest. An RFC built as proposed needs no ADR: its row in `DECISIONS/README.md` (state *Implemented*) is the record. `decided_at` is `unknown` unless a document states the date. A commit subject or a folder name is a lead to a topic, never the reason, the approver or the date. ADRs are not approved documents; they are records a person chose to write, one at a time, never in bulk. A hand-written ADR without front matter is not checked.
 
 **Contracts** (`CONTRACTS/*.md`) — provider, consumers, semver version, every operation with shapes and a real example, failure semantics, compatibility rules. A shipped contract is never changed in a breaking way in place. A contract created by `groundwork.py new-contract` carries front matter: `id` (= file name), `title`, `provider`, `consumers`, `version` (semver; a date never goes in it), `status`, `signoffs_required` (2 or more), the named reviewers `provider_reviewer` and `consumer_reviewers`, and, for an **as-built** contract, `origin: baseline` with `observed_at`. Numbered sections: *1 Provider and consumers · 2 Version and changelog · 3 Operations · 4 Errors and failure semantics · 5 Auth and tenancy · 6 Compatibility rules · 7 Evidence* (as-built: required), then `## Changes`. Approval counts distinct signers (§7); it knows nothing about roles, so `check` only warns (GW047) when a named reviewer has not signed, and whether both sides reviewed stays a human procedure. A hand-written contract without front matter is not checked. A repo inside a workspace reads upward: the workspace's contracts and their findings show in the repo's `check`, board and session context too.
 
@@ -105,6 +126,7 @@ interview → RFC → [approve] → spec → [approve] → plan → tasks → ev
 6. **Handover.** So the next engineer or agent continues without reverse-engineering decisions.
 
 A change of behaviour changes the spec in the same change. A bug is a violated spec; if none covers it, the spec has a gap.
+Each step adds its own kind of information and cites the step before it (§4, one owner per fact); none restates it.
 
 ## 5a. Freshness — documents must keep matching reality
 
@@ -394,6 +416,7 @@ sections; they never invalidate a conforming project.
 | GW083 | W | An implemented feature has no `support` contact |
 | GW090 | W | A finished document exceeds its word budget (§5a″) |
 | GW091 | W | A finished document's sentences average more than 26 words |
+| GW092 | W | A finished spec repeats sentences of its RFC; a plan, tasks or evals file repeats sentences of its spec; an ADR repeats sentences of the RFC it cites (§4, one owner per fact) |
 | GW040 | W | An approval record points at a file that no longer exists |
 | GW041 | W | The capability table in `specs/README.md` is missing or older than the records it is built from |
 | GW045 | E | A GroundWork contract's front matter is missing or blank a field, its id mismatches the file name, its version is not semver, `signoffs_required` is not a whole number of at least 2, or it claims an approval it does not have |

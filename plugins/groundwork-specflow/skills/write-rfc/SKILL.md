@@ -21,6 +21,7 @@ that the people it touches can sign it. It is the input to the spec.
 2. Create it (or open the draft the interview already created — never start a second one): `python3 "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py" new-rfc <short-slug> --title "<title>"`
    (creates `DECISIONS/RFC-000N-slug.md` at the workspace, or the repo if standalone).
 3. Fill every section from the interview. §3 is the Q&A log with an effect label on every row, plus the read-back. Copy every **Open decision** to §10 and every **Out of scope** item to §9. Be concrete about behaviour; leave code out.
+3b. **§4 is the decision, not the spec or the plan.** State the chosen option as behaviour a user would notice. No numbered requirements, no exact UI wording, no mechanism (attributes, components, libraries): the spec and the plan own those, and they will cite this RFC rather than copy it. The RFC owns the need (§2), the alternatives (§5), the risks (§6), the constitution check (§7) and the boundary (§9); say each once, here.
 4. **Classification.** If the change crosses a repo boundary, set `classification: api`, fill §8
    (use **write-contract**) and set `signoffs_required` to the number of leads it touches. Otherwise `internal`.
 4b. If it replaces an earlier decision set `supersedes: [RFC-000N]`; if it merely relates, `related_rfcs: [...]`. State in §7 which existing features it extends, amends or depends on.

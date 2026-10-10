@@ -9,6 +9,7 @@ Fill `specs/<active>/tasks.md`.
 
 - One task = one reviewable change, ordered so checks are green after each.
 - Every task has **Files**, a verifiable **Done when**, and **Covers: FR-n** (the traceability link).
+- **Done when** names the proof, not the behaviour: the eval ids and the command that runs them (`E1, E4 pass (npm test)`), or the manual step. The spec already says what the feature does; do not say it again (`check` warns with GW092).
 - Mark `[P]` only for tasks on disjoint files.
 - Tests for an AC come before or with the code that satisfies it.
 - Keep the closing verification tasks: `groundwork.py verify` passes (T900); every FR is covered by a completed task;

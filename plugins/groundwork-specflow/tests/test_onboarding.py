@@ -8,6 +8,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent / "engine"))
+import groundwork_core as C
 from test_check import CheckBase
 from test_flow import ENV, Base, ca, git_init
 
@@ -87,7 +89,7 @@ class Init(Base):
             json.loads(
                 (self.root / ".groundwork" / "config.json").read_text(encoding="utf-8")
             )["standard"],
-            "0.8.0",
+            C.STANDARD_VERSION,
         )
 
     def test_as_workspace_marks_it(self):

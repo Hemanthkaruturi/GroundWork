@@ -16,7 +16,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-STANDARD_VERSION = "0.8.0"  # the version of STANDARD.md this code implements
+STANDARD_VERSION = "0.9.0"  # the version of STANDARD.md this code implements
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 TEMPLATES = PLUGIN_ROOT / "templates"
@@ -473,6 +473,41 @@ def _gaps_at(level: str, base: Path | None, prefix: str) -> tuple[list[str], lis
         if not (base / d).is_dir():
             missing.append(prefix + d + "/")
     return missing, unfinished
+
+
+GUARDRAIL_LINES = (
+    12  # shown at every session start; more go unshown with a pointer to the file
+)
+
+
+def guardrails(ctx: Ctx) -> list[str]:
+    """The finished bullet lines under '## Guardrails' of every CONSTITUTION.md that binds this place:
+    the repo's (standalone or repo level) and the workspace's above it. Unfinished bullets are left out."""
+    out: list[str] = []
+    places: list[tuple[str, Path | None]] = []
+    if ctx.level == "workspace":
+        places.append(("workspace", ctx.workspace))
+    elif ctx.level in ("repo", "standalone"):
+        if ctx.workspace:
+            places.append(("workspace", ctx.workspace))
+        places.append(("repo", ctx.repo))
+    for label, base in places:
+        p = _find_ci(base, "CONSTITUTION.md") if base else None
+        if not p:
+            continue
+        text = p.read_text(encoding="utf-8")
+        m = re.search(
+            r"^## Guardrails[^\n]*\n(.*?)(?=^## |\Z)", text, re.MULTILINE | re.DOTALL
+        )
+        if not m:
+            continue
+        for line in m.group(1).splitlines():
+            s = line.strip()
+            if not s.startswith(("-", "*")) or PLACEHOLDER.search(s):
+                continue
+            s = re.sub(r"^[-*]\s*", "", s)
+            out.append(f"[{label}] {s}")
+    return out
 
 
 def _find_ci(base: Path, name: str) -> Path | None:

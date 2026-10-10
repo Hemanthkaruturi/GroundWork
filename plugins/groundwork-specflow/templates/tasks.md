@@ -11,10 +11,11 @@ created: {{date}}
 > One task = one reviewable change, ordered so the suite stays green after each.
 > `[P]` marks tasks on disjoint files. Legend: `[ ]` not started · `[~]` in progress · `[x]` done.
 > Mark a task `[x]` only after its "done when" is verified.
+> "Done when" names the proof — the eval ids and the command that runs them — never the behaviour again (the spec owns that).
 
 - [ ] **T001** — [TODO]
   - **Files:** [TODO]
-  - **Done when:** [TODO: verifiable]
+  - **Done when:** [TODO: e.g. "E1, E4 pass (`npm test`)"]
   - **Covers:** FR-1
 
 ## Verification

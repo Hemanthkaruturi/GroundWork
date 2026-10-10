@@ -49,10 +49,7 @@ breaks goes under Known discrepancies with a bug reference — never describe a 
 1. [TODO]
 
 ## 9. Out of scope
-[TODO: accepted limitations; what belongs to future work]
-
-## 10. Constitution check
-[TODO: principle → how the existing behaviour complies, or where it does not]
+[TODO: accepted limitations; what belongs to future work. A constitution rule the behaviour breaks is a Known discrepancy below]
 
 ## Intent and rationale
 <!-- The interview record for this baseline. Effect: Confirmed, Tension, Open decision, Doc update, Out of scope. -->

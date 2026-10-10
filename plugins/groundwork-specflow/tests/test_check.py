@@ -196,6 +196,68 @@ class Rules(CheckBase):
         )
         self.assertFires("GW032")
 
+    def test_gw092_spec_repeats_rfc_sentence(self):
+        need = "A researcher opens the page, types a question, and presses run before any field is suggested."
+        self.edit(
+            self.rfc,
+            lambda t: t.replace(
+                "## 3. Interview record", need + "\n\n## 3. Interview record"
+            ),
+        )
+        ca(self.ws, "approve", "RFC-0001", "--as", "lead")
+        self.assertNotIn("GW092", check(self.ws)[1])
+        self.edit(
+            self.fdir / "spec.md",
+            lambda t: t.replace(
+                "## 2. Users and context",
+                need + " (RFC-0001 §2)\n\n## 2. Users and context",
+            ),
+        )
+        _, ids, items = check(self.ws)
+        self.assertIn("GW092", ids)
+        self.assertTrue(
+            any(
+                f["id"] == "GW092"
+                and f["path"].endswith("spec.md")
+                and "RFC-0001" in f["message"]
+                for f in items
+            )
+        )
+        # a pointer is not a copy
+        self.edit(
+            self.fdir / "spec.md",
+            lambda t: t.replace(need + " (RFC-0001 §2)", "As RFC-0001 §2."),
+        )
+        self.assertNotIn("GW092", check(self.ws)[1])
+
+    def test_gw092_plan_repeats_spec_and_adr_repeats_rfc(self):
+        rule = "The server must refuse any upload larger than one megabyte with a clear message."
+        self.edit(
+            self.fdir / "spec.md", lambda t: t.replace("## 5.", rule + "\n\n## 5.", 1)
+        )
+        self.edit(
+            self.fdir / "plan.md", lambda t: t.replace("## 2.", rule + "\n\n## 2.", 1)
+        )
+        _, _, items = check(self.ws)
+        self.assertTrue(
+            any(f["id"] == "GW092" and f["path"].endswith("plan.md") for f in items)
+        )
+        why = "We chose a styled tooltip because the native one is slow, unstyled and absent on touch."
+        self.edit(self.rfc, lambda t: t.replace("## 6.", why + "\n\n## 6.", 1))
+        ca(self.ws, "approve", "RFC-0001", "--as", "lead")
+        made = ca(
+            self.ws, "new-adr", "tooltip", "--title", "Tooltip", "--rfc", "RFC-0001"
+        )
+        self.assertEqual(made.returncode, 0, made.stdout + made.stderr)
+        adr = Path(made.stdout.strip().splitlines()[0])
+        fill(adr)
+        self.edit(adr, lambda t: t.replace("## 4.", why + "\n\n## 4.", 1))
+        _, _, items = check(self.ws)
+        self.assertTrue(
+            any(f["id"] == "GW092" and f["path"].endswith(adr.name) for f in items),
+            items,
+        )
+
     def test_gw033_ac_without_eval(self):
         self.edit(self.fdir / "evals.md", lambda t: t.replace("AC-1", "AC-x"))
         self.assertFires("GW033")

@@ -1,6 +1,7 @@
 """Codex compatibility: Codex's hook payloads (`turn_id`, `apply_patch` with a `command` body, `Bash`) and PLUGIN_ROOT."""
 
 import json
+import shutil
 import subprocess
 import sys
 import unittest
@@ -75,8 +76,8 @@ class CodexGates(Base):
         )
         o = codex(self.repo, "gate", tool("apply_patch", {"command": patch}))
         reason = o["hookSpecificOutput"]["permissionDecisionReason"]
-        self.assertIn("also writes", reason)
-        self.assertIn("pyproject.toml", reason)
+        self.assertRegex(reason, r"also writes \S*pyproject.toml\. ")
+        self.assertIn("The other files are allowed", reason)
         self.assertNotIn(
             "also writes",
             codex(
@@ -85,6 +86,42 @@ class CodexGates(Base):
                 tool("apply_patch", {"command": PATCH.format("app.py")}),
             )["hookSpecificOutput"]["permissionDecisionReason"],
         )
+
+    def test_a_patch_held_on_every_file_does_not_call_the_others_fine(self):
+        patch = (
+            "*** Begin Patch\n*** Add File: eslint.config.mjs\n+x\n"
+            "*** Add File: src/app.ts\n+y\n*** End Patch\n"
+        )
+        o = codex(self.repo, "gate", tool("apply_patch", {"command": patch}))
+        self.assertTrue(denied(o), o)
+        self.assertNotIn(
+            "also writes", o["hookSpecificOutput"]["permissionDecisionReason"]
+        )
+
+    def test_every_prompt_reminds_codex_of_the_dollar_commands(self):
+        o = codex(
+            self.repo,
+            "prompt-reminder",
+            {"hook_event_name": "UserPromptSubmit", "turn_id": "t", "prompt": "hi"},
+        )
+        ctx = o["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("`$source-command-approve <doc>`", ctx)
+        self.assertNotIn("/groundwork-specflow:", ctx)
+
+    def test_engine_run_from_the_codex_plugin_cache_prints_dollar_commands(self):
+        cached = self.root / ".codex" / "plugins" / "cache" / "g" / "gw" / "0.1.20"
+        shutil.copytree(PLUGIN / "engine", cached / "engine")
+        r = subprocess.run(
+            [sys.executable, str(cached / "engine" / "groundwork.py"), "bypass", ""],
+            cwd=self.repo,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            env=ENV,
+            check=False,
+        )
+        self.assertIn("$source-command-bypass <why>", r.stderr)
+        self.assertNotIn("/groundwork-specflow:", r.stderr + r.stdout)
 
     def test_messages_name_the_codex_commands_not_slash_commands(self):
         o = codex(

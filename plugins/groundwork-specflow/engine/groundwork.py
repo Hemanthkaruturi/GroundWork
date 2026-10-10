@@ -284,7 +284,8 @@ def cmd_prompt_reminder(_a) -> None:
         G.context(
             inp,
             "UserPromptSubmit",
-            f"[groundwork] level={ctx.level} phase={phase}. {ins}{note} {TRIAGE} {BREVITY}",
+            f"[groundwork] level={ctx.level} phase={phase}. {ins}{note} {TRIAGE} {BREVITY}"
+            + (f" {G.codex_reminder()}" if G.name(inp) == "codex" else ""),
         )
     )
 
@@ -306,22 +307,28 @@ def cmd_gate(_a) -> None:
                 "is held. Use the write or edit tool with a file path, or ask the user for /groundwork-specflow:bypass.",
             )
         return
+    if any(C.is_protected_path(path) for path in paths):
+        return deny(
+            full,
+            "groundwork-specflow: approval records are written only by the user's /groundwork-specflow:approve command.",
+        )
+    held = []
     for path in paths:
-        if C.is_protected_path(path):
-            return deny(
-                full,
-                "groundwork-specflow: approval records are written only by the user's /groundwork-specflow:approve command.",
-            )
         ok, reason = C.gate_code_edit(path, G.session_cwd(full))
         if not ok:
-            if (
-                len(paths) > 1
-            ):  # one apply_patch can touch many files; say which one is held
-                reason += (
-                    f" — blocked because this edit also writes {path}. "
-                    "Edit that file separately; the other files in this edit are not the problem."
-                )
-            return deny(full, reason)
+            held.append((path, reason))
+    if not held:
+        return
+    reason = held[0][1]
+    if (
+        len(held) < len(paths)
+    ):  # one apply_patch can touch many files; name the held ones when others would pass
+        names = ", ".join(str(p) for p, _ in held)
+        reason += (
+            f" — blocked because this edit also writes {names}. "
+            "The other files are allowed; write them in an edit of their own."
+        )
+    deny(full, reason)
 
 
 def cmd_stop_brevity(_a) -> None:
@@ -797,7 +804,7 @@ def cmd_init(a) -> None:
                 )
     print("\nNext:")
     print(
-        "  1. Start Claude Code with the plugin and run /groundwork-specflow:bootstrap — it drafts the documents from the evidence above"
+        "  1. In your coding agent, with GroundWork installed, run /groundwork-specflow:bootstrap — it drafts the documents from the evidence above"
     )
     print("     and asks you only what code cannot tell (purpose, people, decisions).")
     print(
@@ -1554,6 +1561,18 @@ def cmd_activate(a) -> None:
     print(f"Active feature: {a.slug}")
 
 
+HOOKS = (
+    "session-context",
+    "prompt-reminder",
+    "gate",
+    "gate-bash",
+    "skill-notice",
+    "stop-brevity",
+    "alert-stop",
+    "alert-question",
+)
+
+
 def main() -> None:
     for stream in (
         sys.stdin,
@@ -1856,6 +1875,10 @@ def main() -> None:
     p.add_argument("slug")
     p.set_defaults(fn=cmd_activate)
     a = ap.parse_args()
+    if (
+        a.cmd not in HOOKS and G.name() == "codex"
+    ):  # the agent relays this output to the user
+        sys.stdout, sys.stderr = G.CodexText(sys.stdout), G.CodexText(sys.stderr)
     a.fn(a)
 
 

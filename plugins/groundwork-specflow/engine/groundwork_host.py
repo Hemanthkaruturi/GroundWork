@@ -51,6 +51,9 @@ PATCH_FILE = re.compile(
 # setup/install.py --codex puts the engine in <project>/.codex/groundwork and the skills in .agents/skills, with no
 # plugin. Project hooks get no PLUGIN_ROOT, and SessionStart has no turn_id, so the install location says Codex.
 CODEX_PROJECT = PLUGIN_ROOT.parent.name == ".codex"
+# Codex caches a plugin under ~/.codex/plugins/cache/. When the agent runs the engine from its shell there is no
+# payload and no PLUGIN_ROOT, so the install location is what says Codex.
+CODEX_PLUGIN = "/.codex/plugins/" in PLUGIN_ROOT.as_posix()
 
 
 def is_devin_env() -> bool:
@@ -69,7 +72,7 @@ def name(full: dict | None = None) -> str:
     forced = os.environ.get("GROUNDWORK_HOST", "").strip().lower()
     if forced in ("claude", "devin", "codex"):
         return forced
-    if CODEX_PROJECT:
+    if CODEX_PROJECT or CODEX_PLUGIN:
         return "codex"
     full = full or {}
     if "turn_id" in full or (os.environ.get("PLUGIN_ROOT") and not is_devin_env()):
@@ -116,6 +119,28 @@ def codex_command(cmd: str) -> str:
 def codex_commands(text: str) -> str:
     """`/groundwork-specflow:approve` -> `$source-command-approve`, `:bootstrap` -> `$groundwork-specflow:bootstrap`."""
     return SLASH_CMD.sub(lambda m: codex_command(m.group(1)), text)
+
+
+def codex_reminder() -> str:
+    """Said on every Codex prompt: agents copy the slash commands from the skills, and Codex rejects them."""
+    return (
+        f"Codex: the user approves with `{codex_command('approve')} <doc>` and bypasses with "
+        f"`{codex_command('bypass')} <reason>`. Never tell them a command starting with /, Codex rejects it."
+    )
+
+
+class CodexText:
+    """A stream that rewrites slash commands into the `$` forms Codex accepts, for engine runs from the shell."""
+
+    def __init__(self, stream):
+        self.stream = stream
+
+    def write(self, text: str) -> int:
+        self.stream.write(codex_commands(text))
+        return len(text)
+
+    def __getattr__(self, attr):
+        return getattr(self.stream, attr)
 
 
 def deny(full: dict, reason: str) -> dict:

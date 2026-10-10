@@ -248,7 +248,7 @@ What's different on Codex:
 
 - **Commands start with `$`, not `/`.** Codex has no plugin slash commands and rejects `/groundwork-specflow:approve` as unrecognised. With the plugin, approve with `$source-command-approve <doc>`, bypass with `$source-command-bypass <reason>`, and see where you are with `$groundwork-specflow:source-command-status`. The names come from Codex, which turns each GroundWork command into a skill called `source-command-<name>`, and puts `groundwork-specflow:` in front of every GroundWork skill.
 - **Questions come as numbered options in the reply**, as on Devin, because Codex has no picker tool outside plan mode.
-- **One edit can touch several files.** Codex writes files with `apply_patch`, which can change many at once. If one of them isn't allowed yet, the whole patch is held, and the message names that file.
+- **One edit can touch several files.** Codex writes files with `apply_patch`, which can change many at once. If one of them isn't allowed yet, the whole patch is held, and when the others are allowed the message names the held one.
 - **The sandbox has no network by default**, so installing the quality tools (ruff, mypy, pytest) fails until you allow it, for example with `-c sandbox_workspace_write.network_access=true`.
 - **The Codex IDE extension doesn't load plugins**, and plugin hooks don't run in cloud sessions. Run `groundwork check` in CI to catch what they miss.
 

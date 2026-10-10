@@ -2,7 +2,7 @@
 
 **Coding agents write code fast. GroundWork makes sure they write the right code, the way your team agreed, and that people can always see why.**
 
-GroundWork is a plugin for Claude Code and Devin. It makes the agent follow a shared, written plan: standard documents first, humans approve the important steps, and only then code. It is free and open source (MIT). The rules are enforced by the tool itself, not by asking nicely.
+GroundWork is a plugin for Claude Code, Codex and Devin. It makes the agent follow a shared, written plan: standard documents first, humans approve the important steps, and only then code. It is free and open source (MIT). The rules are enforced by the tool itself, not by asking nicely.
 
 **This is the base document for GroundWork.** It lists every feature, with a real example for each. Marketing material (slides, posts, one-pagers) should be built from it. Examples marked *(real output)* were produced by running the tool on the sample product described in section 5. Examples marked *(illustration)* show what a person or the agent writes or sees, and were not printed by the tool.
 
@@ -13,8 +13,8 @@ GroundWork is a plugin for Claude Code and Devin. It makes the agent follow a sh
 | 19 skills | one for each step of the path, plus resume, refresh, bugs, ownership, code layout, code quality, baseline and plain writing |
 | 8 hooks | the gate before edits and shell commands, session awareness, reminders, reply length, and optional alerts when the agent waits for you |
 | 83 numbered rules | checked with no AI and no network, on a laptop, in a git hook and in CI |
-| 293 automated tests | the whole lifecycle, and every rule has a test that breaks exactly that rule |
-| 2 coding agents | Claude Code, and Devin (CLI and Desktop), from the same plugin |
+| 313 automated tests | the whole lifecycle, and every rule has a test that breaks exactly that rule |
+| 3 coding agents | Claude Code, Codex (CLI) and Devin (CLI and Desktop), from the same plugin |
 | 3 platforms | Linux, macOS and Windows, tested on Python 3.10 and 3.12 |
 | 0 network calls | it runs on your machine, collects nothing and sends nothing |
 
@@ -57,7 +57,7 @@ Every feature, in one line, with where to see it.
 | **Short, plain replies** | Answer first, about 150 words, nothing important lost | 5.15 |
 | **Other skills can't skip the process** | A design skill is a tool for the build step, not a shortcut | 5.16 |
 | **Sensible defaults** | Python projects use `uv`, never `pip` | 5.17 |
-| **Claude Code and Devin** | One plugin, the same gate and documents, in either agent | 5.29, §11 |
+| **Claude Code, Codex and Devin** | One plugin, the same gate and documents, in any of the three; Codex and Devin can also install it into the project, without their plugin systems | 5.29, 5.36, §11 |
 | **Private and cross-platform** | Runs locally, no telemetry, works on Linux, macOS and Windows | §8, §10 |
 | **Easy to install and update** | Two commands to install, auto-update or one command to update | §11 |
 
@@ -169,7 +169,7 @@ Fix *where* things live, *what* each document contains, and *who* approves. Leav
 ### Private, portable and easy to keep current
 - Runs entirely on your machine. No network requests, no telemetry, no accounts. It reads your local git name and email only to record who did what, and keeps that in your own project files. If you turn alerts on, two small settings files are kept in `~/.groundwork/`.
 - Works on Linux, macOS and Windows. It needs Python 3.10 or newer and git, and nothing else.
-- Works in **Claude Code** and in **Devin** (CLI and Desktop). Both agents run the same hooks, skills and engine, so a team can mix them on one project.
+- Works in **Claude Code**, in **Codex** (CLI) and in **Devin** (CLI and Desktop). All three run the same hooks, skills and engine, so a team can mix them on one project.
 - Two commands to install. Auto-update, or one command to update.
 
 ## 5. See each feature in action
@@ -187,7 +187,7 @@ One sample product is used throughout. **ShopFront** is a workspace called `shop
 | Work and people | 5.8 resume · 5.9 bugs · 5.11 who · 5.26 handover |
 | Keeping it true | 5.12 freshness · 5.13 and 5.28 git hook and CI |
 | Style and defaults | 5.15 short replies · 5.16 other skills · 5.17 `uv` |
-| Agents | 5.29 running in Devin |
+| Agents | 5.29 running in Devin · 5.36 running in Codex |
 | Code | 5.30 code layout · 5.31 code map · 5.32 credentials · 5.33 code quality |
 | Existing systems | 5.34 baselines, imported specs, retrospective decisions and as-built contracts |
 | Attention | 5.35 alerts |
@@ -997,6 +997,29 @@ Alerts are off, voice is off.
 ```
 `alerts test` plays one. The sounds, notifications and speech come from the operating system's own tools on Windows (including WSL), macOS and Linux. Over SSH only the terminal bell rings. The alert hooks print nothing and never change what the agent may do.
 
+### 5.36 Running in Codex
+The same plugin runs in the Codex CLI. Codex reads GroundWork's Claude plugin marketplace as it is, and runs its hooks, skills and engine, so the gate, approvals, the board and every document work as in Claude Code. The engine sees that Codex is calling and answers in Codex's format. Codex writes files with `apply_patch` and runs shell commands with `Bash`, and both are gated. One patch can change several files, so the gate reads it file by file. When some of them are allowed, it names the ones that hold the patch back *(real output, from Codex's hook interface; path shortened)*:
+```
+groundwork-specflow: code edits are blocked until the foundation docs exist and are filled in (missing: none;
+unfinished: PROJECT.md, ARCHITECTURE.md, CONSTITUTION.md, AGENTS.md). Use the bootstrap skill. If this is a genuine
+emergency the USER can run $source-command-bypass <reason>. — blocked because this edit also writes
+shop-api/src/search.py. The other files are allowed; write them in an edit of their own.
+```
+Codex has no plugin slash commands and rejects `/groundwork-specflow:approve` as unrecognised. Commands are typed with `$` instead. Every message the engine sends to Codex names the `$` form, including the output of engine commands the agent runs itself, and every prompt reminds the agent which form to give the user. With the plugin, Codex turns each GroundWork command into a skill called `source-command-<name>`: approve with `$source-command-approve <doc>`, bypass with `$source-command-bypass <reason>`, and see where you are with `$groundwork-specflow:source-command-status`. Other skills are `$groundwork-specflow:<skill>`, for example `$groundwork-specflow:bootstrap`. Codex has no picker outside plan mode, so questions come in numbered rounds, as on Devin (5.29).
+
+Approval stays human. The user types the approve command, and Codex's agent is refused if it tries to run approve itself *(real output)*:
+```
+groundwork-specflow: approvals and bypasses are human acts. Ask the user to run $source-command-approve or
+$source-command-bypass themselves.
+```
+Work is recorded `--via codex`, so `who` shows which agent built what. The code layout, code map, credentials, code quality and alerts (5.30–5.35) need nothing Codex-specific, except that Codex never sends the before-a-question event, so the question alert stays silent; the alert at reply end still rings.
+
+**Trust the hooks first.** Codex installs plugin and project hooks switched off and skips untrusted hooks without a warning. Each person types `/hooks` in Codex, trusts the GroundWork hooks and starts a new session, and does it again after each update, because the hooks have changed. The `workflow` skill checks for GroundWork's session message and, if it is missing, tells the user that nothing is being enforced and how to trust the hooks.
+
+**Differences to know about.** The Codex IDE extension doesn't load plugins, and plugin hooks don't run in Codex cloud sessions. The skills can guide the agent there, but nothing blocks a code edit, so add the git hook or CI check (5.28). Codex's sandbox has no network by default, so installing the quality tools fails until network access is allowed. The plugin relies on Codex reading Claude-format plugins, and on the `source-command-` names Codex gives commands, neither of which Codex documents. The ChatGPT desktop app and Windows haven't been tested with GroundWork yet.
+
+**Without Codex's plugin system.** For a team that wants GroundWork in the repo, or a company that turns plugins off, `setup/install.py --codex` installs it into the project (§11). It puts the engine in `.codex/groundwork/`, each skill and command in `.agents/skills/`, and the hooks in `.codex/hooks.json`, next to any hooks the project already has. These are Codex's project skills and hooks, not a plugin. Commands have no prefix: `$bootstrap`, `$approve`, `$bypass`, `$status`. The approve, bypass and status skills are marked so that only the user can invoke them; Codex's agent can't choose them on its own. The script checks its own install by running the session-start hook the way Codex will, and `--codex --uninstall` removes it and keeps the project's own hooks. Committing `.codex/` and `.agents/` gives the whole team GroundWork; each person still trusts the project and its hooks once.
+
 ## 6. How it helps
 
 | If you are… | You get… |
@@ -1053,9 +1076,9 @@ The step-by-step version is in `docs/manual-testing.md`.
 | `baseline` | Writes what existing code already does as baseline specs, and classifies legacy specs imported with `adopt-specs` |
 | `plain-writing` | Keeps replies and documents short, plain and decision-first |
 
-**8 hooks:** session start (awareness, guardrails, the code map and in-flight work), every prompt (triage and style reminder), before edits and before shell commands (the gate, which can only deny and never approves anything), when another skill loads, at reply end (optional length limit), and two alert hooks, at reply end and before a question, that stay silent unless you turned alerts on. The same hook file serves Claude Code and Devin. Its matchers name both agents' tools.
+**8 hooks:** session start (awareness, guardrails, the code map and in-flight work), every prompt (triage and style reminder), before edits and before shell commands (the gate, which can only deny and never approves anything), when another skill loads, at reply end (optional length limit), and two alert hooks, at reply end and before a question, that stay silent unless you turned alerts on. The same hook file serves Claude Code, Codex and Devin. Its matchers name every agent's tools.
 
-**Commands you type:** `/groundwork-specflow:approve` (one or more documents), `/groundwork-specflow:bypass` (emergencies, logged), `/groundwork-specflow:status`. They are the same in Claude Code and Devin. In Devin, only the user can run them. In a Devin project installed without the plugin system (5.29), they have no prefix: `/approve`, `/bypass`, `/status`.
+**Commands you type:** `/groundwork-specflow:approve` (one or more documents), `/groundwork-specflow:bypass` (emergencies, logged), `/groundwork-specflow:status`. They are the same in Claude Code and Devin. In Devin, only the user can run them. In a Devin project installed without the plugin system (5.29), they have no prefix: `/approve`, `/bypass`, `/status`. Codex has no plugin slash commands, so there they are typed with `$`: `$source-command-approve`, `$source-command-bypass` and `$groundwork-specflow:source-command-status` with the plugin, or `$approve`, `$bypass` and `$status` in a project install (5.36).
 
 **A command-line engine** (`groundwork.py`), pure Python with no dependencies and no Claude needed:
 
@@ -1076,7 +1099,7 @@ The step-by-step version is in `docs/manual-testing.md`.
 | `quality`, `quality init`, `quality keep`, `quality set`, `quality ignore`, `verify` (`--fix`, `--step`) | record the repo's code quality toolchain; run format, lint, types and tests |
 | `codemap`, `codemap --check` | write `CODEMAP.md` (where each kind of code lives) from the code; check it is current |
 
-**Quality:** 293 automated tests cover the whole lifecycle, on Linux, macOS and Windows, on Python 3.10 and 3.12. Every numbered rule has a test that breaks exactly that rule.
+**Quality:** 313 automated tests cover the whole lifecycle, on Linux, macOS and Windows, on Python 3.10 and 3.12. Every numbered rule has a test that breaks exactly that rule.
 
 **Privacy:** it runs locally, makes no network requests, has no telemetry, and never uses, stores or sends credentials. The key check reports only where a key is, never the key itself, and never opens `.env`. See `PRIVACY.md`.
 
@@ -1086,7 +1109,7 @@ The step-by-step version is in `docs/manual-testing.md`.
 - Approval proves "a human typed this", not who they are.
 - Some checks are judgment calls by the agent (is this a bug or a change request? did the short reply keep every caveat? does this change follow the constitution?). The tool checks that the constitution check was done, not that the reasoning is right. Rules written as a command that fails when broken are enforced for real. The saved originals make mistakes recoverable.
 - Contracts are documents: the tool does not yet verify that a repo still honours the contract version it pinned.
-- It works with **Claude Code** and **Devin** (CLI and Desktop; Devin cloud sessions get the skills but no hook enforcement). The engine is agent-neutral, so other agents can get a thin adapter.
+- It works with **Claude Code**, **Codex** (CLI) and **Devin** (CLI and Desktop). Devin and Codex cloud sessions and the Codex IDE extension get no hook enforcement. In Codex, nothing is enforced until each person trusts the hooks in `/hooks`. Codex support relies on Codex reading Claude-format plugins, which Codex doesn't document. The engine is agent-neutral, so other agents can get a thin adapter.
 - The coding rules are instructions, and agents can still slip. The linters, type checkers and tests run by `verify` are what actually hold the line, so a repo is only as strict as the tools it records. `verify` runs those tools, so they must be installed where it runs.
 - The key check looks for well-known key formats (Anthropic, OpenAI, AWS, GitHub, Slack, Google, Stripe, private keys). It doesn't find passwords or keys in unknown formats; use a dedicated secret scanner for that.
 - The code layout checks read imports as text, for Python, JavaScript/TypeScript and Go only. They can miss an unusual import or flag the odd false one, which is why they are warnings. Code in other languages is not checked and does not appear in the code map.
@@ -1109,6 +1132,8 @@ The step-by-step version is in `docs/manual-testing.md`.
 **Does it send our code or data anywhere?** No. It makes no network requests and has no telemetry. It reads your local git name and email to record who did what, and keeps that in your own project files.
 
 **Does it work with Devin?** Yes, in the Devin CLI and Desktop app, with the same gate and documents. Devin cloud sessions get the skills but no hook enforcement, so add the git hook or the CI check there (5.28, 5.29). If your company has turned Devin plugins off, let Devin install GroundWork into the project instead (§11).
+
+**Does it work with Codex?** Yes, in the Codex CLI, with the same gate and documents. Commands start with `$` instead of `/`, and each person trusts the hooks once in `/hooks`. The Codex IDE extension and cloud sessions don't run its hooks, so add the git hook or the CI check there (5.28, 5.36). It can also be installed into the project with `setup/install.py --codex` (§11).
 
 **Will it restructure our existing code?** No. On first onboarding it asks: migrate to the standard layout, or keep the current structure. With *keep*, nothing moves and new code follows your patterns. With *migrate*, code moves only as planned, approved work. Either way, every repo gets a code map.
 
@@ -1166,6 +1191,24 @@ To install the plugin for one project instead, add it to `.devin/config.json` at
 
 As a plugin, commands start with `/groundwork-specflow:`. To update: `devin plugins update groundwork-specflow`. Use one install or the other, not both.
 
+**Using Codex?** Install the plugin from a terminal:
+
+```
+codex plugin marketplace add Hemanthkaruturi/GroundWork
+codex plugin add groundwork-specflow@groundwork-specflow
+```
+
+Then open `codex` in your project, type `/hooks`, trust the GroundWork hooks, and start a new session. Until you do, Codex skips them silently and nothing is enforced. Then type `$groundwork-specflow:bootstrap`. To update, run `codex plugin marketplace upgrade groundwork-specflow`, then the `codex plugin add` command again, and trust the updated hooks.
+
+Or install it into the project, for everyone who opens it in Codex. From the project's root:
+
+```
+git clone -q --depth 1 https://github.com/Hemanthkaruturi/GroundWork.git .groundwork-install
+python3 .groundwork-install/setup/install.py --codex
+```
+
+Commit `.codex/` and `.agents/`. Each person trusts the project and the hooks in `/hooks`, starts a new session and types `$bootstrap`. To update, run the same two commands again and re-trust the hooks. Use the plugin or the project install, not both, or the hooks run twice.
+
 **Existing project?** See where it stands without changing anything: `python3 <plugin>/engine/groundwork.py doctor` and `init --dry-run`.
 
 Full reference: `plugins/groundwork-specflow/STANDARD.md`. Hands-on scenarios: `docs/manual-testing.md`.
@@ -1173,7 +1216,8 @@ Full reference: `plugins/groundwork-specflow/STANDARD.md`. Hands-on scenarios: `
 ## 12. Where it goes next
 
 - Hooks that install themselves for every teammate on clone, and ready-made CI templates.
-- Adapters for more coding agents, beyond Claude Code and Devin.
-- Hook enforcement in Devin cloud sessions, once Devin runs plugin hooks there.
+- Adapters for more coding agents, beyond Claude Code, Codex and Devin.
+- Hook enforcement in Devin and Codex cloud sessions and the Codex IDE extension, once they run plugin hooks.
+- A native Codex plugin manifest, so Codex support no longer depends on its reading Claude-format plugins.
 - Automatic checks that each repo still honours the contract version it pinned.
 - A dashboard view of the work board and ownership map.

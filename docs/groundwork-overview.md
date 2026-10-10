@@ -13,7 +13,7 @@ GroundWork is a plugin for Claude Code and Devin. It makes the agent follow a sh
 | 19 skills | one for each step of the path, plus resume, refresh, bugs, ownership, code layout, code quality, baseline and plain writing |
 | 6 hooks | the gate before edits and shell commands, session awareness, reminders, reply length |
 | 82 numbered rules | checked with no AI and no network, on a laptop, in a git hook and in CI |
-| 283 automated tests | the whole lifecycle, and every rule has a test that breaks exactly that rule |
+| 286 automated tests | the whole lifecycle, and every rule has a test that breaks exactly that rule |
 | 2 coding agents | Claude Code, and Devin (CLI and Desktop), from the same plugin |
 | 3 platforms | Linux, macOS and Windows, tested on Python 3.10 and 3.12 |
 | 0 network calls | it runs on your machine, collects nothing and sends nothing |
@@ -44,7 +44,7 @@ Every feature, in one line, with where to see it.
 | **Ownership and accountability** | Who requested, owns, built, deployed and supports every item, and whom to call | 5.11 |
 | **Documents that stay true** | Freshness tracking flags stale documents, including the workspace ones | 5.12 |
 | **Code layout** | One decision per repo: the standard folders (business logic, connectors to outside systems, entry points, settings), or keep the existing structure. Never migrated without asking | 5.30 |
-| **Code map** | `CODEMAP.md` in every repo, generated from the code: which folder holds what, where outside systems are called, where settings are read | 5.31 |
+| **Code map** | `CODEMAP.md` in every repo, generated from the code: which folder holds what, where outside systems are called, where settings are read. Shown in brief at every session start, and created when work starts if missing | 5.31 |
 | **Credentials** | Secrets come only from environment variables (locally `.env`, git-ignored); a committed `.env` or a pasted key is caught | 5.32 |
 | **Code quality** | One recorded toolchain per repo (formatter, linter, types, tests), run by `verify`, plus ten coding rules every agent reads in AGENTS.md | 5.33 |
 | **Onboarding existing projects** | `init` gathers evidence, `doctor` shows how far the project is from the standard | 5.14, 5.18 |
@@ -842,7 +842,16 @@ Whatever the layout decision, `groundwork init` writes `CODEMAP.md` from the cod
 ## Settings (where environment variables are read)
 - `src/shop_api/services/orders.py`
 ```
-The facts come from the code; people and agents write only the **Holds** column (one line per folder) and a Notes section. Both are kept when the map is regenerated. Every session tells the agent to read the map before searching the code, so it goes straight to the right folder.
+The facts come from the code; people and agents write only the **Holds** column (one line per folder) and a Notes section. Both are kept when the map is regenerated. Every session start shows the map in brief, so the agent goes straight to the right folder instead of searching *(illustration)*:
+```
+CODE MAP: CODEMAP.md lists where each kind of code lives - read it before searching the code.
+  - `src/shop_api/services` [core]: order rules, pricing and the search query
+  - `src/shop_api/clients` [connectors]: the search engine client
+  - `src/shop_api/routes` [entrypoints]: HTTP routes, thin
+  - database via psycopg: `src/shop_api/services/orders.py`
+  - http via httpx: `src/shop_api/clients/search_engine.py`
+```
+A repo onboarded before the map existed gets one the moment work starts: `new-feature`, `new-bug` and `activate` write it when it is missing.
 
 The map knows when it is wrong. Adding a file to a known folder changes nothing. A new folder, a moved one, or a new outside system makes `check` report the map as out of date. `groundwork.py codemap` regenerates it and keeps every description, and only the new folder needs describing.
 
@@ -1036,7 +1045,7 @@ The step-by-step version is in `docs/manual-testing.md`.
 | `quality`, `quality init`, `quality keep`, `quality set`, `verify` | record the repo's code quality toolchain; run format, lint, types and tests |
 | `codemap`, `codemap --check` | write `CODEMAP.md` (where each kind of code lives) from the code; check it is current |
 
-**Quality:** 283 automated tests cover the whole lifecycle, on Linux, macOS and Windows, on Python 3.10 and 3.12. Every numbered rule has a test that breaks exactly that rule.
+**Quality:** 286 automated tests cover the whole lifecycle, on Linux, macOS and Windows, on Python 3.10 and 3.12. Every numbered rule has a test that breaks exactly that rule.
 
 **Privacy:** it runs locally, makes no network requests, has no telemetry, and never uses, stores or sends credentials. The key check reports only where a key is, never the key itself, and never opens `.env`. See `PRIVACY.md`.
 

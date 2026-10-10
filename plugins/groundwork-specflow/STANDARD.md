@@ -277,7 +277,8 @@ The checks are static (imports in Python, JavaScript/TypeScript and Go; environm
 
 Every repo and standalone has **`CODEMAP.md`**, whatever its layout decision: it tells people and agents where each kind of code lives, so nobody searches the whole codebase.
 
-- `groundwork.py codemap` generates it from the code: each code folder (to four levels), its role (standard layout) and file count; the outside systems called and from where; where environment variables are read; entry and wiring files; test folders. `init` and `scaffold` create it; `layout init|keep|map` refresh it.
+- `groundwork.py codemap` generates it from the code: each code folder (to four levels), its role (standard layout) and file count; the outside systems called and from where; where environment variables are read; entry and wiring files; test folders. `init` and `scaffold` create it; `layout init|keep|map` refresh it; `new-feature`, `new-bug` and `activate` create it when it is missing, so work never starts without one.
+- The session start shows the map in brief — each folder with what it holds, and each outside system with where it is called, up to 25 lines with a pointer to the file — so the agent goes to the right folder before its first search. The full file keeps the entry points, settings and tests.
 - Humans and agents write only the **Holds** column (one line per folder: what it holds) and the **Notes** section. Both survive regeneration.
 - A fingerprint of the facts is embedded. When folders, roles, outside calls or settings locations change, the map is out of date (GW109); adding a file to a known folder does not age it. Regenerate, then describe any new folder (GW108 until done).
 

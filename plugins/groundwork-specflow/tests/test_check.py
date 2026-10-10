@@ -196,6 +196,16 @@ class Rules(CheckBase):
         )
         self.assertFires("GW032")
 
+    def test_new_feature_and_activate_write_a_missing_map(self):
+        (self.api / "CODEMAP.md").unlink()
+        r = ca(self.api, "new-feature", "gadgets", "--rfc", "RFC-0001")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue((self.api / "CODEMAP.md").is_file())
+        (self.api / "CODEMAP.md").unlink()
+        r = ca(self.api, "activate", "001-widgets")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue((self.api / "CODEMAP.md").is_file())
+
     def test_gw092_spec_repeats_rfc_sentence(self):
         need = "A researcher opens the page, types a question, and presses run before any field is suggested."
         self.edit(

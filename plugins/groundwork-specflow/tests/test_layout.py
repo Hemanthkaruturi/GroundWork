@@ -393,6 +393,32 @@ class CodeMap(Base):
     def test_missing_map_is_reported(self):
         self.assertIn("GW108", self.ids())
 
+    def test_session_start_shows_the_map_in_brief(self):
+        ca(self.repo, "init")
+        filled = self.text().replace(
+            "| `lib/billing` | — | 1 | [TODO: what this folder holds] |",
+            "| `lib/billing` | — | 1 | invoices and refunds |",
+        )
+        (self.repo / "CODEMAP.md").write_text(filled, encoding="utf-8")
+        ctx = context(self.repo)
+        self.assertIn("  - `lib/billing`: invoices and refunds", ctx)
+        self.assertIn("  - `lib/store`: (not described yet)", ctx)
+        self.assertIn("  - payments via stripe: `lib/billing/invoice.py`", ctx)
+        self.assertIn("  - database via psycopg:", ctx)
+
+    def test_starting_work_writes_a_missing_map(self):
+        self.assertFalse((self.repo / "CODEMAP.md").exists())
+        r = ca(self.repo, "new-bug", "oops", "--title", "Oops")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("code map → CODEMAP.md", r.stdout)
+        self.assertTrue((self.repo / "CODEMAP.md").exists())
+        self.assertIn("`lib/billing`", self.text())
+        # an existing map is left alone
+        (self.repo / "CODEMAP.md").write_text("# mine\n", encoding="utf-8")
+        r = ca(self.repo, "new-bug", "again", "--title", "Again")
+        self.assertNotIn("code map →", r.stdout)
+        self.assertEqual(self.text(), "# mine\n")
+
 
 class Strictness(CheckBase):
     """Layout findings are warnings: they fail `check` only under --strict."""

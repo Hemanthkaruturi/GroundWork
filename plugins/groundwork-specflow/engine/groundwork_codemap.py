@@ -369,6 +369,58 @@ def render(repo: Path, f: dict, previous: str = "") -> str:
     return "\n".join(out)
 
 
+BRIEF_LINES = 25  # shown at every session start; the rest stays in the file
+
+
+def brief(repo: Path, limit: int = BRIEF_LINES) -> list[str]:
+    """The map in a few lines for the session start: each folder with what it holds, and where each
+    outside system is called from. Read from CODEMAP.md, so the Holds descriptions people wrote are shown."""
+    p = C._find_ci(repo, FILE)
+    if p is None:
+        return []
+    text = p.read_text(encoding="utf-8")
+    rows: list[str] = []
+    section = ""
+    for line in text.splitlines():
+        if line.startswith("## "):
+            section = line[3:].strip().lower()
+            continue
+        if not line.startswith("| `"):
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if section.startswith("folders") and len(cells) >= 4:
+            folder, role, _n, holds = cells[:4]
+            holds = "(not described yet)" if TODO in holds else holds
+            role = "" if role in ("—", "no role", "") else f" [{role}]"
+            rows.append(f"{folder}{role}: {holds}")
+    for line in text.splitlines():
+        if line.startswith("## "):
+            section = line[3:].strip().lower()
+            continue
+        if (
+            section.startswith("outside systems")
+            and line.startswith("| ")
+            and not line.startswith("| Kind")
+            and not line.startswith("| ---")
+        ):
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            if len(cells) >= 3:
+                rows.append(f"{cells[0]} via {cells[1]}: {cells[2]}")
+    if not rows:
+        return []
+    shown = rows[:limit]
+    if len(rows) > len(shown):
+        shown.append(f"… {len(rows) - len(shown)} more in {FILE}")
+    return shown
+
+
+def ensure(repo: Path) -> Path | None:
+    """Write the map when the repo has none, so work never starts without it. An existing map is left alone."""
+    if C._find_ci(repo, FILE) is not None:
+        return None
+    return write(repo)
+
+
 def path(repo: Path) -> Path:
     return C._find_ci(repo, FILE) or repo / FILE
 

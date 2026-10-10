@@ -164,6 +164,8 @@ def describe(ctx: C.Ctx) -> str:
                 "missing": "CODE MAP MISSING: run `groundwork.py codemap` to generate CODEMAP.md, then fill its Holds column.",
             }[cm]
         )
+        for row in M.brief(ctx.repo):
+            lines.append("  - " + row)
         lines.append(Q.summary(Q.load(ctx.repo, ctx.config), L.has_code(ctx.repo)))
         lay = L.load(ctx.repo, ctx.config)
         if lay is not None:
@@ -1081,6 +1083,8 @@ def cmd_new_feature(a) -> None:
     rfc = C.find_rfc(ctx, a.rfc)
     if not rfc:
         raise SystemExit(f"RFC '{a.rfc}' not found in {ctx.rfc_home / 'DECISIONS'}")
+    if M.ensure(ctx.repo):
+        print(f"code map → {M.FILE} (describe each folder in its Holds column)")
     specs = ctx.repo / "specs"
     specs.mkdir(exist_ok=True)
     n = C.next_number([p.name for p in specs.iterdir()], r"(\d+)-")
@@ -1435,6 +1439,8 @@ def cmd_new_bug(a) -> None:
         raise SystemExit(
             "Bugs are recorded inside a repo. cd into the repo that has the bug."
         )
+    if M.ensure(ctx.repo):
+        print(f"code map → {M.FILE} (describe each folder in its Holds column)")
     p = B.new_bug(ctx, a.slug, a.title)
     P.auto_created(ctx, "bug", p, None)
     if a.reported_by:
@@ -1491,6 +1497,8 @@ def cmd_activate(a) -> None:
             f"{st.detail}. It cannot be the active implementation target. "
             + C.INSTRUCTIONS.get(st.key if not st.ok else "baseline", "")
         )
+    if M.ensure(ctx.repo):
+        print(f"code map → {M.FILE} (describe each folder in its Holds column)")
     _write(ctx.repo / ".groundwork" / "active", a.slug + "\n")
     print(f"Active feature: {a.slug}")
 

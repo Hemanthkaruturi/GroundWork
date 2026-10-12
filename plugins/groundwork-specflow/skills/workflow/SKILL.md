@@ -12,6 +12,9 @@ before code: every agent gets the same product brief, architecture, constitution
 The rules are enforced by hooks. If this session's context has no message starting "groundwork is active",
 the hooks are not running and nothing is enforced. Tell the user that before anything else. In Codex, plugin hooks
 run only after the user trusts them: they type `/hooks`, trust the groundwork-specflow hooks, and start a new session.
+In Claude Code, a company policy can turn plugin hooks off: `allowManagedHooksOnly` in managed settings skips
+every plugin hook while the plugin's skills and commands still load. Only their admins can allow the GroundWork
+plugin's hooks. Until then, the user approves and bypasses by running the engine in their own terminal.
 Elsewhere, ask them to check that the plugin is installed and enabled.
 
 ## Know your level first

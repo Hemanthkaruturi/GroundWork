@@ -245,6 +245,8 @@ RFC-0001-product-search.md: approved (1/1 sign-offs: Priya Nair)
 ```
 If anyone edits the RFC afterwards, its status becomes `stale` and it must be approved again.
 
+The approve command runs from a prompt hook. If no hook ran, for example because a company policy (`allowManagedHooksOnly`) turned plugin hooks off, the agent approves nothing. It says the hooks are off and gives the person the engine command to run in their own terminal.
+
 ### 5.5 Interview with clickable options
 Instead of a wall of questions in text, the agent shows a picker *(illustration)*:
 ```

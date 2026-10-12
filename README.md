@@ -142,6 +142,12 @@ claude plugin update groundwork-specflow@groundwork-specflow
 
 Restart Claude Code (or run `/reload-plugins`) to start using the new version. If it says you already have the latest version, there is nothing new to install yet.
 
+**Does a session never mention GroundWork, or does `/groundwork-specflow:approve` report no result?** Then GroundWork's hooks aren't running, and nothing is enforced. Check that the plugin is installed and enabled in `/plugin`. On a company laptop, also check whether your organisation's managed settings set `allowManagedHooksOnly`. If they do, Claude Code skips every plugin hook, though GroundWork's skills and commands still show up. Only your admins can change that, by allowing the GroundWork plugin's hooks. Until then, approve from a terminal in your project, with the engine path that `/groundwork-specflow:status` shows:
+
+```
+python3 <engine path>/groundwork.py approve <document>
+```
+
 ### Using Devin instead
 
 GroundWork also runs in [Devin](https://devin.ai) (Devin CLI and Devin Desktop), from this same repository. You need Python 3.10+ and git, as above.

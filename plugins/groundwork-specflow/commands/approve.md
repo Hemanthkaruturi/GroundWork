@@ -3,4 +3,10 @@ description: Approve one or more RFCs or specs (human sign-off, recorded against
 argument-hint: <document path | RFC-NNNN> [more paths …]
 disable-model-invocation: true
 ---
-The groundwork UserPromptSubmit hook has already executed this approval for the user; its result is in your context under "[groundwork approve]". Report that result in one or two lines. If it says REFUSED, explain why and what must change first. Do not run anything yourself and do not edit documents to work around a refusal.
+The groundwork UserPromptSubmit hook has already executed this approval for the user; its result is in your context under "[groundwork approve]". Report that result in one or two lines. If it says REFUSED, explain why and what must change first. Do not edit documents to work around a refusal.
+
+If there is no "[groundwork approve]" result in your context, the hook did not run, and GroundWork's other hooks are probably off too. Run nothing yourself: approve is a human act. Tell the user, and give them this command to run in their own terminal, from the project folder:
+
+`python3 "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py" approve $ARGUMENTS`
+
+If the session context also has no "groundwork is active" message, follow "Check the hooks are running" in the workflow skill.

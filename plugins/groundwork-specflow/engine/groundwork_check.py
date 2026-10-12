@@ -18,6 +18,7 @@ from pathlib import Path
 import groundwork_baseline as BL
 import groundwork_brevity as V
 import groundwork_bugs as B
+import groundwork_changes as CH
 import groundwork_codemap as M
 import groundwork_contracts as CT
 import groundwork_core as C
@@ -852,6 +853,21 @@ def check_bugs(ctx: C.Ctx, r: Report) -> None:
                 r.err(p.rule, bp, p.msg)
 
 
+def check_changes(ctx: C.Ctx, r: Report) -> None:
+    """GW093: a change to a built feature is recorded in its changes.md (§5b)."""
+    if ctx.level not in ("repo", "standalone"):
+        return
+    hit = CH.unrecorded(ctx)
+    if hit:
+        slug, which = hit
+        r.warn(
+            "GW093",
+            CH.path(ctx, slug),
+            f"code changed ({which}) after {slug} was built, and its changes.md records nothing since",
+            f'record who asked and what changed: groundwork.py change "<what>" --requested-by <person> --files {which}',
+        )
+
+
 def check_ownership(ctx: C.Ctx, r: Report) -> None:
     """GW080-GW083: every approved RFC/spec has a requester and owner; people named are findable; finished work has an implementer and support."""
     ppl = PP.people(ctx)
@@ -1161,6 +1177,7 @@ def check_ctx(ctx: C.Ctx, r: Report, seen: set[Path]) -> None:
     check_ownership(ctx, r)
     check_brevity(ctx, r)
     check_overlap(ctx, r)
+    check_changes(ctx, r)
     check_approval_records(ctx, r)
     if ctx.level == "workspace":
         check_rfcs(ctx, r)

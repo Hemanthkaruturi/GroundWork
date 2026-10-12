@@ -245,7 +245,7 @@ RFC-0001-product-search.md: approved (1/1 sign-offs: Priya Nair)
 ```
 If anyone edits the RFC afterwards, its status becomes `stale` and it must be approved again.
 
-The approve command runs from a prompt hook. If no hook ran, for example because a company policy (`allowManagedHooksOnly`) turned plugin hooks off, the agent approves nothing. It says the hooks are off and gives the person the engine command to run in their own terminal.
+The approve command runs from a prompt hook. If no hook ran, for example because a company policy (`allowManagedHooksOnly`) turned plugin hooks off, the agent approves nothing. It says the hooks are off and gives the person the engine command to run in their own terminal. After that, the person tells the agent to continue: a command run outside the chat does not start the agent. An approval typed in the chat starts the next step straight away.
 
 ### 5.5 Interview with clickable options
 Instead of a wall of questions in text, the agent shows a picker *(illustration)*:
@@ -441,6 +441,14 @@ RFC-0001-product-search      Priya Nair   Priya Nair     -                -
 shop-api/001-product-search  Priya Nair   Priya Nair     Ravi Kumar       Sam Ortiz
 shop-web/001-search-box      Meena Iyer   Priya Nair     -                -
 ```
+Small changes after the build are tracked too. Priya later asks to move the search client into its own folder. That needs no new RFC, but it is not lost. The agent reads the RFC, the spec and the feature's `changes.md`, makes the move, and records it:
+```
+groundwork.py change "Moved the search client to connectors/search/" --requested-by "Priya Nair" \
+  --files connectors/search/client.py --via claude-code
+```
+`specs/001-product-search/changes.md` gains a row: when, requested by Priya, implemented by Ravi (via claude-code), what changed, the files, and `RFC-0001 · 001-product-search`. If code changes after the build with no row, `check` warns (GW093).
+
+Some changes belong to no feature at all, such as upgrading a package. Ravi types `/groundwork-specflow:change Upgrade requests to 2.32`. That opens the code gate for an hour and adds a row to the repo's `specs/changes.md`, requested by Ravi. The agent makes the upgrade without an interview or RFC, then completes the row with the files it touched: `groundwork.py change --standalone "Bumped requests, tests pass" --files pyproject.toml uv.lock`.
 
 ### 5.12 Documents that don't rot
 A teammate adds `package.json` and a `src/` folder to `shop-api` without any agent. `groundwork fresh` *(real output)*:
@@ -1089,6 +1097,7 @@ The step-by-step version is in `docs/manual-testing.md`.
 | `init` (`--dry-run`, `--retrofit`, `--as repo\|workspace`), `doctor` | onboard a project; show its stage and next steps |
 | `check`, `check --strict`, `check --json` | verify the 83 rules |
 | `status`, `board`, `note`, `activate` | where things stand, what is in flight, where work stopped |
+| `change` | records a change made to a built feature in its `changes.md`, or (`--standalone`) completes a standalone change in `specs/changes.md` |
 | `new-rfc`, `new-feature`, `new-bug`, `activate-bug`, `plan-sync` | create documents; switch the active bug; pin the plan to the approved spec |
 | `new-contract` (`--as-built`), `new-adr` (`--rfc` or `--retrospective`) | a contract with named reviewers; a decision record after an RFC, or one found in existing code |
 | `adopt-specs`, `adopt-specs --classify`, `new-baseline`, `capability`, `capabilities` | import legacy specs and classify them; write a baseline spec; record capabilities and rebuild their table |

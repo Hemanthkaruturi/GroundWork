@@ -101,8 +101,8 @@ def session_cwd(full: dict) -> str | None:
 # Codex has no plugin slash commands: its TUI rejects /groundwork-specflow:approve as unrecognised. It turns
 # commands/<name>.md into the skill `groundwork-specflow:source-command-<name>`, and skills are mentioned with `$`.
 # Approve and bypass keep a short form: the prompt hook runs them from the typed text (HUMAN_CMD), skill or not.
-COMMANDS = ("approve", "bypass", "status")
-HUMAN_ACTS = ("approve", "bypass")
+COMMANDS = ("approve", "bypass", "change", "status")
+HUMAN_ACTS = ("approve", "bypass", "change")
 SLASH_CMD = re.compile(r"/groundwork-specflow:([a-z-]+)")
 
 
@@ -124,8 +124,8 @@ def codex_commands(text: str) -> str:
 def codex_reminder() -> str:
     """Said on every Codex prompt: agents copy the slash commands from the skills, and Codex rejects them."""
     return (
-        f"Codex: the user approves with `{codex_command('approve')} <doc>` and bypasses with "
-        f"`{codex_command('bypass')} <reason>`. Never tell them a command starting with /, Codex rejects it."
+        f"Codex: the user approves with `{codex_command('approve')} <doc>` bypasses with "
+        f"`{codex_command('bypass')} <reason>`, and opens a standalone change with `{codex_command('change')} <what>`. Never tell them a command starting with /, Codex rejects it."
     )
 
 
@@ -214,7 +214,7 @@ HOST: Codex. The groundwork skills were written for Claude Code; read them with 
 - Write/Edit/MultiEdit mean apply_patch; Bash is the shell. The gates apply to both.
 - Record your work with `--via codex`, not `--via claude-code`.
 - Codex has no /groundwork-specflow:<name> commands; it rejects them as unrecognised. Wherever a skill or the engine's output says /groundwork-specflow:<name>, {forms}. Always tell the user the `$` form.
-- Approval and bypass are human acts: the user types `{approve} <doc>` or `{bypass} <reason>`. If that reports no result, the user runs `python3 "{engine}" approve <doc>` in their own terminal. Never run it yourself."""
+- Approval and bypass are human acts: the user types `{approve} <doc>` or `{bypass} <reason>`. If that reports no result, the user runs `python3 "{engine}" approve <doc>` in their own terminal, then tells you to continue: a command run outside this chat does not start your turn. Never run it yourself."""
 
 DEVIN_NOTE = """\
 HOST: Devin. The groundwork skills were written for Claude Code; read them with these substitutions:
@@ -222,7 +222,7 @@ HOST: Devin. The groundwork skills were written for Claude Code; read them with 
 - There is no AskUserQuestion or ToolSearch tool here. Wherever a skill says AskUserQuestion or "picker", ask ONE round: each question with a short numbered list of options, your recommendation first and marked (Recommended), then end your turn and wait. Never bury questions inside a long reply.
 - Write/Edit/MultiEdit mean write, edit and apply_patch; Bash means exec. The gates apply to all of them.
 - Record your work with `--via devin`, not `--via claude-code`.
-- Approval and bypass are human acts: the user types /groundwork-specflow:approve <doc> or /groundwork-specflow:bypass <reason>. If that reports no result, the user runs `python3 "{engine}" approve <doc>` in their own terminal. Never run it yourself."""
+- Approval and bypass are human acts: the user types /groundwork-specflow:approve <doc> or /groundwork-specflow:bypass <reason>. Offer only that form when a document is ready: it runs the approval and starts your next step. If it reports no result, the user runs `python3 "{engine}" approve <doc>` in their own terminal, then tells you to continue: a command run outside this chat (in Devin, also a `!` command) does not start your turn. Never run it yourself."""
 
 ASK_RULE_CLAUDE = (
     "8. ASK ONLY WITH THE `AskUserQuestion` TOOL: options the user selects, up to 4 questions per round, your recommendation first. "
@@ -240,17 +240,18 @@ ASK_RULE_DEVIN = (
 BOOTSTRAPPED = PLUGIN_ROOT.parent.name == ".devin"
 BOOTSTRAP_NOTE = (
     "- GroundWork is installed in this project's .devin/ folder, not as a plugin, so its commands have no prefix: "
-    "/approve, /bypass, /status, /bootstrap. Where a message says /groundwork-specflow:<name>, tell the user /<name>."
+    "/approve, /bypass, /change, /status, /bootstrap. Where a message says /groundwork-specflow:<name>, tell the user /<name>."
 )
 
 
 CODEX_PLUGIN_FORMS = (
-    "the user types `$source-command-approve` or `$source-command-bypass` for approve and bypass, "
+    "the user types `$source-command-approve`, `$source-command-bypass` or `$source-command-change` for approve, bypass "
+    "and a standalone change, "
     "`$groundwork-specflow:source-command-status` for status, and `$groundwork-specflow:<name>` for any other"
 )
 CODEX_PROJECT_FORMS = (
     "the user types `$<name>`: GroundWork is installed in this project's .codex/ and .agents/skills/ folders, not as "
-    "a plugin, so its skills have no prefix: `$approve`, `$bypass`, `$status`, `$bootstrap`"
+    "a plugin, so its skills have no prefix: `$approve`, `$bypass`, `$change`, `$status`, `$bootstrap`"
 )
 
 

@@ -4,7 +4,7 @@ Hooks:      groundwork.py session-context | prompt-reminder | gate | gate-bash  
 Onboarding:  groundwork.py init [--as repo|workspace] [--retrofit] [--dry-run] | doctor [--json]
 Anyone/CI:  groundwork.py check [--strict] [--json] | fresh [--json] | hooks install|uninstall|status
 Agents:     groundwork.py confirm [doc ...]   (after updating docs to match reality) | confirm --baseline <slug ...>
-Humans:     groundwork.py status | approve <doc> | bypass <reason>
+Humans:     groundwork.py status | approve <doc> | bypass <reason> | bypass --change <what>
 People:     groundwork.py who <feature|RFC|bug> | who --person NAME | who --all | record <event> --ref R ...
 Resume:     groundwork.py board [--all] [--json] | note <text> | deps <feature|RFC> | new-bug <slug> | activate-bug <slug>
 Agents:     groundwork.py scaffold | new-rfc <slug> | new-feature <slug> --rfc N | activate <slug>
@@ -36,6 +36,7 @@ import groundwork_baseline as BL
 import groundwork_board as W
 import groundwork_brevity as V
 import groundwork_bugs as B
+import groundwork_changes as CH
 import groundwork_check as K
 import groundwork_codemap as M
 import groundwork_contracts as CT
@@ -55,7 +56,9 @@ import groundwork_secrets as S
 TRIAGE = (
     "Before changing any file, triage the request: a defect -> fix-bug skill; new or changed behaviour OR LOOK "
     "(UI redesign, restyle, copy) -> interview -> RFC -> approval -> spec -> plan -> tasks -> evals; continuing earlier work -> "
-    "resume skill. Other skills/plugins (frontend-design, etc.) are craft tools used INSIDE the implement step after the "
+    "resume skill; a small change to built work that changes no behaviour (move a file, rename, refactor) -> read the "
+    "feature's RFC, spec and changes.md, make it, record it with `groundwork.py change`; a small, clear change that "
+    "belongs to no feature (upgrade a package) -> the user opens it with /groundwork-specflow:change <what>. Other skills/plugins (frontend-design, etc.) are craft tools used INSIDE the implement step after the "
     "spec is approved - they never replace or skip this path, and the shell is gated like the Write tool."
 )
 
@@ -93,6 +96,7 @@ groundwork is active. These rules are enforced by hooks, not suggestions:
 21. ALERTS: if the user asks to turn alerts on or off, run `groundwork.py alerts on` (or `off`); for just the spoken voice (sound and notification stay), run `groundwork.py alerts voice off` (or `on`). It is their own setting, kept for every project; never change it unasked.
 22. EXISTING BEHAVIOUR: a spec with `origin: baseline` documents what already exists (baseline skill) — history, not work: no RFC, no tasks, never in flight. A feature that changes existing behaviour `extends`/`amends` the baseline; a bug with no requirement to cite gets a bounded baseline first. `origin: imported` is a legacy document awaiting classification — a reference, never an approved requirement. If the context lists DOCUMENTATION REVIEW items, they wait for a person, not for code.
 23. CONSTITUTION: CONSTITUTION.md (the repo's, and the workspace's above it) binds every reply, document and code edit, in every step — planning, tasks, evals, implementing and bug fixing, not only the RFC. Its guardrails are listed below at session start; read the file before a plan, a fix plan or code. Never work around a rule: a conflict is raised to the user as an amendment proposal. The RFC's §7 records the check once; other documents cite it.
+24. CHANGE LOG: every change to a built feature is recorded in its specs/NNN-slug/changes.md, however small. Before changing a feature's code read its RFC, spec and changes.md. After the change run `groundwork.py change "<what changed>" --requested-by <person who asked> --files <paths> --via claude-code` (the RFC/spec ref is filled in; pass --ref for another). A change that alters behaviour still amends the spec (rule 16) and is logged here too. `check` warns (GW093) about unrecorded code changes. A small, clear change that belongs to no RFC or feature (upgrading a package) needs no interview or RFC: the user opens it with /groundwork-specflow:change <what>, which lifts the gate and logs it in specs/changes.md; when done, complete its row with `groundwork.py change --standalone "<what you did>" --files <paths> --via claude-code`. You never open one yourself.
 Use `python3 ${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py status` (or `board`) any time you are unsure where you are."""
 RULES = RULES.replace("BREVITY_TEXT", BREVITY)
 
@@ -221,14 +225,15 @@ def cmd_session_context(_a) -> None:
 
 
 # `/approve` (Claude, Devin) or `$source-command-approve`, the skill Codex makes from commands/approve.md.
+# `/change <what>` is a bypass that opens a standalone change (specs/changes.md).
 HUMAN_CMD = re.compile(
-    r"^\s*[/$](?:groundwork-specflow:)?(?:source-command-)?(approve|bypass)\b\s*(.*)$",
+    r"^\s*[/$](?:groundwork-specflow:)?(?:source-command-)?(approve|bypass|change)\b\s*(.*)$",
     re.DOTALL,
 )
 
 
 def run_human_action(name: str, argstr: str, cwd: str) -> str:
-    """Approve/bypass, run from the UserPromptSubmit hook so only a typed prompt can trigger them."""
+    """Approve/bypass/change, run from the UserPromptSubmit hook so only a typed prompt can trigger them."""
     os.chdir(cwd)
     try:
         args = shlex.split(argstr)
@@ -246,12 +251,37 @@ def run_human_action(name: str, argstr: str, cwd: str) -> str:
                     del args[i : i + 2]
                 cmd_approve(argparse.Namespace(docs=args, who=who))
             else:
-                cmd_bypass(argparse.Namespace(reason=" ".join(args), minutes=60))
+                cmd_bypass(
+                    argparse.Namespace(
+                        reason=" ".join(args), minutes=60, change=name == "change"
+                    )
+                )
         return buf.getvalue().strip()
     except SystemExit as e:
         return f"REFUSED: {e}" if str(e) else "REFUSED"
     except Exception as e:  # noqa: BLE001 — report anything to the human rather than crash the hook
         return f"ERROR: {e}"
+
+
+def after_human_action(name: str, res: str, cwd: str) -> str:
+    """What the agent does once the hook has run approve/bypass. The approval is the user's go-ahead,
+    so a recorded one moves straight on to the next step instead of waiting for "continue" (issue #7)."""
+    never = f"Never run {name} yourself."
+    if name == "change" and not res.startswith(("REFUSED", "ERROR")):
+        return (
+            "Report this result in one line, then make the change in this same turn: it belongs to no RFC or feature, "
+            "so it needs no interview or RFC. If it turns out to alter behaviour a spec describes, stop and tell the "
+            "user it belongs to that feature. When done, record it: `groundwork.py change --standalone "
+            '"<what you did>" --files <paths> --via claude-code`. Never run bypass yourself.'
+        )
+    if name != "approve" or res.startswith(("REFUSED", "ERROR")):
+        return f"Report this result to the user in one or two lines. {never}"
+    phase, ins = C.next_step(C.detect(cwd))
+    return (
+        f"Report this result to the user in one line, then carry on in this same turn without waiting to be "
+        f"told to continue. Next step (phase={phase}): {ins} If that step needs another approval or sign-off, "
+        f"stop and tell the user how to give it. {never}"
+    )
 
 
 def cmd_prompt_reminder(_a) -> None:
@@ -264,7 +294,7 @@ def cmd_prompt_reminder(_a) -> None:
                 inp,
                 "UserPromptSubmit",
                 f"[groundwork {m.group(1)}] The user's command was already executed by the hook. "
-                f"Result: {res}\nReport this result to the user in one or two lines. Run nothing yourself.",
+                f"Result: {res}\n{after_human_action(m.group(1), res, G.cwd(inp))}",
             )
         )
         return
@@ -538,6 +568,14 @@ def cmd_approve(a) -> None:
             print(note)
 
 
+def cmd_approve_cli(a) -> None:
+    """`approve` typed in a terminal. The agent never sees it, so say how to wake it."""
+    cmd_approve(a)
+    print(
+        'Back in the agent chat, say "continue": an approval made in a terminal does not start the agent.'
+    )
+
+
 def _unreviewed_baseline_note(p: Path, ctx: C.Ctx) -> str:
     """Approval and source review are separate records; say so when a baseline has only the first."""
     if p.name != "spec.md" or not ctx.repo or not C.is_baseline(C.spec_meta(p.parent)):
@@ -582,17 +620,43 @@ def signoff_help(p: Path, st: C.DocState) -> str:
 def cmd_bypass(a) -> None:
     ctx = C.detect(Path.cwd())
     root = ctx.repo or ctx.root
+    change = getattr(a, "change", False)
     if not a.reason.strip():
-        raise SystemExit("A bypass needs a reason: /groundwork-specflow:bypass <why>")
+        raise SystemExit(
+            "A standalone change needs a description: /groundwork-specflow:change <what>"
+            if change
+            else "A bypass needs a reason: /groundwork-specflow:bypass <why>"
+        )
+    if change and not ctx.repo:
+        raise SystemExit("A standalone change is made inside a repo.")
     f = root / ".groundwork" / "bypass.json"
     f.parent.mkdir(parents=True, exist_ok=True)
     until = time.time() + a.minutes * 60
     f.write_text(
-        json.dumps({"reason": a.reason, "by": C.signer(), "until": until}) + "\n",
+        json.dumps(
+            {
+                "reason": ("change: " if change else "") + a.reason,
+                "by": C.signer(),
+                "until": until,
+            }
+        )
+        + "\n",
         encoding="utf-8",
     )
     with (root / ".groundwork" / "bypass.log").open("a", encoding="utf-8") as log:
-        log.write(f"{time.strftime('%F %T')} {C.signer()} {a.minutes}min: {a.reason}\n")
+        log.write(
+            f"{time.strftime('%F %T')} {C.signer()} {a.minutes}min: "
+            + ("change: " if change else "")
+            + f"{a.reason}\n"
+        )
+    if change:
+        target = CH.request_standalone(ctx, a.reason)
+        print(
+            f"Standalone change opened in {target.relative_to(ctx.repo)}, requested by {C.signer()}: {a.reason}. "
+            f"The code-edit gate is open for {a.minutes} minutes. It belongs to no RFC or feature; a change to "
+            "behaviour a spec describes belongs to that feature instead."
+        )
+        return
     print(
         f"Gate bypassed for {a.minutes} minutes in {root}. Logged to .groundwork/bypass.log."
     )
@@ -1445,6 +1509,30 @@ def cmd_note(a) -> None:
     print("noted in " + str(W.add_note(ctx, " ".join(a.text))))
 
 
+def cmd_change(a) -> None:
+    ctx = C.detect(Path.cwd())
+    if not ctx.repo:
+        raise SystemExit("Changes are recorded inside a repo.")
+    what = " ".join(a.what)
+    if a.standalone:
+        target = CH.complete_standalone(
+            ctx, what, a.requested_by, a.files, a.ref, a.via
+        )
+        print(f"recorded in {target}")
+        return
+    slug = a.feature or C.active_slug(ctx)
+    if not slug:
+        raise SystemExit(
+            "No active feature: name the one this change belongs to with --feature NNN-slug. "
+            "A change that belongs to no feature is standalone: a person opens it with "
+            "/groundwork-specflow:change <what>, then record it with --standalone."
+        )
+    if not a.requested_by:
+        raise SystemExit("A change needs --requested-by <person who asked>.")
+    target = CH.add(ctx, slug, what, a.requested_by, a.files, a.ref, a.via)
+    print(f"recorded in {target}")
+
+
 def cmd_deps(a) -> None:
     ctx = C.detect(Path.cwd())
     ref = a.ref or C.active_slug(ctx)
@@ -1608,7 +1696,7 @@ def main() -> None:
         help="one or more documents; all are checked before any is recorded",
     )
     p.add_argument("--as", dest="who")
-    p.set_defaults(fn=cmd_approve)
+    p.set_defaults(fn=cmd_approve_cli)
     p = sub.add_parser(
         "adopt-specs",
         help="bring legacy spec directories under GroundWork metadata (origin: imported), or classify them",
@@ -1678,9 +1766,16 @@ def main() -> None:
     p = sub.add_parser("bypass")
     p.add_argument("reason", nargs="+")
     p.add_argument("--minutes", type=int, default=60)
+    p.add_argument(
+        "--change",
+        action="store_true",
+        help="open a standalone change (no RFC or feature), logged in specs/changes.md",
+    )
     p.set_defaults(
         fn=lambda a: cmd_bypass(
-            argparse.Namespace(reason=" ".join(a.reason), minutes=a.minutes)
+            argparse.Namespace(
+                reason=" ".join(a.reason), minutes=a.minutes, change=a.change
+            )
         )
     )
     p = sub.add_parser("new-rfc")
@@ -1818,6 +1913,27 @@ def main() -> None:
     p.add_argument("--all", action="store_true", help="include finished work")
     p.add_argument("--json", action="store_true")
     p.set_defaults(fn=cmd_board)
+    p = sub.add_parser(
+        "change", help="record a change made to a built feature in its changes.md"
+    )
+    p.add_argument("what", nargs="*", help="what changed, in one line")
+    p.add_argument(
+        "--requested-by",
+        help="the person who asked for it (a pending standalone change already has one)",
+    )
+    p.add_argument(
+        "--standalone",
+        action="store_true",
+        help="a change that belongs to no feature: complete the pending row in specs/changes.md",
+    )
+    p.add_argument("--files", nargs="*", default=[], help="files changed")
+    p.add_argument(
+        "--ref",
+        help="the RFC, spec or bug it belongs to (default: the feature's RFC and slug)",
+    )
+    p.add_argument("--feature", help="NNN-slug (default: the active feature)")
+    p.add_argument("--via", help="the agent that made it, e.g. claude-code")
+    p.set_defaults(fn=cmd_change)
     p = sub.add_parser("note", help="record where work stopped")
     p.add_argument("text", nargs="+")
     p.set_defaults(fn=cmd_note)

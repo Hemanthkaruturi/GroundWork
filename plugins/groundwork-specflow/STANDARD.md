@@ -1,6 +1,6 @@
 # The Groundwork Standard
 
-**Version 0.9.0** · the specification that `groundwork check` enforces and the templates implement.
+**Version 0.10.0** · the specification that `groundwork check` enforces and the templates implement.
 
 Everything a team or an agent needs to know to work "the Groundwork way" is here. If two
 projects follow the same version of this document, a person or an agent moving between them
@@ -38,7 +38,7 @@ then built in each repo against it. A change that needs another repo is never a 
 <workspace>/                      <repo>/  (also at standalone root)
   PROJECT.md                        ARCHITECTURE.md
   ARCHITECTURE.md                   AGENTS.md, CODEMAP.md (generated, §5g)
-  CONSTITUTION.md                   specs/NNN-slug/{spec,plan,tasks,evals,handover}.md  (+ log.md, append-only notes)
+  CONSTITUTION.md                   specs/NNN-slug/{spec,plan,tasks,evals,handover}.md  (+ log.md notes, changes.md change log); specs/changes.md (standalone changes)
   AGENTS.md                         specs/NNN-slug/spec.md only, for a baseline (§5j)
   CONTRACTS/<provider>-<topic>.md   specs/README.md    (capability table, generated, §5j)
   DECISIONS/RFC-NNNN-slug.md        bugs/NNN-slug.md   (one record per defect)
@@ -178,6 +178,8 @@ Work in flight MUST be recoverable from files alone — never from an agent's or
 - **Persist as you go.** During the interview the RFC draft is created after the first round and every question and answer is recorded in its §3 immediately. A closed session therefore loses nothing.
 - **The board.** `groundwork.py board` derives everything in flight — RFCs being drafted, in review, or approved with no spec yet; features and the first unmet step of their pipeline; open bugs — with the single next action, the last note, and what blocks it. Active work sorts first, then the most recently touched. The session start injects it.
 - **Notes.** `groundwork.py note "<text>"` appends a dated line to the active feature's `log.md` (else the repo's `.groundwork/journal.md`): where work stopped, the next action, open questions. `log.md` is append-only and committed.
+- **Change log.** Every change made to a feature after it was built (it has a `handover.md`) is recorded, however small: moving a file, a rename, a refactor. `groundwork.py change "<what>" --requested-by <person> --files <paths>` appends a row to the feature's `changes.md` with when, who requested it, who implemented it (the git identity, plus the agent with `--via`), what changed, the files, and the document it belongs to (default: the spec's RFC and the feature). `changes.md` is append-only and committed. Before changing a built feature's code, an agent reads its RFC, spec and `changes.md`. A change that alters behaviour still amends the spec (§5a) and is logged here too. `check` warns (GW093) when code changed after the active feature was built and `changes.md` records nothing since.
+- **Standalone changes.** A small, clear change that belongs to no RFC or feature (upgrading a package, a CI tweak) needs no interview or RFC. A person opens it with `/groundwork-specflow:change <what>` (from a terminal: `groundwork.py bypass --change <what>`). Like a bypass, this is a human act: it lifts the code-edit gate for 60 minutes and is logged in `.groundwork/bypass.log`. It also adds a pending row, requested by that person, to the repo's `specs/changes.md`. When the work is done, the agent completes the row with `groundwork.py change --standalone "<what was done>" --files <paths>`. A change to behaviour a spec describes is never standalone: it belongs to that feature.
 - **Resume, don't restart.** A resuming session reads the notes and the item's documents, does not redo finished steps, and does not re-ask what the RFC's §3 already records.
 
 ## 5c. Relationships between features
@@ -418,6 +420,7 @@ sections; they never invalidate a conforming project.
 | GW090 | W | A finished document exceeds its word budget (§5a″) |
 | GW091 | W | A finished document's sentences average more than 26 words |
 | GW092 | W | A finished spec repeats sentences of its RFC; a plan, tasks or evals file repeats sentences of its spec; an ADR repeats sentences of the RFC it cites (§4, one owner per fact) |
+| GW093 | W | Code changed after the active feature was built, and its `changes.md` records nothing since (§5b) |
 | GW040 | W | An approval record points at a file that no longer exists |
 | GW041 | W | The capability table in `specs/README.md` is missing or older than the records it is built from |
 | GW045 | E | A GroundWork contract's front matter is missing or blank a field, its id mismatches the file name, its version is not semver, `signoffs_required` is not a whole number of at least 2, or it claims an approval it does not have |

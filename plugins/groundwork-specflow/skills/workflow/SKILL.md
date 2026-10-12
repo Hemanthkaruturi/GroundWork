@@ -46,6 +46,7 @@ Alongside the path, not a step of it: **baseline** — specs with `origin: basel
 - **Resuming** any unfinished work (a closed session, another person, another agent): the **resume** skill reads `groundwork.py board` — everything in flight, its next action, last note, blockers.
 - **Bugs**: the **fix-bug** skill. A bug is a violated requirement; the fix is gated on citing which (across specs if needed), a classification (code-bug / spec-gap / design-flaw), and a regression test.
 - **Relationships**: every feature is independent, or declares `extends` / `amends` / `depends_on` / `builds_against`. `groundwork.py deps <feature|RFC>` shows what it needs and who it affects. Pause with `groundwork.py note`.
+- **Changes after the build**: every change to a built feature, however small, is read against its RFC, spec and `changes.md` first and recorded with `groundwork.py change` after (who asked, who made it, what, files, ref). A small, clear change that belongs to no feature (upgrading a package) skips the interview and RFC: the user opens it with `/groundwork-specflow:change <what>`, and you complete its row in `specs/changes.md` with `groundwork.py change --standalone` when done.
 
 ## Where does this project stand?
 `groundwork.py doctor` reports the project's stage (Not started → Scaffolded → Documented → Current → Guarded → Practicing) and the exact next steps.

@@ -19,7 +19,7 @@ Every question to the user goes through the `AskUserQuestion` tool (load it with
    - Otherwise ask (`AskUserQuestion`): the active item first (Recommended), then the next most recent, up to three, plus "Something new".
    - The chosen item is **blocked** (blocked by another feature) → say so and offer to resume the blocker first.
 3. Activate it: feature → `groundwork.py activate <NNN-slug>` (in its repo); bug → `groundwork.py activate-bug <NNN-slug>`; RFC → nothing to activate.
-4. Re-orient before touching anything: read `log.md` (the notes), the item's documents (RFC / spec / plan / tasks / bug record), `groundwork.py deps <ref>` for what it depends on and what depends on it,
+4. Re-orient before touching anything: read `log.md` (the notes) and `changes.md` (changes made after the build), the item's documents (RFC / spec / plan / tasks / bug record), `groundwork.py deps <ref>` for what it depends on and what depends on it,
    and `git status` / `git log -5` for the code's real state. Use the code map the session start lists to go straight to the folders the work touches. **Do not redo finished steps and do not re-ask what is already recorded** — the RFC's §3 interview record holds every answer given so far.
 5. Continue with the skill the board names, from exactly where it stopped:
    `drafting` → interview / write-rfc · `in review` → ask the user to approve · `approved — no spec yet` → write-spec (in each repo the RFC touches) · `spec.md is draft` → write-spec ·

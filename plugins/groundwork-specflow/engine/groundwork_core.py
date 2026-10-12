@@ -16,7 +16,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-STANDARD_VERSION = "0.9.0"  # the version of STANDARD.md this code implements
+STANDARD_VERSION = "0.10.0"  # the version of STANDARD.md this code implements
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 TEMPLATES = PLUGIN_ROOT / "templates"
@@ -1045,7 +1045,8 @@ def _why_blocked(ctx: Ctx) -> str | None:
             "no active feature and no diagnosed bug, so there is no approved spec to build against. New work: interview "
             "the user (interview skill), RFC → approval → spec → plan → tasks → evals. A bug: the fix-bug skill (diagnose, "
             "classify, cite the violated requirements, name a regression test). Resuming: the resume skill. "
-            "For a tiny emergency the USER can run /groundwork-specflow:bypass <reason>."
+            "A small change that belongs to no feature (upgrading a package, a CI tweak): the USER opens it with "
+            "/groundwork-specflow:change <what>. For a tiny emergency the USER can run /groundwork-specflow:bypass <reason>."
         )
     if (ctx.repo / "specs" / slug).is_dir() and origin(
         spec_meta(ctx.repo / "specs" / slug)

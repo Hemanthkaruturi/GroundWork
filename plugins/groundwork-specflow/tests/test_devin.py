@@ -181,6 +181,46 @@ class DevinApprove(CheckBase):
             "[groundwork approve]", o["hookSpecificOutput"]["additionalContext"]
         )
 
+    def test_an_approval_moves_the_agent_on_without_a_continue(self):
+        # issue #7: the agent stopped after every approval until the user said "continue"
+        o = devin(
+            self.api,
+            "prompt-reminder",
+            {
+                "hook_event_name": "UserPromptSubmit",
+                "prompt": f"/groundwork-specflow:approve {self.fdir / 'spec.md'}",
+            },
+        )
+        ctx = o["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("approved", ctx)
+        self.assertIn("without waiting to be told to continue", ctx)
+        self.assertIn("Next step (phase=", ctx)
+
+    def test_a_refused_approval_only_reports(self):
+        o = devin(
+            self.api,
+            "prompt-reminder",
+            {
+                "hook_event_name": "UserPromptSubmit",
+                "prompt": "/groundwork-specflow:approve no-such-doc.md",
+            },
+        )
+        ctx = o["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("REFUSED", ctx)
+        self.assertNotIn("Next step (phase=", ctx)
+
+    def test_terminal_approval_says_how_to_wake_the_agent(self):
+        r = subprocess.run(
+            [sys.executable, str(CA), "approve", str(self.fdir / "spec.md")],
+            cwd=self.api,
+            capture_output=True,
+            text=True,
+            env=ENV,
+            check=False,
+        )
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn('say "continue"', r.stdout)
+
 
 class ClaudeUnchanged(Base):
     def test_claude_payload_keeps_claude_output(self):

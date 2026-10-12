@@ -34,6 +34,7 @@ what output to expect, and how to see a failure case. Use/extend the spec's §8.
 and what you did not.
 
 When the feature's tasks are done record it: `groundwork.py record implemented --ref <feature> --via claude-code` (the person is the git identity of the human you work for). Commit messages carry `Refs: <NNN-slug>` so `groundwork.py who` can list everyone who touched it.
+**Changes after the build.** Once the feature has a handover, any further change to its code, however small (moving a file, a rename, a refactor), starts by reading its RFC, spec and `changes.md`, and ends with `groundwork.py change "<what changed>" --requested-by <person who asked> --files <paths> --via claude-code`. A change that alters behaviour amends the spec first (discovery protocol above) and is logged too.
 Before you stop for any reason, leave a trail: `groundwork.py note "<where I stopped; next action>"`. Then continue with **handover**.
 
 ## Write for the reader

@@ -98,7 +98,7 @@ class CodexInstall(Base):
         )
 
     def test_commands_are_user_only(self):
-        for cmd in ("approve", "bypass", "status"):
+        for cmd in ("approve", "bypass", "change", "status"):
             policy = self.p / ".agents" / "skills" / cmd / "agents" / "openai.yaml"
             self.assertIn("allow_implicit_invocation: false", policy.read_text())
         self.assertFalse(

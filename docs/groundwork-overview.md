@@ -12,7 +12,7 @@ GroundWork is a plugin for Claude Code, Codex and Devin. It makes the agent foll
 | --- | --- |
 | 19 skills | one for each step of the path, plus resume, refresh, bugs, ownership, code layout, code quality, baseline and plain writing |
 | 8 hooks | the gate before edits and shell commands, session awareness, reminders, reply length, and optional alerts when the agent waits for you |
-| 83 numbered rules | checked with no AI and no network, on a laptop, in a git hook and in CI |
+| 84 numbered rules | checked with no AI and no network, on a laptop, in a git hook and in CI |
 | 313 automated tests | the whole lifecycle, and every rule has a test that breaks exactly that rule |
 | 3 coding agents | Claude Code, Codex (CLI) and Devin (CLI and Desktop), from the same plugin |
 | 3 platforms | Linux, macOS and Windows, tested on Python 3.10 and 3.12 |
@@ -40,6 +40,7 @@ Every feature, in one line, with where to see it.
 | **Feature and RFC relationships** | depends on, builds against, extends, amends, supersedes, with cycle and clash detection | 5.10, 5.25 |
 | **Bug lifecycle** | A bug is a broken requirement: record, diagnose, classify, cite the requirement, test first, prove, close | 5.9 |
 | **Resume anywhere** | A work board, notes, and files that survive closed sessions and hand-offs | 5.8 |
+| **Change logs** | Every change to a built feature, however small, is logged with who asked, who made it, what, files and its RFC; standalone changes (a package upgrade) are opened by a person and logged too | 5.11 |
 | **Handover** | A standard pack so the next person or agent continues without guessing | 5.26 |
 | **Ownership and accountability** | Who requested, owns, built, deployed and supports every item, and whom to call | 5.11 |
 | **Documents that stay true** | Freshness tracking flags stale documents, including the workspace ones | 5.12 |
@@ -108,7 +109,7 @@ Fix *where* things live, *what* each document contains, and *who* approves. Leav
 ### Structure everyone shares
 - **Two levels, plus standalone.** A *workspace* holds the product-level truth (project brief, architecture, rules, contracts, decisions). Each *repo* holds its own code, specs and internals. A single repo with no workspace above it is *standalone* and carries both sets of documents. The agent always knows which level it is on, and a directory that is neither is *unknown*: nothing may be built there.
 - **Standard documents:** `PROJECT`, `ARCHITECTURE`, `CONSTITUTION` (the non-negotiable rules), `AGENTS`, RFCs, contracts, specs, plans, tasks, evals, bug records, handovers.
-- **A written standard** (`STANDARD.md`) with 83 numbered rules. `groundwork check` verifies them with no AI and no network, so it runs the same on a laptop, in a git hook and in CI.
+- **A written standard** (`STANDARD.md`) with 84 numbered rules. `groundwork check` verifies them with no AI and no network, so it runs the same on a laptop, in a git hook and in CI.
 
 ### Every repo looks the same inside
 - **A standard code layout.** Business logic lives in `core/`. Code that talks to an outside system (an LLM, a database, an HTTP API, a queue, email) lives in `connectors/`, one folder per system. Routes, commands and workers live in `entrypoints/`, and settings are read only in `config/`. A small wiring file plugs connectors into core. There are profiles for services, command-line tools, web front ends and libraries.
@@ -746,7 +747,7 @@ The log says who and why:
 ```
 2026-09-30 14:08:06 priya@shop.example 60min: typo in prod banner
 ```
-The agent cannot run the bypass itself. Any behaviour change still needs the spec updated afterwards.
+The agent cannot run the bypass itself. Any behaviour change still needs the spec updated afterwards. A routine change that belongs to no feature, such as a package upgrade, uses `/groundwork-specflow:change <what>` instead (5.11): it lifts the gate the same way and is also logged in `specs/changes.md`.
 
 ### 5.28 Git hooks and CI, for people who do not use the plugin
 Hooks live in `.git/` and are not shared by git, so the tool can copy its check engine into the repo *(real output)*:
@@ -795,7 +796,7 @@ Approval stays human: the user types `/groundwork-specflow:approve`, and Devin's
 
 **Differences to know about.** Devin cloud sessions don't run plugin hooks. There, the skills guide the agent, but nothing blocks a code edit. Devin also runs plugin hooks "best effort": a hook that fails is skipped rather than stopping the session. The git hook and CI check (5.28) close that gap, because they check every commit whichever agent made it.
 
-**Without Devin's plugin system.** Some companies turn Devin plugins off, and then no plugin install loads. For that case, Devin can install GroundWork into the project itself (§11). `setup/install.py` puts the engine in `.devin/groundwork/`, each skill and command in `.devin/skills/`, and the hooks in `.devin/hooks.v1.json`. These are Devin's project skills and hooks, not a plugin. The gate, approvals, documents, code layout and code map work the same, and commands have no prefix: `/approve`, `/bypass`, `/status`. The script checks its own install by running the session-start hook the way Devin will. It runs on Linux, macOS, Windows and WSL. Committing `.devin/` gives the whole team GroundWork. That this works while plugins are turned off hasn't been confirmed yet.
+**Without Devin's plugin system.** Some companies turn Devin plugins off, and then no plugin install loads. For that case, Devin can install GroundWork into the project itself (§11). `setup/install.py` puts the engine in `.devin/groundwork/`, each skill and command in `.devin/skills/`, and the hooks in `.devin/hooks.v1.json`. These are Devin's project skills and hooks, not a plugin. The gate, approvals, documents, code layout and code map work the same, and commands have no prefix: `/approve`, `/bypass`, `/change`, `/status`. The script checks its own install by running the session-start hook the way Devin will. It runs on Linux, macOS, Windows and WSL. Committing `.devin/` gives the whole team GroundWork. That this works while plugins are turned off hasn't been confirmed yet.
 
 ### 5.30 Code layout: one decision per repo, never a surprise migration
 `shop-api` already has code. Before any code is written, `groundwork.py layout` shows that no decision exists yet, and offers both choices *(real output)*:
@@ -1015,7 +1016,7 @@ unfinished: PROJECT.md, ARCHITECTURE.md, CONSTITUTION.md, AGENTS.md). Use the bo
 emergency the USER can run $source-command-bypass <reason>. — blocked because this edit also writes
 shop-api/src/search.py. The other files are allowed; write them in an edit of their own.
 ```
-Codex has no plugin slash commands and rejects `/groundwork-specflow:approve` as unrecognised. Commands are typed with `$` instead. Every message the engine sends to Codex names the `$` form, including the output of engine commands the agent runs itself, and every prompt reminds the agent which form to give the user. With the plugin, Codex turns each GroundWork command into a skill called `source-command-<name>`: approve with `$source-command-approve <doc>`, bypass with `$source-command-bypass <reason>`, and see where you are with `$groundwork-specflow:source-command-status`. Other skills are `$groundwork-specflow:<skill>`, for example `$groundwork-specflow:bootstrap`. Codex has no picker outside plan mode, so questions come in numbered rounds, as on Devin (5.29).
+Codex has no plugin slash commands and rejects `/groundwork-specflow:approve` as unrecognised. Commands are typed with `$` instead. Every message the engine sends to Codex names the `$` form, including the output of engine commands the agent runs itself, and every prompt reminds the agent which form to give the user. With the plugin, Codex turns each GroundWork command into a skill called `source-command-<name>`: approve with `$source-command-approve <doc>`, bypass with `$source-command-bypass <reason>`, open a standalone change with `$source-command-change <what>`, and see where you are with `$groundwork-specflow:source-command-status`. Other skills are `$groundwork-specflow:<skill>`, for example `$groundwork-specflow:bootstrap`. Codex has no picker outside plan mode, so questions come in numbered rounds, as on Devin (5.29).
 
 Approval stays human. The user types the approve command, and Codex's agent is refused if it tries to run approve itself *(real output)*:
 ```
@@ -1028,7 +1029,7 @@ Work is recorded `--via codex`, so `who` shows which agent built what. The code 
 
 **Differences to know about.** The Codex IDE extension doesn't load plugins, and plugin hooks don't run in Codex cloud sessions. The skills can guide the agent there, but nothing blocks a code edit, so add the git hook or CI check (5.28). Codex's sandbox has no network by default, so installing the quality tools fails until network access is allowed. The plugin relies on Codex reading Claude-format plugins, and on the `source-command-` names Codex gives commands, neither of which Codex documents. The ChatGPT desktop app and Windows haven't been tested with GroundWork yet.
 
-**Without Codex's plugin system.** For a team that wants GroundWork in the repo, or a company that turns plugins off, `setup/install.py --codex` installs it into the project (§11). It puts the engine in `.codex/groundwork/`, each skill and command in `.agents/skills/`, and the hooks in `.codex/hooks.json`, next to any hooks the project already has. These are Codex's project skills and hooks, not a plugin. Commands have no prefix: `$bootstrap`, `$approve`, `$bypass`, `$status`. The approve, bypass and status skills are marked so that only the user can invoke them; Codex's agent can't choose them on its own. The script checks its own install by running the session-start hook the way Codex will, and `--codex --uninstall` removes it and keeps the project's own hooks. Committing `.codex/` and `.agents/` gives the whole team GroundWork; each person still trusts the project and its hooks once.
+**Without Codex's plugin system.** For a team that wants GroundWork in the repo, or a company that turns plugins off, `setup/install.py --codex` installs it into the project (§11). It puts the engine in `.codex/groundwork/`, each skill and command in `.agents/skills/`, and the hooks in `.codex/hooks.json`, next to any hooks the project already has. These are Codex's project skills and hooks, not a plugin. Commands have no prefix: `$bootstrap`, `$approve`, `$bypass`, `$change`, `$status`. The approve, bypass, change and status skills are marked so that only the user can invoke them; Codex's agent can't choose them on its own. The script checks its own install by running the session-start hook the way Codex will, and `--codex --uninstall` removes it and keeps the project's own hooks. Committing `.codex/` and `.agents/` gives the whole team GroundWork; each person still trusts the project and its hooks once.
 
 ## 6. How it helps
 
@@ -1088,20 +1089,20 @@ The step-by-step version is in `docs/manual-testing.md`.
 
 **8 hooks:** session start (awareness, guardrails, the code map and in-flight work), every prompt (triage and style reminder), before edits and before shell commands (the gate, which can only deny and never approves anything), when another skill loads, at reply end (optional length limit), and two alert hooks, at reply end and before a question, that stay silent unless you turned alerts on. The same hook file serves Claude Code, Codex and Devin. Its matchers name every agent's tools.
 
-**Commands you type:** `/groundwork-specflow:approve` (one or more documents), `/groundwork-specflow:bypass` (emergencies, logged), `/groundwork-specflow:status`. They are the same in Claude Code and Devin. In Devin, only the user can run them. In a Devin project installed without the plugin system (5.29), they have no prefix: `/approve`, `/bypass`, `/status`. Codex has no plugin slash commands, so there they are typed with `$`: `$source-command-approve`, `$source-command-bypass` and `$groundwork-specflow:source-command-status` with the plugin, or `$approve`, `$bypass` and `$status` in a project install (5.36).
+**Commands you type:** `/groundwork-specflow:approve` (one or more documents), `/groundwork-specflow:bypass` (emergencies, logged), `/groundwork-specflow:change` (a standalone change such as a package upgrade, logged), `/groundwork-specflow:status`. They are the same in Claude Code and Devin. In Devin, only the user can run them. In a Devin project installed without the plugin system (5.29), they have no prefix: `/approve`, `/bypass`, `/change`, `/status`. Codex has no plugin slash commands, so there they are typed with `$`: `$source-command-approve`, `$source-command-bypass`, `$source-command-change` and `$groundwork-specflow:source-command-status` with the plugin, or `$approve`, `$bypass`, `$change` and `$status` in a project install (5.36).
 
 **A command-line engine** (`groundwork.py`), pure Python with no dependencies and no Claude needed:
 
 | Command | Purpose |
 | --- | --- |
 | `init` (`--dry-run`, `--retrofit`, `--as repo\|workspace`), `doctor` | onboard a project; show its stage and next steps |
-| `check`, `check --strict`, `check --json` | verify the 83 rules |
+| `check`, `check --strict`, `check --json` | verify the 84 rules |
 | `status`, `board`, `note`, `activate` | where things stand, what is in flight, where work stopped |
 | `change` | records a change made to a built feature in its `changes.md`, or (`--standalone`) completes a standalone change in `specs/changes.md` |
 | `new-rfc`, `new-feature`, `new-bug`, `activate-bug`, `plan-sync` | create documents; switch the active bug; pin the plan to the approved spec |
 | `new-contract` (`--as-built`), `new-adr` (`--rfc` or `--retrospective`) | a contract with named reviewers; a decision record after an RFC, or one found in existing code |
 | `adopt-specs`, `adopt-specs --classify`, `new-baseline`, `capability`, `capabilities` | import legacy specs and classify them; write a baseline spec; record capabilities and rebuild their table |
-| `approve`, `bypass` | human sign-off (several documents at once, all or none) and the emergency bypass |
+| `approve`, `bypass`, `bypass --change` | human sign-off (several documents at once, all or none), the emergency bypass, and opening a standalone change |
 | `deps`, `who`, `record` | relations, responsibility, and recording who did what |
 | `fresh`, `confirm`, `confirm --baseline` | detect stale documents and baselines whose sources changed; record that a person checked them |
 | `alerts on\|off\|status\|test`, `alerts voice on\|off` | your own alert setting, for every project |

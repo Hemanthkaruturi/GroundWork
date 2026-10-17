@@ -137,6 +137,15 @@ class Detection(Base):
         (self.root / "ws" / "PROJECT.md").write_text("# p", encoding="utf-8")
         self.assertEqual(self.level(self.root / "ws" / "api"), "REPO")
 
+    def test_repo_pinned_standalone_keeps_its_own_rfcs_inside_workspace(self):
+        git_init(self.root / "ws" / "api")
+        (self.root / "ws" / "PROJECT.md").write_text("# p", encoding="utf-8")
+        cfg = self.root / "ws" / "api" / ".groundwork"
+        cfg.mkdir()
+        (cfg / "config.json").write_text('{"level": "standalone"}', encoding="utf-8")
+        self.assertEqual(self.level(self.root / "ws" / "api"), "STANDALONE")
+        self.assertEqual(self.level(self.root / "ws"), "WORKSPACE")
+
     def test_gate_agrees_with_session_workspace_before_project_md_exists(self):
         git_init(self.root / "shop" / "api")
         git_init(self.root / "shop" / "web")

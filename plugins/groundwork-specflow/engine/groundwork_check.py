@@ -30,6 +30,7 @@ import groundwork_people as PP
 import groundwork_quality as Q
 import groundwork_relations as R
 import groundwork_secrets as S
+import groundwork_submodules as SM
 
 # --- the shape of every governed document (STANDARD.md §4) ----------------------------
 
@@ -1180,6 +1181,8 @@ def check_ctx(ctx: C.Ctx, r: Report, seen: set[Path]) -> None:
     check_changes(ctx, r)
     check_approval_records(ctx, r)
     if ctx.level == "workspace":
+        for path, msg, hint in SM.problems(ctx.workspace):
+            r.warn("GW006", path, msg, hint)
         check_rfcs(ctx, r)
         check_adrs(ctx, r)
         check_contracts(ctx, r)

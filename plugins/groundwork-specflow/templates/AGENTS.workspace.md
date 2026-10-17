@@ -25,6 +25,8 @@ the repo's commands and the coding rules every agent follows.
   not a quiet cross-repo edit — say what the other repo needs and let the user decide.
 - Anything two repos must agree on is settled here first (RFC, then CONTRACTS/), then built
   in each repo against a pinned contract version.
+- Commit code inside its repo. If the workspace is in git (repos are submodules), push the repo first,
+  then commit the moved pointer and any workspace document change here.
 
 ## Process (enforced by the groundwork plugin)
 Interview → RFC → human approval → spec → plan → tasks → evals → implement → handover.

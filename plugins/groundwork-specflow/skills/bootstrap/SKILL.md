@@ -18,6 +18,7 @@ description: Create or complete the foundation documents (PROJECT.md, ARCHITECTU
    in the workflow skill first.
 1. Run `python3 "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py" status`. If the level is **unknown**, stop and ask
    the user: is this a repo (`git init`) or a workspace holding several repos (`groundwork.py mark-workspace`)?
+   At a **workspace**, decide *Workspace in git* (below) before step 2 if `status` says it is not decided.
 2. Run `python3 "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py" init` (add `--dry-run` first if the project already has documents).
    It creates only what is missing, records the standard version, and writes **`.groundwork/discovery.json`**: evidence about the existing
    codebase (languages, manifests and their scripts/dependencies, entry points, tests, CI/infra, existing docs, git history and top contributors).
@@ -32,6 +33,19 @@ description: Create or complete the foundation documents (PROJECT.md, ARCHITECTU
    business facts.** Ask (with `AskUserQuestion`, a round at a time); then write what they said.
 
 **Keep the template's headings and order** (a reader must find "Who works on what" in the same place in every project); replace each `[TODO]` with the user's words, or leave it as a `[NEEDS CLARIFICATION: …]` if they haven't said.
+
+## Workspace in git (workspace only, once)
+The workspace can be a git repository of its own, with each repo as a **git submodule**. Then the shared documents are versioned
+and pushed, and one clone gets every repo at a commit that belongs with the rest. Each repo keeps its own history and remote.
+1. Run `groundwork.py submodules` and read each repo's state. Ask (`AskUserQuestion`):
+   **Track in git, repos as submodules (Recommended)** — documents versioned and pushed; nothing in the repos moves ·
+   **Keep a plain folder** — documents stay local; each repo is cloned by hand.
+2. Track → `groundwork.py submodules init --dry-run`, show the user what it will do, then `submodules init`. It registers each repo
+   in place from its `origin` URL and commits nothing. A repo it skips (no commit, no remote, or a token in the URL) is named:
+   tell the user what to fix; never put a token in `.gitmodules`. Plain folder → `groundwork.py submodules skip`.
+3. After the documents are written, offer to commit them (`git add .gitignore .gitmodules *.md CONTRACTS DECISIONS .groundwork`).
+   The user creates the workspace's remote; then `git remote add origin <url>` and `git push -u origin HEAD`.
+   Teammates clone with `git clone --recurse-submodules <url>`.
 
 ## PROJECT.md — business, not technical
 Ask: what is this, for whom, what pain does it remove, what does success look like, what is in/out of

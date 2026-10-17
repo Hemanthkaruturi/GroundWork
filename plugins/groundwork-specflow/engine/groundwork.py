@@ -52,6 +52,7 @@ import groundwork_people as P
 import groundwork_quality as Q
 import groundwork_relations as R
 import groundwork_secrets as S
+import groundwork_submodules as SM
 
 TRIAGE = (
     "Before changing any file, triage the request: a defect -> fix-bug skill; new or changed behaviour OR LOOK "
@@ -128,6 +129,7 @@ def describe(ctx: C.Ctx) -> str:
     if ctx.level == "workspace":
         kids = C.child_repos(ctx.workspace)
         lines.append("Repos here: " + (", ".join(k.name for k in kids) or "(none yet)"))
+        lines.append(SM.summary(ctx.workspace))
     if ctx.level == "repo":
         lines.append(
             "You are in a repo inside a workspace: read the workspace's PROJECT.md, "
@@ -1172,7 +1174,45 @@ def cmd_mark_workspace(_a) -> None:
         level="workspace",
         standard=C.read_config(root).get("standard", C.STANDARD_VERSION),
     )
-    print(f"{root} is now a workspace.")
+    print(
+        f"{root} is now a workspace.\n"
+        "Ask the user whether to track it in git with each repo as a submodule "
+        "(`groundwork.py submodules init`) or keep it a plain folder (`groundwork.py submodules skip`)."
+    )
+
+
+def cmd_submodules(a) -> None:
+    ctx = C.detect(Path.cwd())
+    if ctx.level != "workspace":
+        raise SystemExit(
+            "Run this at the workspace root (the folder that holds the repos)."
+        )
+    ws = ctx.workspace
+    if a.action == "skip":
+        C.write_config(ws, **{SM.KEY: "none"})
+        print("Recorded: the workspace stays a plain folder, not a git repository.")
+        return
+    if a.action == "init":
+        notes = SM.init(ws, dry=a.dry_run)
+        print(
+            ("Would do:\n  " if a.dry_run else "Done:\n  ")
+            + "\n  ".join(notes or ["nothing (all set)"])
+        )
+        if not a.dry_run:
+            print(
+                "Next: review `git status`, add the workspace documents, commit, then add a remote and push:\n"
+                "  git add .gitignore .gitmodules *.md CONTRACTS DECISIONS .groundwork\n"
+                '  git commit -m "Workspace with repos as submodules"\n'
+                "  git remote add origin <workspace-repo-url> && git push -u origin HEAD\n"
+                "Teammates clone it with: git clone --recurse-submodules <workspace-repo-url>"
+            )
+        return
+    print(SM.summary(ws))
+    for r in SM.survey(ws):
+        print(
+            f"  {r.name:<28} {r.state:<16} {r.url}"
+            + (f"\n      {r.note}" if r.note else "")
+        )
 
 
 def cmd_new_rfc(a) -> None:
@@ -1790,6 +1830,15 @@ def main() -> None:
     for k in ("extends", "depends-on", "builds-against", "amends"):
         p.add_argument("--" + k, help="comma-separated NNN-slug or repo/NNN-slug")
     p.set_defaults(fn=cmd_new_feature)
+    p = sub.add_parser(
+        "submodules",
+        help="workspace in git: status, init (repos become submodules, nothing moves), skip",
+    )
+    p.add_argument(
+        "action", nargs="?", default="status", choices=["status", "init", "skip"]
+    )
+    p.add_argument("--dry-run", action="store_true")
+    p.set_defaults(fn=cmd_submodules)
     p = sub.add_parser("hooks")
     p.add_argument("action", choices=["install", "uninstall", "status"])
     p.add_argument(

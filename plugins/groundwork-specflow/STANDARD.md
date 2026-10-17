@@ -1,6 +1,6 @@
 # The Groundwork Standard
 
-**Version 0.10.0** · the specification that `groundwork check` enforces and the templates implement.
+**Version 0.11.0** · the specification that `groundwork check` enforces and the templates implement.
 
 Everything a team or an agent needs to know to work "the Groundwork way" is here. If two
 projects follow the same version of this document, a person or an agent moving between them
@@ -57,6 +57,16 @@ then built in each repo against it. A change that needs another repo is never a 
 RFCs live in the workspace `DECISIONS/` (in the repo's own `DECISIONS/` when standalone). Specs
 live in the repo that builds them. File names are case-insensitive on lookup; the canonical
 spelling is as shown.
+
+## 3a. The workspace in git
+
+A workspace SHOULD be a git repository of its own whose repos are **git submodules**. The workspace repository versions the shared documents (PROJECT, ARCHITECTURE, CONSTITUTION, AGENTS, CONTRACTS, DECISIONS) and pins one commit of each repo, so a clone reproduces a set of repos that belong together. Each repo keeps its own history, branches, pull requests and releases.
+
+- The choice is the user's and is asked when the workspace is set up. `groundwork.py submodules init` records `"workspace_git": "submodules"`, runs `git init` if needed, git-ignores `.env`, and registers each repo in place from its own `origin` URL. It moves no file, rewrites no history and commits nothing. `submodules skip` records `"none"`. `submodules` (status) lists each repo's state.
+- A repo is registered only when it has a commit and an `origin` URL without a password or token in it; otherwise it is skipped and named.
+- Code is committed inside its repo. The workspace commit holds documents and moved pointers. `init` sets `push.recurseSubmodules=check`, so git refuses to push a workspace pointing at a repo commit that is not pushed.
+- Clone with `git clone --recurse-submodules <url>`, or run `git submodule update --init` after a plain clone.
+- When the workspace is in git, every repo under it is a submodule and is checked out (GW006).
 
 ## 4. Documents and their required sections
 
@@ -367,6 +377,7 @@ sections; they never invalidate a conforming project.
 | GW003 | E | A finished foundation document lacks a required section (§4) |
 | GW004 | W | No `standard` version recorded |
 | GW005 | E | The project's standard has a different major version |
+| GW006 | W | The workspace is a git repository but a repo under it is not a submodule, or a submodule is not checked out (§3a) |
 | GW010 | E | RFC front matter missing, wrong id, bad classification or sign-off count |
 | GW011 | E | A finished RFC lacks a required numbered section, or they are out of order |
 | GW012 | E | An `api` RFC lacks a §8 contract or requires fewer than 2 sign-offs |
@@ -468,6 +479,7 @@ python3 <plugin>/engine/groundwork.py check --json     # machine-readable
 - `groundwork.py init` also records, in `.groundwork/discovery.json`: `surface` (HTTP route files, prefixes and mounts, CLI commands, schema files, API docs, with the scan's limits), `rules` (rule-shaped lines from the README, AGENTS, CLAUDE, CONTRIBUTING, constitutions and docs, with sources, possible conflicts and the CI gate commands), `capability_candidates` (clusters from routes, commands and workers, with suggested lifecycle and what is unconfirmed), `adoptable.specs` (legacy spec directories with their original status, companions, headings and task counts), `git.recent_subjects` and `scan` (limits, exclusions, unsupported patterns). All of it is evidence from bounded regex scans, never a decision, and never a claim of complete coverage.
 - `groundwork.py new-adr <slug> [--title T] [--rfc RFC-000N | --retrospective [--source PATH] [--decided-at DATE]]` creates an ADR in `DECISIONS/` and lists it in the index.
 - `groundwork.py new-contract <provider>-<topic> [--title T] [--provider P] [--consumers a,b] [--as-built]` creates a contract in the workspace's `CONTRACTS/` (a standalone repo's own).
+- `groundwork.py submodules [status|init|skip] [--dry-run]` puts the workspace in git with its repos as submodules, or records that it stays a plain folder (§3a).
 - `groundwork.py doctor [--json]` is read-only. It places the project on a ladder — **0 Not started** (required docs missing) ·
   **1 Scaffolded** (unfinished, or non-conforming) · **2 Documented** (finished, conforming) · **3 Current** (confirmed, not stale) ·
   **4 Guarded** (git hook or CI enforces the standard) · **5 Practicing** (the RFC → spec path is in use) — and lists ordered next steps.

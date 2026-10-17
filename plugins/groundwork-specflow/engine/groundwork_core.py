@@ -161,6 +161,9 @@ def detect(path: Path | str, session_cwd: Path | str | None = None) -> Ctx:
     git = find_git_root(start)
     if git:
         cfg = read_config(git)
+        if cfg.get("level") == "standalone":
+            # pinned: this repo keeps its own DECISIONS/ even when a workspace sits above it
+            return Ctx("standalone", git, repo=git, config=cfg)
         if cfg.get("level") == "workspace" or child_repos(git):
             return Ctx("workspace", git, workspace=git, config=cfg)
         ws = _find_workspace_above(git)

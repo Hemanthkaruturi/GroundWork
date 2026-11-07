@@ -99,6 +99,9 @@ def active_bug(ctx: C.Ctx) -> str | None:
     return slug if slug and (bugs_dir(ctx) / f"{slug}.md").is_file() else None
 
 
+CASE_LINE = re.compile(r"^\s*[-*] .*\bcovered\b", re.MULTILINE | re.IGNORECASE)
+
+
 def _section_text(text: str, n: int) -> str:
     m = re.search(rf"^## {n}\.[^\n]*\n(.*?)(?=^## |\Z)", text, re.MULTILINE | re.DOTALL)
     return m.group(1) if m else ""
@@ -246,6 +249,15 @@ def bug_state(ctx: C.Ctx, slug: str) -> BugState:
             "GW062",
             "error",
             "name the regression test in `regression_test:` (path relative to the repo)",
+        )
+    if st.status in ("diagnosed", "fixed", "closed") and not CASE_LINE.search(
+        _section_text(text, 6)
+    ):
+        add(
+            "GW126",
+            "warning",
+            "§6 lists no cases around the root cause: add a bullet per case, each saying "
+            "'covered by <test>' or 'not covered' and why",
         )
     if st.status in ("fixed", "closed"):
         rt = (meta.get("regression_test") or "").strip()

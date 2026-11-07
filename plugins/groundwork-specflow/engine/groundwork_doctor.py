@@ -391,7 +391,19 @@ def diagnose_ctx(ctx: C.Ctx, ws_children: bool = True) -> Diagnosis:
             hs = H.status(base)
         except Exception:  # noqa: BLE001
             hs = "not installed"
-        if "pre-commit" in hs:
+        try:
+            old = H.stale(base)
+        except Exception:  # noqa: BLE001
+            old = None
+        if old:
+            add(
+                "Guardrails",
+                "warn",
+                "git hook is out of date",
+                old + ". " + H.STALE_ADVICE,
+                "groundwork.py hooks install",
+            )
+        elif "pre-commit" in hs:
             add("Guardrails", "ok", "git hook: " + hs)
         else:
             add(

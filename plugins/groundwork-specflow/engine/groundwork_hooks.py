@@ -40,7 +40,7 @@ fi
 PY=$(command -v python3 || command -v python) || {{ echo "groundwork-specflow: python not found; skipping check" >&2; exit 0; }}
 "$PY" "$GW" check --hook {strict}"$ROOT" || {{
   echo >&2
-  echo "groundwork-specflow: {verb} blocked. Fix the findings above, or bypass once with --no-verify." >&2
+  echo "groundwork-specflow: {verb} blocked (checked with $GW). Fix the findings above, or bypass once with --no-verify." >&2
   exit 1
 }}
 """
@@ -145,6 +145,35 @@ def uninstall(repo: Path) -> list[str]:
                 orig.rename(path)
                 notes.append(f"restored your original {name}")
     return notes or ["no groundwork hooks installed"]
+
+
+PINNED = re.compile(r"/(\d+\.\d+\.\d+)/engine/groundwork\.py")
+
+STALE_ADVICE = (
+    "Run `groundwork.py hooks install` in that repo, but know what it does: it rewrites "
+    ".git/hooks/pre-commit in that repo only (not pre-push unless you add --pre-push). A hook that is "
+    "not ours is kept as pre-commit.groundwork-orig and still runs first; if that file already exists the "
+    "install stops and asks you to resolve it by hand. After it, commits are checked by the current rules, "
+    "so a commit the old hook let through may now be blocked. Undo with `groundwork.py hooks uninstall`; "
+    "bypass a single commit with `git commit --no-verify`."
+)
+
+
+def stale(repo: Path) -> str | None:
+    """Hook from an older installer that pins one engine version for ever."""
+    current = C.PLUGIN_ROOT.name
+    if not VERSION_DIR.fullmatch(current):
+        return None  # not a versioned cache folder: nothing to compare
+    p = hooks_dir(repo) / "pre-commit"
+    if not (p.exists() and _ours(p)):
+        return None
+    text = p.read_text(encoding="utf-8")
+    if 'ls "$CACHE"' in text:  # newer installer follows the newest engine itself
+        return None
+    pinned = PINNED.findall(text)
+    if pinned and pinned[-1] != current:
+        return f"the pre-commit hook runs engine {pinned[-1]} for ever; the installed plugin is {current}"
+    return None
 
 
 def status(repo: Path) -> str:

@@ -207,7 +207,7 @@ RFCs may `supersede` or be `related_rfcs` to earlier RFCs; a superseded RFC leav
 
 ## 5d. Bugs
 
-A bug is a **violated or missing requirement**. Each defect gets a record `bugs/NNN-slug.md` with front matter (`id, title, status, severity, classification, violates, amends, rfc, regression_test, author, created`) and numbered sections *1 Report · 2 Reproduction · 3 Diagnosis · 4 Classification · 5 Fix plan · 6 Regression test · 7 Verification*. Status runs `open → diagnosed → fixed → closed`.
+A bug is a **violated or missing requirement**. Each defect gets a record `bugs/NNN-slug.md` with front matter (`id, title, status, severity, classification, violates, amends, rfc, regression_test, author, created`) and numbered sections *1 Report · 2 Reproduction · 3 Diagnosis · 4 Classification · 5 Fix plan · 6 Regression test and cases · 7 Verification*. Status runs `open → diagnosed → fixed → closed`.
 
 | `classification` | Means | Required before code edits |
 | --- | --- | --- |
@@ -457,6 +457,8 @@ sections; they never invalidate a conforming project.
 | GW122 | W | No `lint` or no `test` command, so `verify` cannot check it |
 | GW123 | W | Standard toolchain: a code file is longer than `max_file_lines` (default 400; tests exempt) |
 | GW124 | W | `prettier` formats the repo but `.prettierignore` does not exclude GroundWork's documents (`groundwork.py quality ignore`) |
+| GW125 | W | A git hook from an older installer is pinned to an old engine |
+| GW126 | W | A bug claiming diagnosed or later lists no cases in §6 |
 
 Unfinished documents are reported once (GW002/GW025) and otherwise skipped: a scaffold cannot
 yet be judged on shape. A finished document is held to the standard in full.

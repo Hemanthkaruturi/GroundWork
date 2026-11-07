@@ -12,7 +12,7 @@ GroundWork is a plugin for Claude Code, Codex and Devin. It makes the agent foll
 | --- | --- |
 | 19 skills | one for each step of the path, plus resume, refresh, bugs, ownership, code layout, code quality, baseline and plain writing |
 | 8 hooks | the gate before edits and shell commands, session awareness, reminders, reply length, and optional alerts when the agent waits for you |
-| 85 numbered rules | checked with no AI and no network, on a laptop, in a git hook and in CI |
+| 87 numbered rules | checked with no AI and no network, on a laptop, in a git hook and in CI |
 | 313 automated tests | the whole lifecycle, and every rule has a test that breaks exactly that rule |
 | 3 coding agents | Claude Code, Codex (CLI) and Devin (CLI and Desktop), from the same plugin |
 | 3 platforms | Linux, macOS and Windows, tested on Python 3.10 and 3.12 |
@@ -109,7 +109,7 @@ Fix *where* things live, *what* each document contains, and *who* approves. Leav
 ### Structure everyone shares
 - **Two levels, plus standalone.** A *workspace* holds the product-level truth (project brief, architecture, rules, contracts, decisions). Each *repo* holds its own code, specs and internals. A single repo with no workspace above it is *standalone* and carries both sets of documents. The agent always knows which level it is on, and a directory that is neither is *unknown*: nothing may be built there.
 - **Standard documents:** `PROJECT`, `ARCHITECTURE`, `CONSTITUTION` (the non-negotiable rules), `AGENTS`, RFCs, contracts, specs, plans, tasks, evals, bug records, handovers.
-- **A written standard** (`STANDARD.md`) with 85 numbered rules. `groundwork check` verifies them with no AI and no network, so it runs the same on a laptop, in a git hook and in CI.
+- **A written standard** (`STANDARD.md`) with 87 numbered rules. `groundwork check` verifies them with no AI and no network, so it runs the same on a laptop, in a git hook and in CI.
 
 ### Every repo looks the same inside
 - **A standard code layout.** Business logic lives in `core/`. Code that talks to an outside system (an LLM, a database, an HTTP API, a queue, email) lives in `connectors/`, one folder per system. Routes, commands and workers live in `entrypoints/`, and settings are read only in `config/`. A small wiring file plugs connectors into core. There are profiles for services, command-line tools, web front ends and libraries.
@@ -1096,7 +1096,7 @@ The step-by-step version is in `docs/manual-testing.md`.
 | Command | Purpose |
 | --- | --- |
 | `init` (`--dry-run`, `--retrofit`, `--as repo\|workspace`), `doctor` | onboard a project; show its stage and next steps |
-| `check`, `check --strict`, `check --json` | verify the 85 rules |
+| `check`, `check --strict`, `check --json` | verify the 87 rules |
 | `status`, `board`, `note`, `activate` | where things stand, what is in flight, where work stopped |
 | `change` | records a change made to a built feature in its `changes.md`, or (`--standalone`) completes a standalone change in `specs/changes.md` |
 | `new-rfc`, `new-feature`, `new-bug`, `activate-bug`, `plan-sync` | create documents; switch the active bug; pin the plan to the approved spec |

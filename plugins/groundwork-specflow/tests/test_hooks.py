@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parents[1] / "engine"))
 from test_check import CheckBase
 from test_flow import ENV, ca
 
@@ -24,6 +25,45 @@ def commit(repo, msg="c", env=None, *extra):
         env={**GENV, **(env or {})},
         check=False,
     )
+
+
+class StaleHook(CheckBase):
+    def hook(self, body):
+        d = Path(
+            subprocess.run(
+                ["git", "-C", str(self.api), "rev-parse", "--git-path", "hooks"],
+                capture_output=True, text=True, check=True,
+            ).stdout.strip()
+        )
+        d = d if d.is_absolute() else self.api / d
+        (d / "pre-commit").write_text(body, encoding="utf-8")
+
+    def stale(self):
+        import groundwork_core as C
+        import groundwork_hooks as H
+
+        old = C.PLUGIN_ROOT
+        C.PLUGIN_ROOT = Path("/cache/groundwork-specflow/0.1.25")
+        try:
+            return H.stale(self.api)
+        finally:
+            C.PLUGIN_ROOT = old
+
+    def test_pinned_old_engine_is_stale(self):
+        self.hook("#!/bin/sh\n# groundwork-hook v1\npython3 /c/0.1.2/engine/groundwork.py check\n")
+        self.assertIn("0.1.2", self.stale())
+
+    def test_current_installer_foreign_or_missing_hook_is_not_stale(self):
+        self.assertIsNone(self.stale())
+        self.hook("#!/bin/sh\npython3 /c/0.1.2/engine/groundwork.py\n")
+        self.assertIsNone(self.stale())
+        self.hook('#!/bin/sh\n# groundwork-hook v1\nV=$(ls "$CACHE")\n/c/0.1.2/engine/groundwork.py\n')
+        self.assertIsNone(self.stale())
+
+    def test_blocked_message_names_the_engine(self):
+        import groundwork_hooks as H
+
+        self.assertIn("checked with $GW", H.SCRIPT)
 
 
 class Hooks(CheckBase):

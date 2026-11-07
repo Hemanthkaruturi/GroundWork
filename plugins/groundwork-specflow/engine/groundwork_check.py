@@ -24,6 +24,7 @@ import groundwork_contracts as CT
 import groundwork_core as C
 import groundwork_decisions as AD
 import groundwork_fresh as F
+import groundwork_hooks as H
 import groundwork_layout as L
 import groundwork_overlap as O
 import groundwork_people as PP
@@ -848,10 +849,25 @@ def check_bugs(ctx: C.Ctx, r: Report) -> None:
         for p in st.problems:
             if st.status == "open" and p.rule in ("GW062", "GW065"):
                 continue  # still being diagnosed: not yet claiming anything
-            if p.rule == "GW064":
-                r.warn("GW064", bp, p.msg)
+            if p.rule in ("GW064", "GW126"):
+                r.warn(p.rule, bp, p.msg)
             else:
                 r.err(p.rule, bp, p.msg)
+
+
+def check_hooks(ctx: C.Ctx, r: Report) -> None:
+    """GW125: a git hook from an older installer is pinned to an old engine."""
+    if ctx.level not in ("repo", "standalone", "workspace"):
+        return
+    base = ctx.workspace if ctx.level == "workspace" else ctx.repo
+    if not base or not (base / ".git").exists():
+        return
+    try:  # a probe must never break `check`
+        why = H.stale(base)
+    except Exception:  # noqa: BLE001
+        return
+    if why:
+        r.warn("GW125", base / ".git" / "hooks" / "pre-commit", why, H.STALE_ADVICE)
 
 
 def check_changes(ctx: C.Ctx, r: Report) -> None:
@@ -1179,6 +1195,7 @@ def check_ctx(ctx: C.Ctx, r: Report, seen: set[Path]) -> None:
     check_brevity(ctx, r)
     check_overlap(ctx, r)
     check_changes(ctx, r)
+    check_hooks(ctx, r)
     check_approval_records(ctx, r)
     if ctx.level == "workspace":
         for path, msg, hint in SM.problems(ctx.workspace):

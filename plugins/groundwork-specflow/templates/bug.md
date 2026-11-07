@@ -40,8 +40,12 @@ set `rfc` to a new or amending APPROVED RFC). `regression_test` is the path of t
 ## 5. Fix plan
 [TODO: the smallest change that fixes the root cause; files; what could regress; other features that depend on this behaviour]
 
-## 6. Regression test
-[TODO: the test that fails now and passes after the fix; where it lives]
+## 6. Regression test and cases
+**Test:** [TODO: the test that fails now and passes after the fix; where it lives]
+**Cases around the root cause** (one bullet each; say "covered by <test>" or "not covered" and why):
+- [TODO: e.g. the empty or first-run case — covered by …]
+- [TODO: e.g. the thing was deleted or is missing — not covered, because …]
+- [TODO: e.g. two actors at once, or a retry — …]
 
 ## 7. Verification
 _Filled after the fix: how it was verified by hand and by test; docs updated (ARCHITECTURE/AGENTS/CONTRACTS) or unchanged._

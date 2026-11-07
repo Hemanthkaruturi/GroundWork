@@ -400,6 +400,28 @@ class Bugs(CheckBase):
         self.assertIn("GW065", ids)
         self.assertEqual(code, 1)
 
+    def test_diagnosed_bug_without_cases_warns_gw126_and_never_blocks(self):
+        p = self.new_bug()
+        self.assertNotIn("GW126", check(self.ws)[1])  # still open
+        self.diagnose(
+            p,
+            "code-bug",
+            violates="[FR-1@001-widgets]",
+            regression_test="tests/test_fix.py",
+        )
+        code, ids, _ = check(self.ws)
+        self.assertIn("GW126", ids)
+        self.assertEqual(code, 0)
+        p.write_text(
+            p.read_text(encoding="utf-8").replace(
+                "## 7.",
+                "- empty input: covered by tests/test_fix.py\n"
+                "- already deleted: not covered, out of scope here\n\n## 7.",
+            ),
+            encoding="utf-8",
+        )
+        self.assertNotIn("GW126", check(self.ws)[1])
+
     def test_closed_bug_leaves_the_board(self):
         p = self.new_bug()
         self.assertIn("bugs/001-crash", [i["ref"] for i in board(self.api)])

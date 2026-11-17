@@ -26,7 +26,7 @@ rule (`GWnnn`, §9) that `groundwork check` can verify without a model.
 | --- | --- | --- |
 | **workspace** | The folder above the repositories of one application. Owns product-level truth and cross-repo boundaries. | Contains child git repositories, or declares itself (`.groundwork/config.json` `"level": "workspace"`), or holds `PROJECT.md` above a repo |
 | **repo** | A git repository with application code, inside a workspace. Owns its own craft. | Git root with a workspace above it |
-| **standalone** | A git repository with no workspace. Carries both sets of documents. | Git root, no workspace |
+| **standalone** | A git repository with no workspace. Carries both sets of documents. | Git root, no workspace — or pinned (`.groundwork/config.json` `"level": "standalone"`) even under a workspace |
 | **unknown** | Neither. Nothing may be built here. | — |
 
 A repo reads *upward*. Anything two repos must agree on is decided in the workspace first (§5),
@@ -54,7 +54,9 @@ then built in each repo against it. A change that needs another repo is never a 
 | repo | `ARCHITECTURE.md`, `AGENTS.md` (and the workspace above satisfies its own list) |
 | standalone | `PROJECT.md`, `ARCHITECTURE.md`, `CONSTITUTION.md`, `AGENTS.md`, `DECISIONS/` |
 
-RFCs live in the workspace `DECISIONS/` (in the repo's own `DECISIONS/` when standalone). Specs
+RFCs live in the workspace `DECISIONS/` (in the repo's own `DECISIONS/` when standalone). A repo
+inside a workspace that already carries its own RFCs may pin `"level": "standalone"` in its
+`.groundwork/config.json`; it then keeps its own `DECISIONS/` and the workspace does not own its RFCs. Specs
 live in the repo that builds them. File names are case-insensitive on lookup; the canonical
 spelling is as shown.
 

@@ -255,11 +255,24 @@ CODEX_PROJECT_FORMS = (
 )
 
 
+# Claude Code expands ${CLAUDE_PLUGIN_ROOT} for hooks but not in the agent's shell, so without the
+# literal path agents spent turns looking for the engine (`which groundwork.py`, `find / -name ...`).
+CLAUDE_ENGINE_NOTE = (
+    "ENGINE: `${{CLAUDE_PLUGIN_ROOT}}` is {root}. It is not set in your shell, so run every GroundWork "
+    'command with the literal path: `python3 "{engine}" <command>`. Never search for the engine.'
+)
+
+
 def adapt_rules(rules: str, host: str) -> str:
     """The session rules, worded for the harness that will read them."""
-    if host not in ("devin", "codex"):
-        return rules
     engine = (PLUGIN_ROOT / "engine" / "groundwork.py").as_posix()
+    if host not in ("devin", "codex"):
+        rules = rules.replace("${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py", engine)
+        return (
+            rules
+            + "\n"
+            + CLAUDE_ENGINE_NOTE.format(root=PLUGIN_ROOT.as_posix(), engine=engine)
+        )
     rules = rules.replace(ASK_RULE_CLAUDE, ASK_RULE_DEVIN).replace(
         "--via claude-code", f"--via {host}"
     )

@@ -179,6 +179,29 @@ class CodexGates(Base):
         self.assertIn("--via codex", rules)
         self.assertIn("$source-command-approve", ctx)
         self.assertIn((PLUGIN / "engine" / "groundwork.py").as_posix(), ctx)
+        self.assertNotIn("ENGINE: ", ctx)
+
+    def test_claude_session_context_names_the_engine_path(self):
+        # ${CLAUDE_PLUGIN_ROOT} is not set in the agent's shell, so the rules carry the literal path.
+        out = subprocess.run(
+            [
+                sys.executable,
+                str(PLUGIN / "engine" / "groundwork.py"),
+                "session-context",
+            ],
+            input=json.dumps(
+                {"hook_event_name": "SessionStart", "cwd": str(self.repo)}
+            ),
+            capture_output=True,
+            text=True,
+            cwd=self.repo,
+            check=True,
+        )
+        ctx = json.loads(out.stdout)["hookSpecificOutput"]["additionalContext"]
+        engine = (PLUGIN / "engine" / "groundwork.py").as_posix()
+        self.assertIn(f"ENGINE: `${{CLAUDE_PLUGIN_ROOT}}` is {PLUGIN.as_posix()}", ctx)
+        self.assertIn(f'python3 "{engine}" <command>', ctx)
+        self.assertNotIn("${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py", ctx)
 
 
 class CodexApprove(CheckBase):

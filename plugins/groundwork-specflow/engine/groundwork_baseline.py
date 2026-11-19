@@ -140,6 +140,18 @@ def _remove_fm_keys(text: str, keys: set[str]) -> str:
     return "---\n" + "\n".join(lines) + "\n---\n" + text[m.end() :]
 
 
+def _decode(raw: bytes) -> tuple[str, bool]:
+    """Text with '\\n' line ends, and whether the file used '\\r\\n' (a Windows checkout)."""
+    text = raw.decode("utf-8")
+    crlf = "\r\n" in text
+    return (text.replace("\r\n", "\n") if crlf else text), crlf
+
+
+def _write_doc(p: Path, text: str, crlf: bool) -> None:
+    """Write back with the file's own line ends, so the body's bytes stay unchanged."""
+    p.write_bytes((text.replace("\n", "\r\n") if crlf else text).encode("utf-8"))
+
+
 def _add_fm(text: str, fields: dict) -> str:
     """Add front matter keys. With no block: prepend one (the body stays byte-identical).
     With an existing block: add only the keys that are absent; existing keys are never changed."""
@@ -166,7 +178,7 @@ def candidate_info(rc: C.Ctx, fdir: Path) -> dict | None:
         return None
     raw = sp.read_bytes()
     try:
-        text = raw.decode("utf-8")
+        text, _ = _decode(raw)
     except UnicodeDecodeError:
         return _blocked_candidate(
             fdir, "spec.md is not UTF-8; import would change its bytes"
@@ -284,10 +296,8 @@ def import_specs(rc: C.Ctx, slugs: list[str] | None, dry: bool) -> dict:
             continue
         p: Path = c["path"]
         _require_safe_paths(rc, p)
-        raw = p.read_bytes()
-        text = raw.decode("utf-8")
-        new = _add_fm(text, fields)
-        p.write_text(new, encoding="utf-8", newline="")
+        text, crlf = _decode(p.read_bytes())
+        _write_doc(p, _add_fm(text, fields), crlf)
         cap_link(rc, cap_slug_for(c["slug"]), c["slug"], title=c["title"], create=True)
         cap_set(
             rc,
@@ -327,7 +337,7 @@ def classify(
         _require_safe_paths(rc, sp)
         if not sp.is_file():
             raise SystemExit(f"specs/{slug}/spec.md does not exist")
-        text = sp.read_bytes().decode("utf-8")
+        text, crlf = _decode(sp.read_bytes())
         meta, _ = C.split_fm(text)
         if not C.is_imported(meta) and not (kind == "archived" and C.is_baseline(meta)):
             raise SystemExit(
@@ -349,11 +359,11 @@ def classify(
         else:
             text = C.set_fm(text, {"origin": "imported", "adoption_state": "archived"})
             nxt = "archived reference; nothing to do"
-        changes.append((slug, sp, text, nxt))
+        changes.append((slug, sp, text, crlf, nxt))
     out = []
-    for slug, sp, text, nxt in changes:
+    for slug, sp, text, crlf, nxt in changes:
         if not dry:
-            sp.write_text(text, encoding="utf-8", newline="")
+            _write_doc(sp, text, crlf)
             cap = capability or cap_slug_for(slug)
             cap_link(rc, cap, slug, create=True)
             cap_set(rc, cap, next_action=nxt)

@@ -146,7 +146,6 @@ class Import(Base):
         sp = r / "specs" / "001-clients-and-tenants" / "spec.md"
         body = sp.read_bytes()
         self.assertEqual(ca(r, "adopt-specs").returncode, 0)
-        text = sp.read_text(encoding="utf-8")
         meta = fm(sp)
         self.assertEqual(meta["origin"], "imported")
         self.assertEqual(meta["adoption_state"], "pending")
@@ -157,7 +156,7 @@ class Import(Base):
         self.assertEqual(meta["title"], "Clients and Tenants")
         self.assertEqual(meta["historical_companions"], ["plan.md", "tasks.md"])
         self.assertNotIn("author", meta)  # the original owner was "—": never invented
-        self.assertTrue(text.endswith(body.decode()))  # body bytes untouched
+        self.assertTrue(sp.read_bytes().endswith(body))  # body bytes untouched
         self.assertFalse(
             (r / "specs" / "001-clients-and-tenants" / "evals.md").exists()
         )
@@ -189,6 +188,25 @@ class Import(Base):
                 if p.is_file() and ".git/" not in str(p)
             },
         )
+
+    def test_a_crlf_checkout_imports_and_classifies_with_its_bytes_kept(self):
+        # Windows checkouts end lines with CRLF; the front matter must still be found.
+        r = legacy_repo(self.root)
+        sp = r / "specs" / "001-clients-and-tenants" / "spec.md"
+        head = "---\r\ntool: other\r\nstatus: Done\r\n---\r\n"
+        body = LEGACY_SPEC.format(status="x").replace("\n", "\r\n")
+        sp.write_bytes((head + body).encode("utf-8"))
+        self.assertEqual(ca(r, "adopt-specs").returncode, 0)
+        raw = sp.read_bytes()
+        self.assertTrue(raw.endswith(body.encode("utf-8")))
+        self.assertNotIn(b"\n", raw.replace(b"\r\n", b""))  # no bare LF added
+        meta = fm(sp)
+        self.assertEqual(meta["adopted_status"], "Done")
+        self.assertEqual(meta["origin"], "imported")
+        out = ca(r, "adopt-specs", "--classify", "archived", "001-clients-and-tenants")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual(fm(sp)["adoption_state"], "archived")
+        self.assertTrue(sp.read_bytes().endswith(body.encode("utf-8")))
 
     def test_foreign_front_matter_is_preserved_or_reported(self):
         r = legacy_repo(self.root)

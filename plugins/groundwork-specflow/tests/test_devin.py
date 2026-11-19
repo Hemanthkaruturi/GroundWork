@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from test_check import CheckBase
-from test_flow import CA, ENV, Base, git_init
+from test_flow import CA, ENV, SESSION_HOOKS, Base, git_init
 
 PLUGIN = Path(__file__).resolve().parents[1]
 
@@ -136,13 +136,21 @@ class DevinGates(Base):
             "session-context",
             {"hook_event_name": "SessionStart", "source": "startup"},
         )
-        ctx = o["hookSpecificOutput"]["additionalContext"]
+        state = o["hookSpecificOutput"]["additionalContext"]
         self.assertEqual(o["hookSpecificOutput"]["hookEventName"], "SessionStart")
         self.assertIn(
-            "Level: STANDALONE", ctx
+            "Level: STANDALONE", state
         )  # found the project via DEVIN_PROJECT_DIR
-        self.assertIn("HOST: Devin", ctx)
-        rules = ctx.split("HOST: Devin")[0]
+        self.assertTrue(state.startswith("ENGINE: "))
+        rules = "\n\n".join(
+            devin(self.repo, h, {"hook_event_name": "SessionStart"})["hookSpecificOutput"][
+                "additionalContext"
+            ]
+            for h in SESSION_HOOKS[1:]
+        )
+        ctx = state + rules
+        self.assertIn("HOST: Devin", rules)
+        rules = rules.split("HOST: Devin")[0]
         for claude_only in (
             "ToolSearch",
             "AskUserQuestion",
@@ -243,17 +251,19 @@ class ClaudeUnchanged(Base):
         self.assertEqual(
             json.loads(r.stdout)["hookSpecificOutput"]["permissionDecision"], "deny"
         )
-        r = subprocess.run(
-            [sys.executable, str(CA), "session-context"],
-            cwd=self.root / "r",
-            capture_output=True,
-            text=True,
-            input="{}",
-            env=ENV,
-            check=False,
-        )
-        self.assertNotIn("HOST: Devin", r.stdout)
-        self.assertIn("AskUserQuestion", r.stdout)
+        out = ""
+        for h in SESSION_HOOKS:
+            out += subprocess.run(
+                [sys.executable, str(CA), h],
+                cwd=self.root / "r",
+                capture_output=True,
+                text=True,
+                input="{}",
+                env=ENV,
+                check=False,
+            ).stdout
+        self.assertNotIn("HOST: Devin", out)
+        self.assertIn("AskUserQuestion", out)
 
 
 class DevinPackaging(unittest.TestCase):

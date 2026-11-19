@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from test_check import CheckBase, check
-from test_flow import CA, ENV, ca, denied, hook
+from test_flow import CA, ENV, ca, denied, hook, session
 
 
 def hook_ctx(cwd, prompt):
@@ -84,9 +84,9 @@ class ChangeLog(CheckBase):
         self.assertNotIn("GW093", check(self.ws)[1])
 
     def test_rules_tell_the_agent_to_read_and_record(self):
-        r = ca(self.api, "session-context", stdin="{}")
-        self.assertIn("changes.md", r.stdout)
-        self.assertIn("groundwork.py change", r.stdout)
+        ctx = session(self.api)
+        self.assertIn("changes.md", ctx)
+        self.assertIn("groundwork.py change", ctx)
 
 
 class StandaloneChange(CheckBase):

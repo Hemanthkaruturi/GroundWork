@@ -574,13 +574,17 @@ def _requirement_ids(r: Report, fdir: Path, stext: str) -> list[str]:
         r.err("GW023", fdir / "spec.md", "no numbered acceptance criteria (**AC-1**)")
     known = set(frs) | set(nfrs)
     proven: set[str] = set()
-    for m in re.finditer(r"^- \*\*(AC-\d+)\*\*(.*)$", stext, re.MULTILINE):
+    # The bullet runs on over wrapped lines, up to the next bullet, blank line or heading.
+    for m in re.finditer(
+        r"^- \*\*(AC-\d+)\*\*(.*(?:\n(?![ \t]*(?:[-*] |#|$)).*)*)", stext, re.MULTILINE
+    ):
         refs = set(re.findall(r"\b(N?FR-\d+)\b", m.group(2)))
         if not refs:
             r.err(
                 "GW023",
                 fdir / "spec.md",
                 f"{m.group(1)} does not cite the requirement it proves",
+                f"name it in the {m.group(1)} bullet, e.g. `- **{m.group(1)}** (FR-1) Given ..., when ..., then ...`",
             )
         for x in refs - known:
             r.err("GW023", fdir / "spec.md", f"{m.group(1)} cites unknown {x}")

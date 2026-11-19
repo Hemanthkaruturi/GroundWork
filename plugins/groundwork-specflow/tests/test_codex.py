@@ -9,9 +9,20 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from test_check import CheckBase
-from test_flow import CA, ENV, Base, git_init
+from test_flow import CA, ENV, SESSION_HOOKS, Base, git_init
 
 PLUGIN = Path(__file__).resolve().parents[1]
+
+
+def codex_session(project):
+    """(project state, both halves of the rules) as the Codex SessionStart hooks give them."""
+    ctx = [
+        codex(project, h, {"hook_event_name": "SessionStart", "source": "startup"})[
+            "hookSpecificOutput"
+        ]["additionalContext"]
+        for h in SESSION_HOOKS
+    ]
+    return ctx[0], "\n\n".join(ctx[1:])
 
 
 def codex(project, sub, payload):
@@ -72,11 +83,11 @@ class CodexGates(Base):
     def test_a_multi_file_patch_names_the_held_file(self):
         patch = (
             "*** Begin Patch\n*** Update File: ARCHITECTURE.md\n@@\n-a\n+b\n"
-            "*** Add File: pyproject.toml\n+[project]\n*** End Patch\n"
+            "*** Add File: app.py\n+x = 1\n*** End Patch\n"
         )
         o = codex(self.repo, "gate", tool("apply_patch", {"command": patch}))
         reason = o["hookSpecificOutput"]["permissionDecisionReason"]
-        self.assertRegex(reason, r"also writes \S*pyproject.toml\. ")
+        self.assertRegex(reason, r"also writes \S*app.py\. ")
         self.assertIn("The other files are allowed", reason)
         self.assertNotIn(
             "also writes",
@@ -130,12 +141,7 @@ class CodexGates(Base):
         reason = o["hookSpecificOutput"]["permissionDecisionReason"]
         self.assertIn("$source-command-bypass", reason)
         self.assertNotIn("/groundwork-specflow:", reason)
-        ctx = codex(
-            self.repo,
-            "session-context",
-            {"hook_event_name": "SessionStart", "source": "startup"},
-        )
-        rules = ctx["hookSpecificOutput"]["additionalContext"].split("HOST: Codex")[0]
+        rules = codex_session(self.repo)[1].split("HOST: Codex")[0]
         self.assertNotIn("/groundwork-specflow:", rules)
 
     def test_shell_writes_and_human_acts_are_blocked(self):
@@ -160,15 +166,12 @@ class CodexGates(Base):
                 codex(self.repo, "gate-bash", tool("Bash", inp))
 
     def test_session_context_is_worded_for_codex(self):
-        o = codex(
-            self.repo,
-            "session-context",
-            {"hook_event_name": "SessionStart", "source": "startup"},
-        )
-        ctx = o["hookSpecificOutput"]["additionalContext"]
-        self.assertIn("HOST: Codex", ctx)
+        state, rules = codex_session(self.repo)
+        ctx = state + rules
+        self.assertIn("HOST: Codex", rules)
         self.assertNotIn("HOST: Devin", ctx)
-        rules = ctx.split("HOST: Codex")[0]
+        self.assertTrue(state.startswith("ENGINE: "))
+        rules = rules.split("HOST: Codex")[0]
         for claude_only in (
             "ToolSearch",
             "AskUserQuestion",
@@ -179,29 +182,6 @@ class CodexGates(Base):
         self.assertIn("--via codex", rules)
         self.assertIn("$source-command-approve", ctx)
         self.assertIn((PLUGIN / "engine" / "groundwork.py").as_posix(), ctx)
-        self.assertNotIn("ENGINE: ", ctx)
-
-    def test_claude_session_context_names_the_engine_path(self):
-        # ${CLAUDE_PLUGIN_ROOT} is not set in the agent's shell, so the rules carry the literal path.
-        out = subprocess.run(
-            [
-                sys.executable,
-                str(PLUGIN / "engine" / "groundwork.py"),
-                "session-context",
-            ],
-            input=json.dumps(
-                {"hook_event_name": "SessionStart", "cwd": str(self.repo)}
-            ),
-            capture_output=True,
-            text=True,
-            cwd=self.repo,
-            check=True,
-        )
-        ctx = json.loads(out.stdout)["hookSpecificOutput"]["additionalContext"]
-        engine = (PLUGIN / "engine" / "groundwork.py").as_posix()
-        self.assertIn(f"ENGINE: `${{CLAUDE_PLUGIN_ROOT}}` is {PLUGIN.as_posix()}", ctx)
-        self.assertIn(f'python3 "{engine}" <command>', ctx)
-        self.assertNotIn("${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py", ctx)
 
 
 class CodexApprove(CheckBase):

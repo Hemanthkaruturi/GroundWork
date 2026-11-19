@@ -4,7 +4,7 @@ import tseslint from "typescript-eslint";
 import prettier from "eslint-config-prettier";
 
 export default tseslint.config(
-  { ignores: ["dist/", "build/", "coverage/", "node_modules/", ".next/", "next-env.d.ts"] },
+  { ignores: ["dist/", "build/", "coverage/", "node_modules/", ".devin/", ".codex/", ".claude/", ".agents/", ".next/", "next-env.d.ts"] },
   js.configs.recommended,
   ...tseslint.configs.strict,
   prettier,

@@ -35,7 +35,7 @@ The spec is **upstream** of the plan: **a plan never changes a spec on its own.*
 3. **Ask the user which reading is right** — via the picker, with each reading as an option and what it implies. **Do not pick the reading yourself and edit the spec to match.** Every doubt you cannot resolve stays in the spec as `[NEEDS CLARIFICATION: …]` (which blocks approval) — **never as a footnote in chat**.
 4. **Only then amend the spec** to say exactly what the user chose, and add a dated line under its `## Changes` section (after the required sections) recording *what changed and why* ("found while planning: …; user chose …"). Re-approval is refused without that line.
 5. Tell the user the spec needs re-approval (`/groundwork-specflow:approve <spec>`). Until they do, treat everything downstream as **provisional**.
-6. After re-approval: re-read the plan, tasks and evals against the *current* spec, fix what no longer matches (tell the user what you changed), then run `python3 "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py" plan-sync`. Code stays blocked until you do — the plan is pinned to the spec version it was written for.
+6. After re-approval: re-read the plan, tasks and evals against the *current* spec, fix what no longer matches (tell the user what you changed), then run `python3 "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py" plan-sync <NNN-slug>` for the amended feature (it can be a feature other than the active one). Code stays blocked until you do — the plan is pinned to the spec version it was written for.
 
 Remove every `[TODO…]` you resolved. When plan.md is finished and the spec is approved, run `groundwork.py plan-sync` to pin it to that spec version, then continue to **write-tasks**.
 

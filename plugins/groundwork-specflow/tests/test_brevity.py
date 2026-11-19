@@ -11,7 +11,7 @@ ENGINE = Path(__file__).resolve().parents[1] / "engine"
 sys.path.insert(0, str(ENGINE))
 import groundwork_brevity as V
 from test_check import CheckBase, check
-from test_flow import ca, hook
+from test_flow import ca, hook, session
 
 
 def transcript(path, turns):
@@ -119,7 +119,7 @@ class Docs(CheckBase):
 
 class Reminders(CheckBase):
     def test_the_rule_is_in_the_session_context_and_in_every_prompt(self):
-        ctx = hook(self.api, "session-context", {})["additionalContext"]
+        ctx = session(self.api)
         self.assertIn("COMMUNICATION", ctx)
         self.assertIn("answer or decision first", ctx)
         rem = hook(self.api, "prompt-reminder", {})["additionalContext"]
@@ -172,7 +172,7 @@ class StopHook(CheckBase):
         )
 
     def test_the_must_keep_rule_is_in_the_session_rules_and_every_prompt(self):
-        ctx = hook(self.api, "session-context", {})["additionalContext"]
+        ctx = session(self.api)
         rem = hook(self.api, "prompt-reminder", {})["additionalContext"]
         for text in (ctx, rem):
             self.assertIn("SHORT MUST NOT MEAN LESS TRUE", text)

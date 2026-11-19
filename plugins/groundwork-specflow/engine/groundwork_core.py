@@ -49,6 +49,15 @@ DOC_GLOBS = [
     ".gitignore",
     "LICENSE*",
     ".claude/*",
+    # Tool configuration and the variable list, not code: bootstrap's layout and code-quality steps write these.
+    # Dependency manifests (pyproject.toml, package.json) stay gated: changing them is a /change.
+    ".env.example",
+    "ruff.toml",
+    "mypy.ini",
+    ".editorconfig",
+    ".prettierignore",
+    ".prettierrc*",
+    ".golangci.yml",
 ]
 
 PLACEHOLDER = re.compile(r"\[TODO\b|\[NEEDS CLARIFICATION", re.IGNORECASE)
@@ -100,10 +109,22 @@ def _existing(p: Path) -> Path:
     return p if _isdir(p) else p.parent
 
 
+def _is_git(d: Path) -> bool:
+    """A real repository marker: a .git folder holding HEAD, or a .git file (worktree, submodule).
+
+    Codex's sandbox briefly creates an empty `.git` folder in its writable roots (e.g. /tmp) as a mount
+    target, which once made /tmp look like a repository holding every project below it."""
+    g = d / ".git"
+    try:
+        return g.is_file() or (g / "HEAD").is_file()
+    except OSError:
+        return False
+
+
 def find_git_root(start: Path) -> Path | None:
     p = _existing(start)
     for d in [p, *p.parents]:
-        if _exists(d / ".git"):
+        if _is_git(d):
             return d
     return None
 
@@ -119,7 +140,7 @@ def child_repos(d: Path) -> list[Path]:
         if _isdir(k)
         and k.name not in SKIP_DIRS
         and not k.name.startswith(".")
-        and _exists(k / ".git")
+        and _is_git(k)
     ]
 
 
@@ -879,8 +900,11 @@ INSTRUCTIONS = {
 }
 
 
-def next_step(ctx: Ctx) -> tuple[str, str]:
-    """(phase, instruction) — the single most useful thing to do next."""
+def next_step(ctx: Ctx, skip_bug: bool = False) -> tuple[str, str]:
+    """(phase, instruction) — the single most useful thing to do next.
+
+    ``skip_bug``: the next step for the feature/RFC work, ignoring an open bug (after the user approves
+    an RFC or spec, the bug is not what they just unblocked)."""
     if ctx.level == "unknown":
         return "classify", (
             "This directory is neither a git repository nor a workspace. Ask the user "
@@ -906,7 +930,7 @@ def next_step(ctx: Ctx) -> tuple[str, str]:
         )
     import groundwork_bugs as B
 
-    bug = B.active_bug(ctx)
+    bug = None if skip_bug else B.active_bug(ctx)
     if bug:
         b = B.bug_state(ctx, bug)
         if b.status not in ("closed",):
@@ -953,6 +977,12 @@ def next_step(ctx: Ctx) -> tuple[str, str]:
         if not st.ok:
             return st.key, f"[{slug}] {st.detail}. " + INSTRUCTIONS[st.key]
     done, total = task_counts(ctx, slug)
+    handover = ctx.repo / "specs" / slug / "handover.md"
+    if total and done == total and handover.is_file() and not doc_state(handover, ctx).placeholders:
+        return "done", (
+            f"[{slug}] is built and handed over ({total}/{total} tasks). Nothing is left on it. For new work "
+            "start with the interview skill; for a defect use fix-bug."
+        )
     if total and done == total:
         return (
             "handover",
@@ -1034,8 +1064,16 @@ def _why_blocked(ctx: Ctx) -> str | None:
     missing, unfinished = foundation_gaps(ctx)
     if missing or unfinished:
         return (
-            "code edits are blocked until the foundation docs exist and are filled in "
-            f"(missing: {', '.join(missing) or 'none'}; unfinished: {', '.join(unfinished) or 'none'}). "
+            "code edits are blocked until the foundation docs exist and are filled in ("
+            + "; ".join(
+                part
+                for part in (
+                    f"missing: {', '.join(missing)}" if missing else "",
+                    f"unfinished: {', '.join(unfinished)}" if unfinished else "",
+                )
+                if part
+            )
+            + "). "
             "Use the bootstrap skill. If this is a genuine emergency the USER can run "
             "/groundwork-specflow:bypass <reason>."
         )
@@ -1123,6 +1161,24 @@ def _script_is_protected(word: str, cwd: Path | None) -> bool:
     return False
 
 
+# Programs that only read their arguments: `cat .groundwork/approvals.json` is not a write (a live run was blocked).
+_READERS = {"cat", "head", "tail", "less", "more", "jq", "wc", "grep", "rg", "ls", "stat", "file", "diff",
+            "sha256sum", "md5sum"}
+
+
+def _only_reads(cmd: str) -> bool:
+    """Every command in it is a plain reader, with no redirection, substitution or heredoc."""
+    if re.search(r"[>`]|\$\(|<<", cmd):
+        return False
+    stripped, bodies = _strip_heredocs(cmd)
+    if bodies:
+        return False
+    progs = [argv for argv in _simple_commands(stripped) if argv]
+    return bool(progs) and all(
+        Path(argv[0]).name in _READERS and not _ASSIGN.match(argv[0]) for argv in progs
+    )
+
+
 def is_protected_command(cmd: str, cwd: Path | None = None, _depth: int = 0) -> bool:
     """Would this shell command touch approvals/bypass records or run the human-only engine commands?
 
@@ -1131,6 +1187,8 @@ def is_protected_command(cmd: str, cwd: Path | None = None, _depth: int = 0) -> 
     analysis cannot prove an arbitrary shell command safe (string building at runtime, encoded payloads), so when a
     command pipes a decoder into a shell, or evals something we cannot read, it is refused as well.
     """
+    if _depth == 0 and _only_reads(cmd):
+        return False
     if PROTECTED_CMD.search(cmd):
         return True
     if _depth > 3:  # nested bash -c / eval chains this deep: refuse
@@ -1202,11 +1260,26 @@ def is_protected_command(cmd: str, cwd: Path | None = None, _depth: int = 0) -> 
 # --- scaffolding ----------------------------------------------------------------------
 
 
+# A project install (setup/install.py) serves one harness, whose commands have no plugin prefix:
+# Devin's are /approve, Codex's $approve. A plugin install keeps /groundwork-specflow:<name>.
+_INSTALL_HOME = PLUGIN_ROOT.parent.name
+_SLASH = re.compile(r"/groundwork-specflow:([a-z-]+)")
+
+
+def local_commands(text: str) -> str:
+    """`/groundwork-specflow:approve` in the form this install's harness accepts."""
+    if _INSTALL_HOME == ".devin":
+        return _SLASH.sub(r"/\1", text)
+    if _INSTALL_HOME == ".codex":
+        return _SLASH.sub(r"$\1", text)
+    return text
+
+
 def render(template: str, **vars: str) -> str:
     t = (TEMPLATES / template).read_text(encoding="utf-8")
     for k, v in vars.items():
         t = t.replace("{{" + k + "}}", v)
-    return t
+    return local_commands(t)
 
 
 def slugify(s: str) -> str:

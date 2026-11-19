@@ -55,6 +55,14 @@ def hook(cwd, event_cmd, tool_input):
     return json.loads(r.stdout)["hookSpecificOutput"] if r.stdout.strip() else None
 
 
+SESSION_HOOKS = ("session-context", "session-rules-1", "session-rules-2")
+
+
+def session(cwd):
+    """Everything the SessionStart hooks tell the agent, in hooks.json order."""
+    return "\n\n".join(hook(cwd, h, {})["additionalContext"] for h in SESSION_HOOKS)
+
+
 def denied(cwd, path):
     o = hook(cwd, "gate", {"file_path": str(path)})
     return bool(o and o.get("permissionDecision") == "deny"), (o or {}).get(
@@ -96,7 +104,7 @@ class ConstitutionAwareness(Base):
             "# C\n\n## Guardrails\n* Card numbers are never stored or logged.\n\n## Quality gates\n- x\n",
             encoding="utf-8",
         )
-        ctx = hook(api, "session-context", {})["additionalContext"]
+        ctx = session(api)
         self.assertIn("CONSTITUTION GUARDRAILS", ctx)
         self.assertIn(
             "[workspace] No secrets, keys or provider credentials in any repository.",
@@ -111,6 +119,109 @@ class ConstitutionAwareness(Base):
         ctx = hook(self.root / "r", "session-context", {})["additionalContext"]
         self.assertNotIn("CONSTITUTION GUARDRAILS", ctx)
 
+
+class EnginePath(Base):
+    """${CLAUDE_PLUGIN_ROOT} is not set in the agent's shell, so the agent is told the literal engine path."""
+
+    ENGINE = CA.as_posix()
+
+    def setUp(self):
+        super().setUp()
+        git_init(self.root / "r")
+        self.repo = self.root / "r"
+
+    def test_session_rules_carry_the_quoted_literal_path(self):
+        ctx = session(self.repo)
+        self.assertIn(f"`${{CLAUDE_PLUGIN_ROOT}}` ({CA.parents[1].as_posix()}) is not set", ctx)
+        self.assertIn(f'python3 "{self.ENGINE}" status', ctx)
+        self.assertIn(f'python3 "{self.ENGINE}" <command>', ctx)
+        self.assertNotIn(f"python3 {self.ENGINE}", ctx)  # never unquoted: paths can hold spaces
+        self.assertNotIn("${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py status", ctx)
+
+    def test_every_prompt_names_the_current_engine(self):
+        rem = hook(self.repo, "prompt-reminder", {})["additionalContext"]
+        self.assertIn(f'Engine: `python3 "{self.ENGINE}" <command>`', rem)
+
+    def test_engine_note_leads_the_session_context(self):
+        # Claude Code shows only the first 2,000 characters of a context over 10,000.
+        ctx = hook(self.repo, "session-context", {})["additionalContext"]
+        self.assertTrue(ctx.startswith("ENGINE: "))
+        self.assertLess(ctx.index(f'python3 "{self.ENGINE}" <command>'), 2000)
+
+    def test_every_session_part_fits_the_context_cap(self):
+        # Over 10,000 characters Claude Code shows the model only a file path and a 2,000-character preview.
+        for host in ("", "codex", "devin"):
+            env = {**ENV, "GROUNDWORK_HOST": host} if host else ENV
+            for h in SESSION_HOOKS:
+                with self.subTest(host=host or "claude", hook=h):
+                    r = subprocess.run(
+                        [sys.executable, str(CA), h],
+                        cwd=self.repo,
+                        input=json.dumps({"cwd": str(self.repo)}),
+                        capture_output=True,
+                        text=True,
+                        encoding="utf-8",
+                        env=env,
+                        check=True,
+                    )
+                    ctx = json.loads(r.stdout)["hookSpecificOutput"]["additionalContext"]
+                    self.assertLess(len(ctx), 10_000)
+
+    def test_long_project_state_is_cut_to_fit(self):
+        sys.path.insert(0, str(CA.parent))
+        import groundwork as GW
+
+        old = GW.describe
+        GW.describe = lambda ctx: "Level: STANDALONE\n" + "IN FLIGHT: x\n" * 2000
+        try:
+            from unittest.mock import patch
+            import io
+
+            with patch("sys.stdin", io.StringIO(json.dumps({"cwd": str(self.repo)}))), patch(
+                "sys.stdout", new_callable=io.StringIO
+            ) as so:
+                GW.cmd_session_context(None)
+            ctx = json.loads(so.getvalue())["hookSpecificOutput"]["additionalContext"]
+        finally:
+            GW.describe = old
+        self.assertLessEqual(len(ctx), 10_000)
+        self.assertTrue(ctx.startswith("ENGINE: "))
+        self.assertIn("groundwork.py status` for the rest", ctx)
+
+    def test_session_hooks_are_registered_in_order(self):
+        cfg = json.loads((CA.parents[1] / "hooks" / "hooks.json").read_text(encoding="utf-8"))
+        subs = [h["command"].split("||")[0].split()[-1] for g in cfg["hooks"]["SessionStart"] for h in g["hooks"]]
+        self.assertEqual(subs, list(SESSION_HOOKS))
+
+    def test_approve_turn_names_the_engine(self):
+        r = ca(self.repo, "prompt-reminder", stdin=json.dumps({"cwd": str(self.repo), "prompt": "/approve x"}))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        ctx = json.loads(r.stdout)["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("[groundwork approve]", ctx)
+        self.assertIn(f'Engine: `python3 "{self.ENGINE}" <command>`', ctx)
+
+    def test_groundwork_skills_get_no_craft_tool_notice(self):
+        for name in ("groundwork-specflow:refresh", "frontend-design"):
+            with self.subTest(name=name):
+                o = hook(self.repo, "skill-notice", {"skill": name})
+                self.assertEqual(o is None, name.startswith("groundwork-specflow:"))
+
+    def test_project_installed_skills_are_recognised_by_marker(self):
+        sys.path.insert(0, str(CA.parent))
+        import groundwork_host as G
+
+        devin = self.root / "p" / ".devin"
+        (devin / "skills" / "bootstrap").mkdir(parents=True)
+        (devin / "skills" / "bootstrap" / G.INSTALLED_MARKER).write_text("", encoding="utf-8")
+        (devin / "skills" / "mine").mkdir()
+        old = G.PLUGIN_ROOT
+        G.PLUGIN_ROOT = devin / "groundwork"
+        try:
+            self.assertTrue(G.is_groundwork_skill("bootstrap"))
+            self.assertFalse(G.is_groundwork_skill("mine"))
+            self.assertFalse(G.is_groundwork_skill("../skills/bootstrap"))
+        finally:
+            G.PLUGIN_ROOT = old
 
 class Detection(Base):
     def level(self, p):

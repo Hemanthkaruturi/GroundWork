@@ -172,6 +172,9 @@ def install() -> str:
     )
     shutil.copytree(PLUGIN / "templates", home / "templates")
     shutil.copy2(PLUGIN / "STANDARD.md", home / "STANDARD.md")
+    # Running the engine writes __pycache__/ next to it; without this the team commits .pyc files and every
+    # engine run dirties the tree.
+    write(home / ".gitignore", "__pycache__/\n*.pyc\n")
 
     # 2. Skills and commands as project skills. Paths point at the engine copy, and commands are /approve
     #    (Devin) or $approve (Codex) rather than /groundwork-specflow:approve and so on.

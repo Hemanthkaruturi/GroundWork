@@ -13,7 +13,7 @@ import re
 import shlex
 from pathlib import Path
 
-from groundwork_core import PLUGIN_ROOT
+from groundwork_core import PLUGIN_ROOT, local_commands
 
 # Devin's built-in tool names (docs.devin.ai/cli/extensibility/hooks/lifecycle-hooks). Claude's are capitalised.
 DEVIN_EDIT_TOOLS = {"write", "edit", "apply_patch", "notebook_edit"}
@@ -129,14 +129,26 @@ def codex_reminder() -> str:
     )
 
 
-class CodexText:
-    """A stream that rewrites slash commands into the `$` forms Codex accepts, for engine runs from the shell."""
+def via(host: str) -> str:
+    """The `--via` value that records which harness did the work."""
+    return host if host in ("codex", "devin") else "claude-code"
 
-    def __init__(self, stream):
+
+def host_commands(text: str, host: str) -> str:
+    """Slash commands in the form the harness reading `text` accepts."""
+    return codex_commands(text) if host == "codex" else local_commands(text)
+
+
+class CodexText:
+    """A stream that rewrites slash commands into the forms the harness accepts, for engine runs from the shell:
+    `$` forms for Codex, unprefixed `/approve` for a Devin project install."""
+
+    def __init__(self, stream, host: str = "codex"):
         self.stream = stream
+        self.host = host
 
     def write(self, text: str) -> int:
-        self.stream.write(codex_commands(text))
+        self.stream.write(host_commands(text, self.host))
         return len(text)
 
     def __getattr__(self, attr):
@@ -145,10 +157,9 @@ class CodexText:
 
 def deny(full: dict, reason: str) -> dict:
     host = name(full)
+    reason = host_commands(reason, host)
     if host == "devin":
         return {"decision": "block", "reason": reason}
-    if host == "codex":
-        reason = codex_commands(reason)
     return {
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
@@ -159,8 +170,7 @@ def deny(full: dict, reason: str) -> dict:
 
 
 def context(full: dict, default_event: str, text: str) -> dict:
-    if name(full) == "codex":
-        text = codex_commands(text)
+    text = host_commands(text, name(full))
     return {
         "hookSpecificOutput": {
             "hookEventName": full.get("hook_event_name") or default_event,
@@ -200,6 +210,19 @@ def shell_command(full: dict) -> str:
     return cmd if isinstance(cmd, str) else str(cmd or "")
 
 
+INSTALLED_MARKER = ".groundwork-installed"  # setup/install.py marks each project skill it copies
+
+
+def is_groundwork_skill(name: str) -> bool:
+    """A plugin skill is `groundwork-specflow:<name>`; a project install (setup/install.py) drops the prefix."""
+    if name.startswith("groundwork-specflow:"):
+        return True
+    if not name or "/" in name or "\\" in name or name.startswith("."):
+        return False
+    folders = (PLUGIN_ROOT.parent / "skills", PLUGIN_ROOT.parent.parent / ".agents" / "skills")
+    return any((f / name / INSTALLED_MARKER).is_file() for f in folders)
+
+
 def skill_name(full: dict) -> str:
     inp = full.get("tool_input") or {}
     return next(
@@ -209,7 +232,6 @@ def skill_name(full: dict) -> str:
 
 CODEX_NOTE = """\
 HOST: Codex. The groundwork skills were written for Claude Code; read them with these substitutions:
-- `${{CLAUDE_PLUGIN_ROOT}}` means {root} — use that literal path in commands, e.g. `python3 "{engine}" status`.
 - There is no AskUserQuestion or ToolSearch tool here. Wherever a skill says AskUserQuestion or "picker", ask ONE round: each question with a short numbered list of options, your recommendation first and marked (Recommended), then end your turn and wait. Never bury questions inside a long reply.
 - Write/Edit/MultiEdit mean apply_patch; Bash is the shell. The gates apply to both.
 - Record your work with `--via codex`, not `--via claude-code`.
@@ -218,7 +240,6 @@ HOST: Codex. The groundwork skills were written for Claude Code; read them with 
 
 DEVIN_NOTE = """\
 HOST: Devin. The groundwork skills were written for Claude Code; read them with these substitutions:
-- `${{CLAUDE_PLUGIN_ROOT}}` means {root} — use that literal path in commands, e.g. `python3 "{engine}" status`.
 - There is no AskUserQuestion or ToolSearch tool here. Wherever a skill says AskUserQuestion or "picker", ask ONE round: each question with a short numbered list of options, your recommendation first and marked (Recommended), then end your turn and wait. Never bury questions inside a long reply.
 - Write/Edit/MultiEdit mean write, edit and apply_patch; Bash means exec. The gates apply to all of them.
 - Record your work with `--via devin`, not `--via claude-code`.
@@ -255,36 +276,48 @@ CODEX_PROJECT_FORMS = (
 )
 
 
-# Claude Code expands ${CLAUDE_PLUGIN_ROOT} for hooks but not in the agent's shell, so without the
-# literal path agents spent turns looking for the engine (`which groundwork.py`, `find / -name ...`).
-CLAUDE_ENGINE_NOTE = (
-    "ENGINE: `${{CLAUDE_PLUGIN_ROOT}}` is {root}. It is not set in your shell, so run every GroundWork "
-    'command with the literal path: `python3 "{engine}" <command>`. Never search for the engine.'
+# Hosts expand ${CLAUDE_PLUGIN_ROOT} for hooks but not in the agent's shell, so without the literal
+# path agents spent turns looking for the engine (`which groundwork.py`, `find / -name ...`).
+# Said in the project-state message, which comes first in a session's hooks.json.
+ENGINE_NOTE = (
+    "ENGINE: run every GroundWork command, written `groundwork.py <command>` or "
+    '`${{CLAUDE_PLUGIN_ROOT}}/engine/groundwork.py <command>` in rules, skills and commands, as `python3 "{engine}" <command>`. '
+    "`${{CLAUDE_PLUGIN_ROOT}}` ({root}) is not set in your shell. If that file is gone (the plugin was updated), "
+    "use the path in the latest [groundwork] reminder. Never search for the engine."
 )
+PLACEHOLDER = "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py"
+
+
+def engine_path() -> str:
+    """The engine that is running now: a hook reports it fresh, so it follows plugin updates."""
+    return (PLUGIN_ROOT / "engine" / "groundwork.py").as_posix()
+
+
+def engine_reminder() -> str:
+    """Short form of ENGINE_NOTE, said on every prompt, including approve, bypass and change."""
+    return f'Engine: `python3 "{engine_path()}" <command>` (`${{CLAUDE_PLUGIN_ROOT}}` is not set in your shell).'
+
+
+def engine_note() -> str:
+    return ENGINE_NOTE.format(root=PLUGIN_ROOT.as_posix(), engine=engine_path())
 
 
 def adapt_rules(rules: str, host: str) -> str:
     """The session rules, worded for the harness that will read them."""
-    engine = (PLUGIN_ROOT / "engine" / "groundwork.py").as_posix()
+    engine = engine_path()
+    rules = rules.replace(PLACEHOLDER, engine)
     if host not in ("devin", "codex"):
-        rules = rules.replace("${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py", engine)
-        return (
-            rules
-            + "\n"
-            + CLAUDE_ENGINE_NOTE.format(root=PLUGIN_ROOT.as_posix(), engine=engine)
-        )
+        return rules
     rules = rules.replace(ASK_RULE_CLAUDE, ASK_RULE_DEVIN).replace(
         "--via claude-code", f"--via {host}"
     )
-    rules = rules.replace("${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py", engine)
     if host == "codex":
         rules = codex_commands(rules)
     note = (CODEX_NOTE if host == "codex" else DEVIN_NOTE).format(
-        root=PLUGIN_ROOT.as_posix(),
-        engine=engine,
         forms=CODEX_PROJECT_FORMS if CODEX_PROJECT else CODEX_PLUGIN_FORMS,
         approve=codex_command("approve"),
         bypass=codex_command("bypass"),
+        engine=engine,
     )
     if BOOTSTRAPPED and host == "devin":
         rules, note = (

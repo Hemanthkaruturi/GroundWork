@@ -337,7 +337,7 @@ def _git_contributors(repo: Path, slug: str) -> list[tuple[str, int]]:
 def _approvals(kind: str, owner: C.Ctx, doc: Path) -> str:
     st = C.doc_state(doc, owner)
     rec = C.load_approvals(C.owner_root(doc, owner)).get(
-        str(doc.resolve().relative_to(C.owner_root(doc, owner).resolve()))
+        doc.resolve().relative_to(C.owner_root(doc, owner).resolve()).as_posix()
     )
     if not rec:
         return f"not approved ({st.status})"

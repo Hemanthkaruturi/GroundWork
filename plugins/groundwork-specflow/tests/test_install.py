@@ -207,13 +207,25 @@ class DevinInstallUnchanged(Base):
             hooks,
             "PreToolUse",
             "gate",
-            {"hook_event_name": "PreToolUse", "tool_name": "write", "tool_input": {"file_path": str(p / "app.py")}},
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "write",
+                "tool_input": {"file_path": str(p / "app.py")},
+            },
             env=env,
         )
-        rem = run_hook(p, hooks, "UserPromptSubmit", "prompt-reminder", {"prompt": "hi"}, env=env)
+        rem = run_hook(
+            p, hooks, "UserPromptSubmit", "prompt-reminder", {"prompt": "hi"}, env=env
+        )
         engine = p / ".devin" / "groundwork" / "engine" / "groundwork.py"
         init = subprocess.run(
-            [sys.executable, str(engine), "init"], cwd=p, capture_output=True, text=True, env={**ENV, **env}, check=False
+            [sys.executable, str(engine), "init"],
+            cwd=p,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            env={**ENV, **env},
+            check=False,
         )
         texts = [json.dumps(deny), json.dumps(rem), init.stdout + init.stderr]
         texts += [f.read_text(encoding="utf-8") for f in p.glob("*.md")]
@@ -225,7 +237,9 @@ class DevinInstallUnchanged(Base):
         p = self.root / "proj"
         git_init(p)
         install(p)
-        self.assertIn("__pycache__/", (p / ".devin" / "groundwork" / ".gitignore").read_text())
+        self.assertIn(
+            "__pycache__/", (p / ".devin" / "groundwork" / ".gitignore").read_text()
+        )
 
 
 if __name__ == "__main__":

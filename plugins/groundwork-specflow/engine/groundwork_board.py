@@ -111,8 +111,14 @@ def collect(ctx: C.Ctx, include_done: bool = False) -> list[Work]:
             )
             name = f"{rc.repo.name}/{fdir.name}" if prefix else fdir.name
             # An RFC that amends a built feature is carried by that spec's `## Changes` entry, not a new spec.
-            changes = re.search(r"^## Changes\b(.*?)(?=^## |\Z)", body, re.MULTILINE | re.DOTALL)
-            amending = set(re.findall(r"\bRFC-\d{4}\b", changes.group(1))) if changes else set()
+            changes = re.search(
+                r"^## Changes\b(.*?)(?=^## |\Z)", body, re.MULTILINE | re.DOTALL
+            )
+            amending = (
+                set(re.findall(r"\bRFC-\d{4}\b", changes.group(1)))
+                if changes
+                else set()
+            )
             for rid in ({m["rfc"]} if m.get("rfc") else set()) | amending:
                 if name not in cited.get(rid, []):
                     cited.setdefault(rid, []).append(name)

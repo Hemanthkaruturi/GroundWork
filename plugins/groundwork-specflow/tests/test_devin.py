@@ -143,9 +143,9 @@ class DevinGates(Base):
         )  # found the project via DEVIN_PROJECT_DIR
         self.assertTrue(state.startswith("ENGINE: "))
         rules = "\n\n".join(
-            devin(self.repo, h, {"hook_event_name": "SessionStart"})["hookSpecificOutput"][
-                "additionalContext"
-            ]
+            devin(self.repo, h, {"hook_event_name": "SessionStart"})[
+                "hookSpecificOutput"
+            ]["additionalContext"]
             for h in SESSION_HOOKS[1:]
         )
         ctx = state + rules

@@ -32,7 +32,9 @@ class StaleHook(CheckBase):
         d = Path(
             subprocess.run(
                 ["git", "-C", str(self.api), "rev-parse", "--git-path", "hooks"],
-                capture_output=True, text=True, check=True,
+                capture_output=True,
+                text=True,
+                check=True,
             ).stdout.strip()
         )
         d = d if d.is_absolute() else self.api / d
@@ -50,14 +52,18 @@ class StaleHook(CheckBase):
             C.PLUGIN_ROOT = old
 
     def test_pinned_old_engine_is_stale(self):
-        self.hook("#!/bin/sh\n# groundwork-hook v1\npython3 /c/0.1.2/engine/groundwork.py check\n")
+        self.hook(
+            "#!/bin/sh\n# groundwork-hook v1\npython3 /c/0.1.2/engine/groundwork.py check\n"
+        )
         self.assertIn("0.1.2", self.stale())
 
     def test_current_installer_foreign_or_missing_hook_is_not_stale(self):
         self.assertIsNone(self.stale())
         self.hook("#!/bin/sh\npython3 /c/0.1.2/engine/groundwork.py\n")
         self.assertIsNone(self.stale())
-        self.hook('#!/bin/sh\n# groundwork-hook v1\nV=$(ls "$CACHE")\n/c/0.1.2/engine/groundwork.py\n')
+        self.hook(
+            '#!/bin/sh\n# groundwork-hook v1\nV=$(ls "$CACHE")\n/c/0.1.2/engine/groundwork.py\n'
+        )
         self.assertIsNone(self.stale())
 
     def test_blocked_message_names_the_engine(self):

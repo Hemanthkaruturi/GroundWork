@@ -74,21 +74,26 @@ def today() -> str:
 
 def path_problem(rc: C.Ctx, path: Path) -> str | None:
     """Check the whole path before reading it, including linked parent directories."""
-    return path_problem_under((rc.repo or rc.root).resolve(), path)
+    return path_problem_under(rc.repo or rc.root, path)
 
 
 def path_problem_under(root: Path, path: Path) -> str | None:
-    root = root.resolve()
-    try:
-        relative = path.relative_to(root)
-    except ValueError:
+    # The path may be spelled from the root as given or as resolved (macOS /var is /private/var).
+    real = root.resolve()
+    for base in dict.fromkeys((root.absolute(), real)):
+        try:
+            relative = path.relative_to(base)
+            break
+        except ValueError:
+            continue
+    else:
         return f"{path}: outside the repository"
-    current = root
+    current = base
     for part in relative.parts:
         current /= part
         if current.is_symlink():
             return f"{path}: symlinked path ({current}); review it manually"
-    if not path.resolve().is_relative_to(root):
+    if not path.resolve().is_relative_to(real):
         return f"{path}: resolves outside the repository"
     return None
 
@@ -282,7 +287,7 @@ def import_specs(rc: C.Ctx, slugs: list[str] | None, dry: bool) -> dict:
         raw = p.read_bytes()
         text = raw.decode("utf-8")
         new = _add_fm(text, fields)
-        p.write_text(new, encoding="utf-8")
+        p.write_text(new, encoding="utf-8", newline="")
         cap_link(rc, cap_slug_for(c["slug"]), c["slug"], title=c["title"], create=True)
         cap_set(
             rc,
@@ -348,7 +353,7 @@ def classify(
     out = []
     for slug, sp, text, nxt in changes:
         if not dry:
-            sp.write_text(text, encoding="utf-8")
+            sp.write_text(text, encoding="utf-8", newline="")
             cap = capability or cap_slug_for(slug)
             cap_link(rc, cap, slug, create=True)
             cap_set(rc, cap, next_action=nxt)

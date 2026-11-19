@@ -278,9 +278,11 @@ def _approvals_file(root: Path) -> Path:
 
 def load_approvals(root: Path) -> dict:
     try:
-        return json.loads(_approvals_file(root).read_text(encoding="utf-8"))
+        store = json.loads(_approvals_file(root).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
+    # Keys are '/'-separated; older Windows installs wrote '\\', so read those too.
+    return {k.replace("\\", "/"): v for k, v in store.items()}
 
 
 def signer() -> str:
@@ -347,7 +349,7 @@ def doc_state(path: Path, ctx: Ctx) -> DocState:
     meta, body = split_fm(text)
     needed = signoffs_needed(meta)
     root = owner_root(path, ctx)
-    rel = str(path.resolve().relative_to(root.resolve()))
+    rel = path.resolve().relative_to(root.resolve()).as_posix()
     rec = load_approvals(root).get(rel)
     signers = [s["who"] for s in rec["signers"]] if rec else []
     placeholders = len(PLACEHOLDER.findall(body))
@@ -406,7 +408,7 @@ def approve_preflight(path: Path, ctx: Ctx) -> str | None:
             if bad:
                 return f"{path.parent.name}: " + "; ".join(bad)
     root = owner_root(path, ctx)
-    rel = str(path.relative_to(root.resolve()))
+    rel = path.relative_to(root.resolve()).as_posix()
     rec = load_approvals(root).get(rel)
     # A spec that was approved and then changed may be re-approved only with the change explained.
     if (
@@ -431,7 +433,7 @@ def approve(path: Path, ctx: Ctx, who: str | None = None) -> DocState:
     text = path.read_text(encoding="utf-8")
     meta, _ = split_fm(text)
     root = owner_root(path, ctx)
-    rel = str(path.relative_to(root.resolve()))
+    rel = path.relative_to(root.resolve()).as_posix()
     store = load_approvals(root)
     h = body_hash(text)
     rec = store.get(rel)
@@ -978,7 +980,12 @@ def next_step(ctx: Ctx, skip_bug: bool = False) -> tuple[str, str]:
             return st.key, f"[{slug}] {st.detail}. " + INSTRUCTIONS[st.key]
     done, total = task_counts(ctx, slug)
     handover = ctx.repo / "specs" / slug / "handover.md"
-    if total and done == total and handover.is_file() and not doc_state(handover, ctx).placeholders:
+    if (
+        total
+        and done == total
+        and handover.is_file()
+        and not doc_state(handover, ctx).placeholders
+    ):
         return "done", (
             f"[{slug}] is built and handed over ({total}/{total} tasks). Nothing is left on it. For new work "
             "start with the interview skill; for a defect use fix-bug."
@@ -1162,8 +1169,23 @@ def _script_is_protected(word: str, cwd: Path | None) -> bool:
 
 
 # Programs that only read their arguments: `cat .groundwork/approvals.json` is not a write (a live run was blocked).
-_READERS = {"cat", "head", "tail", "less", "more", "jq", "wc", "grep", "rg", "ls", "stat", "file", "diff",
-            "sha256sum", "md5sum"}
+_READERS = {
+    "cat",
+    "head",
+    "tail",
+    "less",
+    "more",
+    "jq",
+    "wc",
+    "grep",
+    "rg",
+    "ls",
+    "stat",
+    "file",
+    "diff",
+    "sha256sum",
+    "md5sum",
+}
 
 
 def _only_reads(cmd: str) -> bool:

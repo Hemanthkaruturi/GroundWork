@@ -113,7 +113,10 @@ class ShellGate(CheckBase):
             "grep -n RFC .groundwork/approvals.json",
         ):
             self.assertFalse(self.blocked(cmd)[0], cmd)
-        for cmd in ("cat x > .groundwork/approvals.json", "cat .groundwork/approvals.json | tee .groundwork/bypass.json"):
+        for cmd in (
+            "cat x > .groundwork/approvals.json",
+            "cat .groundwork/approvals.json | tee .groundwork/bypass.json",
+        ):
             self.assertTrue(self.blocked(cmd)[0], cmd)
 
     def test_the_protected_command_check_leaves_ordinary_commands_alone(self):

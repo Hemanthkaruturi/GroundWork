@@ -219,14 +219,19 @@ def describe(ctx: C.Ctx) -> str:
 # The harness does not promise their order, so each part says what the others hold.
 CONTEXT_CAP = 10_000
 RULES_SPLIT = "\n13. "
-STATE_CUT = "\n... (cut to fit the context limit: run `groundwork.py status` for the rest)"
+STATE_CUT = (
+    "\n... (cut to fit the context limit: run `groundwork.py status` for the rest)"
+)
 
 
 def session_rules(host: str, part: int) -> str:
     head, sep, rest = G.adapt_rules(RULES, host).partition(RULES_SPLIT)
     assert sep, "RULES_SPLIT not found in RULES"
     if part == 1:
-        return head + "\n(Rules 13-24 and this project's state arrive as separate session messages.)"
+        return (
+            head
+            + "\n(Rules 13-24 and this project's state arrive as separate session messages.)"
+        )
     return (
         "groundwork rules, continued (rules 0-12 and this project's state arrive as separate session messages):"
         + RULES_SPLIT
@@ -248,7 +253,9 @@ def cmd_session_context(_a) -> None:
     )
     state = describe(ctx)
     room = CONTEXT_CAP - len(head) - len(STATE_CUT)
-    if len(state) > room:  # past the cap the model would see only a file path and a preview
+    if (
+        len(state) > room
+    ):  # past the cap the model would see only a file path and a preview
         state = state[:room].rsplit("\n", 1)[0] + STATE_CUT
     out(G.context(inp, "SessionStart", head + state))
 
@@ -279,11 +286,21 @@ HUMAN_CMD = re.compile(
 )
 
 
+def split_args(argstr: str) -> list[str]:
+    """Split a typed command's arguments; on Windows a backslash is a path separator, not an escape."""
+    if os.name != "nt":
+        return shlex.split(argstr)
+    return [
+        a[1:-1] if len(a) > 1 and a[0] == a[-1] and a[0] in "\"'" else a
+        for a in shlex.split(argstr, posix=False)
+    ]
+
+
 def run_human_action(name: str, argstr: str, cwd: str) -> str:
     """Approve/bypass/change, run from the UserPromptSubmit hook so only a typed prompt can trigger them."""
     os.chdir(cwd)
     try:
-        args = shlex.split(argstr)
+        args = split_args(argstr)
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             if name == "approve":
@@ -752,7 +769,8 @@ def scaffold_at(ctx: C.Ctx, dry: bool = False) -> list[str]:
             if not dry:
                 tpl = {
                     "AGENTS.md": "AGENTS.repo.md"
-                    if ctx.level in ("repo", "standalone")  # a standalone repo holds code too
+                    if ctx.level
+                    in ("repo", "standalone")  # a standalone repo holds code too
                     else "AGENTS.workspace.md"
                 }.get(f, f)
                 _write(
@@ -965,8 +983,18 @@ def cmd_layout(a) -> None:
         return
     # Re-running `init --create` under the standard toolchain only adds configs for languages that have
     # appeared since (GW121 tells the agent to): the decision itself does not change, so no --force.
-    topping_up = a.action == "init" and a.create and current is not None and current.mode == "standard"
-    if a.action in ("init", "keep") and current is not None and not a.force and not topping_up:
+    topping_up = (
+        a.action == "init"
+        and a.create
+        and current is not None
+        and current.mode == "standard"
+    )
+    if (
+        a.action in ("init", "keep")
+        and current is not None
+        and not a.force
+        and not topping_up
+    ):
         raise SystemExit(
             f"This repo already recorded its layout decision (mode: {current.mode}). "
             "Change it only if the user asked to: add --force."
@@ -1125,8 +1153,18 @@ def cmd_quality(a) -> None:
         return
     # Re-running `init --create` under the standard toolchain only adds configs for languages that have
     # appeared since (GW121 tells the agent to): the decision itself does not change, so no --force.
-    topping_up = a.action == "init" and a.create and current is not None and current.mode == "standard"
-    if a.action in ("init", "keep") and current is not None and not a.force and not topping_up:
+    topping_up = (
+        a.action == "init"
+        and a.create
+        and current is not None
+        and current.mode == "standard"
+    )
+    if (
+        a.action in ("init", "keep")
+        and current is not None
+        and not a.force
+        and not topping_up
+    ):
         raise SystemExit(
             f"This repo already recorded its quality decision (mode: {current.mode}). "
             "Change it only if the user asked to: add --force."
@@ -1138,7 +1176,11 @@ def cmd_quality(a) -> None:
         q = Q.load(repo)
         agents = Q.ensure_agents_section(repo, q)
         print(
-            ("Kept: GroundWork standard toolchain." if topping_up and not a.force else "Recorded: GroundWork standard toolchain.")
+            (
+                "Kept: GroundWork standard toolchain."
+                if topping_up and not a.force
+                else "Recorded: GroundWork standard toolchain."
+            )
             + (f" Created: {', '.join(made)}." if made else "")
             + (
                 " No code yet, so no tool configs were written: once the first code exists, run "
@@ -1721,10 +1763,14 @@ def cmd_plan_sync(a) -> None:
         raise SystemExit("plan-sync runs inside a repo.")
     # Any feature, not only the active one: an amended, re-approved older spec is synced while newer work is active.
     slug = (
-        Path(a.feature).parts[1] if a.feature and Path(a.feature).parts[:1] == ("specs",) else a.feature
+        Path(a.feature).parts[1]
+        if a.feature and Path(a.feature).parts[:1] == ("specs",)
+        else a.feature
     ) or C.active_slug(ctx)
     if not slug:
-        raise SystemExit("No active feature: name one (groundwork.py plan-sync <NNN-slug>).")
+        raise SystemExit(
+            "No active feature: name one (groundwork.py plan-sync <NNN-slug>)."
+        )
     fdir = ctx.repo / "specs" / slug
     if not (fdir / "spec.md").is_file():
         raise SystemExit(f"No specs/{slug}/spec.md.")
@@ -2113,7 +2159,11 @@ def main() -> None:
     p = sub.add_parser(
         "plan-sync", help="record that plan/tasks/evals match the current approved spec"
     )
-    p.add_argument("feature", nargs="?", help="NNN-slug or specs/NNN-slug (default: the active feature)")
+    p.add_argument(
+        "feature",
+        nargs="?",
+        help="NNN-slug or specs/NNN-slug (default: the active feature)",
+    )
     p.set_defaults(fn=cmd_plan_sync)
     p = sub.add_parser(
         "alerts", help="sound and voice when the agent waits for you (your own setting)"
@@ -2126,8 +2176,13 @@ def main() -> None:
     p.set_defaults(fn=cmd_activate)
     a = ap.parse_args()
     host = G.name()
-    if a.cmd not in HOOKS and (host == "codex" or G.BOOTSTRAPPED):  # the agent relays this output to the user
-        sys.stdout, sys.stderr = G.CodexText(sys.stdout, host), G.CodexText(sys.stderr, host)
+    if a.cmd not in HOOKS and (
+        host == "codex" or G.BOOTSTRAPPED
+    ):  # the agent relays this output to the user
+        sys.stdout, sys.stderr = (
+            G.CodexText(sys.stdout, host),
+            G.CodexText(sys.stderr, host),
+        )
     a.fn(a)
 
 

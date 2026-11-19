@@ -132,10 +132,14 @@ class EnginePath(Base):
 
     def test_session_rules_carry_the_quoted_literal_path(self):
         ctx = session(self.repo)
-        self.assertIn(f"`${{CLAUDE_PLUGIN_ROOT}}` ({CA.parents[1].as_posix()}) is not set", ctx)
+        self.assertIn(
+            f"`${{CLAUDE_PLUGIN_ROOT}}` ({CA.parents[1].as_posix()}) is not set", ctx
+        )
         self.assertIn(f'python3 "{self.ENGINE}" status', ctx)
         self.assertIn(f'python3 "{self.ENGINE}" <command>', ctx)
-        self.assertNotIn(f"python3 {self.ENGINE}", ctx)  # never unquoted: paths can hold spaces
+        self.assertNotIn(
+            f"python3 {self.ENGINE}", ctx
+        )  # never unquoted: paths can hold spaces
         self.assertNotIn("${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py status", ctx)
 
     def test_every_prompt_names_the_current_engine(self):
@@ -164,7 +168,9 @@ class EnginePath(Base):
                         env=env,
                         check=True,
                     )
-                    ctx = json.loads(r.stdout)["hookSpecificOutput"]["additionalContext"]
+                    ctx = json.loads(r.stdout)["hookSpecificOutput"][
+                        "additionalContext"
+                    ]
                     self.assertLess(len(ctx), 10_000)
 
     def test_long_project_state_is_cut_to_fit(self):
@@ -174,12 +180,13 @@ class EnginePath(Base):
         old = GW.describe
         GW.describe = lambda ctx: "Level: STANDALONE\n" + "IN FLIGHT: x\n" * 2000
         try:
-            from unittest.mock import patch
             import io
+            from unittest.mock import patch
 
-            with patch("sys.stdin", io.StringIO(json.dumps({"cwd": str(self.repo)}))), patch(
-                "sys.stdout", new_callable=io.StringIO
-            ) as so:
+            with (
+                patch("sys.stdin", io.StringIO(json.dumps({"cwd": str(self.repo)}))),
+                patch("sys.stdout", new_callable=io.StringIO) as so,
+            ):
                 GW.cmd_session_context(None)
             ctx = json.loads(so.getvalue())["hookSpecificOutput"]["additionalContext"]
         finally:
@@ -189,12 +196,22 @@ class EnginePath(Base):
         self.assertIn("groundwork.py status` for the rest", ctx)
 
     def test_session_hooks_are_registered_in_order(self):
-        cfg = json.loads((CA.parents[1] / "hooks" / "hooks.json").read_text(encoding="utf-8"))
-        subs = [h["command"].split("||")[0].split()[-1] for g in cfg["hooks"]["SessionStart"] for h in g["hooks"]]
+        cfg = json.loads(
+            (CA.parents[1] / "hooks" / "hooks.json").read_text(encoding="utf-8")
+        )
+        subs = [
+            h["command"].split("||")[0].split()[-1]
+            for g in cfg["hooks"]["SessionStart"]
+            for h in g["hooks"]
+        ]
         self.assertEqual(subs, list(SESSION_HOOKS))
 
     def test_approve_turn_names_the_engine(self):
-        r = ca(self.repo, "prompt-reminder", stdin=json.dumps({"cwd": str(self.repo), "prompt": "/approve x"}))
+        r = ca(
+            self.repo,
+            "prompt-reminder",
+            stdin=json.dumps({"cwd": str(self.repo), "prompt": "/approve x"}),
+        )
         self.assertEqual(r.returncode, 0, r.stderr)
         ctx = json.loads(r.stdout)["hookSpecificOutput"]["additionalContext"]
         self.assertIn("[groundwork approve]", ctx)
@@ -212,7 +229,9 @@ class EnginePath(Base):
 
         devin = self.root / "p" / ".devin"
         (devin / "skills" / "bootstrap").mkdir(parents=True)
-        (devin / "skills" / "bootstrap" / G.INSTALLED_MARKER).write_text("", encoding="utf-8")
+        (devin / "skills" / "bootstrap" / G.INSTALLED_MARKER).write_text(
+            "", encoding="utf-8"
+        )
         (devin / "skills" / "mine").mkdir()
         old = G.PLUGIN_ROOT
         G.PLUGIN_ROOT = devin / "groundwork"
@@ -222,6 +241,7 @@ class EnginePath(Base):
             self.assertFalse(G.is_groundwork_skill("../skills/bootstrap"))
         finally:
             G.PLUGIN_ROOT = old
+
 
 class Detection(Base):
     def level(self, p):

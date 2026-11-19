@@ -1,6 +1,7 @@
 """Baselines, imported legacy specs and the capability index (STANDARD.md §5j)."""
 
 import json
+import os
 import re
 import sys
 import tempfile
@@ -1077,7 +1078,7 @@ class SnapshotSafety(unittest.TestCase):
         self.assertEqual(set(snap["skipped"]), {p.rstrip("/") for p in excluded})
         self.assertEqual(
             {
-                call.args[0].relative_to(self.repo).as_posix()
+                call.args[0].relative_to(self.repo.resolve()).as_posix()
                 for call in hash_file.call_args_list
             },
             set(snap["sources"]),
@@ -1189,7 +1190,9 @@ class SnapshotSafety(unittest.TestCase):
             snap = F.baseline_snapshot(self.repo, self.document(" ".join(paths)))
         hash_file.assert_not_called()
         self.assertEqual(snap["sources"], {})
-        self.assertEqual(set(snap["skipped"]), set(paths))
+        # A Windows drive path (C:/...) is not read as a path token at all; it is still never hashed.
+        expected = set(paths) if os.name != "nt" else set(paths[:3])
+        self.assertEqual(set(snap["skipped"]), expected)
 
 
 class MultiApprove(CheckBase):

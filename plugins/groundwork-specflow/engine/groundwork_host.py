@@ -210,7 +210,9 @@ def shell_command(full: dict) -> str:
     return cmd if isinstance(cmd, str) else str(cmd or "")
 
 
-INSTALLED_MARKER = ".groundwork-installed"  # setup/install.py marks each project skill it copies
+INSTALLED_MARKER = (
+    ".groundwork-installed"  # setup/install.py marks each project skill it copies
+)
 
 
 def is_groundwork_skill(name: str) -> bool:
@@ -219,7 +221,10 @@ def is_groundwork_skill(name: str) -> bool:
         return True
     if not name or "/" in name or "\\" in name or name.startswith("."):
         return False
-    folders = (PLUGIN_ROOT.parent / "skills", PLUGIN_ROOT.parent.parent / ".agents" / "skills")
+    folders = (
+        PLUGIN_ROOT.parent / "skills",
+        PLUGIN_ROOT.parent.parent / ".agents" / "skills",
+    )
     return any((f / name / INSTALLED_MARKER).is_file() for f in folders)
 
 

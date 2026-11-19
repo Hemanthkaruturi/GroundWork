@@ -132,7 +132,7 @@ def collect(ctx: C.Ctx, include_done: bool = False) -> list[Work]:
         n = interview_rows(text)
         if not r.approved:
             state = (
-                "stale — edited after approval; needs re-approval"
+                "stale — edited after approval; needs re-approval (status shows what changed)"
                 if r.status == "stale"
                 else f"in review ({C.signoffs_label(r)} sign-offs)"
                 if r.status == "in-review"

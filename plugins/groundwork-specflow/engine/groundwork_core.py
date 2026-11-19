@@ -803,6 +803,7 @@ def feature_steps(ctx: Ctx, slug: str) -> list[Step]:
                 "rfc",
                 r.approved,
                 f"{rfc_path.name} is {r.status}"
+                + (STALE_HINT if r.status == "stale" else "")
                 + (
                     f" ({signoffs_label(r)} sign-offs)"
                     if r.status == "in-review"
@@ -815,6 +816,7 @@ def feature_steps(ctx: Ctx, slug: str) -> list[Step]:
             "spec",
             spec.approved,
             f"spec.md is {spec.status}"
+            + (STALE_HINT if spec.status == "stale" else "")
             + (
                 f", {spec.placeholders} unresolved marker(s)"
                 if spec.placeholders
@@ -883,6 +885,8 @@ def task_counts(ctx: Ctx, slug: str) -> tuple[int, int]:
     done = len(re.findall(r"^\s*- \[x\]", t, re.MULTILINE | re.IGNORECASE))
     return done, done + len(re.findall(r"^\s*- \[[ ~]\]", t, re.MULTILINE))
 
+
+STALE_HINT = " (edited after approval; `groundwork.py status` shows what changed)"
 
 INSTRUCTIONS = {
     "rfc": "RFC not approved. Ask the user to review it, then to run /groundwork-specflow:approve <path>.",

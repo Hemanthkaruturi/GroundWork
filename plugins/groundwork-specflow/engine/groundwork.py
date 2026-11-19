@@ -52,6 +52,7 @@ import groundwork_people as P
 import groundwork_quality as Q
 import groundwork_relations as R
 import groundwork_secrets as S
+import groundwork_stale as ST
 import groundwork_submodules as SM
 
 TRIAGE = (
@@ -598,6 +599,22 @@ def cmd_status(a) -> None:
             print(f"  [{'x' if st.ok else ' '}] {st.key:<6} {st.detail}")
         d, t = C.task_counts(ctx, slug)
         print(f"  tasks: {d}/{t} done")
+    stale = ST.stale_docs(ctx) if ctx.level != "unknown" else []
+    if stale:
+        print(
+            "\nEDITED AFTER APPROVAL (the user re-approves; tell them exactly this, never a guessed cause):"
+        )
+        for p in stale:
+            print(f"  {_shown(p, ctx)}")
+            for line in ST.explain(p, ctx):
+                print(f"    {line}")
+
+
+def _shown(p: Path, ctx: C.Ctx) -> str:
+    try:
+        return p.resolve().relative_to(ctx.root.resolve()).as_posix()
+    except ValueError:
+        return str(p)
 
 
 def _resolve_doc(ref: str) -> Path:

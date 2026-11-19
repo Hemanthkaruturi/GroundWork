@@ -13,7 +13,7 @@ GroundWork is a plugin for Claude Code, Codex and Devin. It makes the agent foll
 | 19 skills | one for each step of the path, plus resume, refresh, bugs, ownership, code layout, code quality, baseline and plain writing |
 | 10 hooks | the gate before edits and shell commands, session awareness, reminders, reply length, and optional alerts when the agent waits for you |
 | 87 numbered rules | checked with no AI and no network, on a laptop, in a git hook and in CI |
-| 313 automated tests | the whole lifecycle, and every rule has a test that breaks exactly that rule |
+| 373 automated tests | the whole lifecycle, and every rule has a test that breaks exactly that rule |
 | 3 coding agents | Claude Code, Codex (CLI) and Devin (CLI and Desktop), from the same plugin |
 | 3 platforms | Linux, macOS and Windows, tested on Python 3.10 and 3.12 |
 | 0 network calls | it runs on your machine, collects nothing and sends nothing |
@@ -679,10 +679,20 @@ ERROR   GW037  shop-api/specs/001-product-search/plan.md: plan.md was written ag
 ```
 The agent's next code edit is refused *(real output)*:
 ```
-DENIED: feature '001-product-search' is not ready to build: spec.md is stale. Write/finish spec.md with the write-spec skill,
-resolve every [NEEDS CLARIFICATION], then ask the user to run /groundwork-specflow:approve on it.
-Approval is a human act (/groundwork-specflow:approve); you cannot approve documents yourself.
+DENIED: feature '001-product-search' is not ready to build: spec.md is stale (edited after approval; `groundwork.py status`
+shows what changed). Write/finish spec.md with the write-spec skill, resolve every [NEEDS CLARIFICATION], then ask the user
+to run /groundwork-specflow:approve on it. Approval is a human act (/groundwork-specflow:approve); you cannot approve documents yourself.
 ```
+`status` shows what changed, so the agent tells the user exactly that instead of guessing a cause. The approval keeps only a hash of the approved text, so the approved version is found in git history *(illustration)*:
+```
+EDITED AFTER APPROVAL (the user re-approves; tell them exactly this, never a guessed cause):
+  specs/001-product-search/spec.md
+    changed since the approved version (commit 4e1c2a9):
+    5. Non-functional requirements: +1 -1 line(s)
+        - - **NFR-1**: search answers in under 300 ms for 10,000 products
+        + - **NFR-1**: search answers in under 200 ms for 10,000 products
+```
+If the approved version was never committed, `status` says so and the agent asks the user what changed.
 
 ### 5.25 Relations in full: depends on, builds against, extends, amends, supersedes
 Every feature is independent, or declares how it relates to another:
@@ -1112,7 +1122,7 @@ The step-by-step version is in `docs/manual-testing.md`.
 | `quality`, `quality init`, `quality keep`, `quality set`, `quality ignore`, `verify` (`--fix`, `--step`) | record the repo's code quality toolchain; run format, lint, types and tests |
 | `codemap`, `codemap --check` | write `CODEMAP.md` (where each kind of code lives) from the code; check it is current |
 
-**Quality:** 367 automated tests cover the whole lifecycle, on Linux, macOS and Windows, on Python 3.10 and 3.12. Every numbered rule has a test that breaks exactly that rule.
+**Quality:** 373 automated tests cover the whole lifecycle, on Linux, macOS and Windows, on Python 3.10 and 3.12. Every numbered rule has a test that breaks exactly that rule.
 
 **Privacy:** it runs locally, makes no network requests, has no telemetry, and never uses, stores or sends credentials. The key check reports only where a key is, never the key itself, and never opens `.env`. See `PRIVACY.md`.
 

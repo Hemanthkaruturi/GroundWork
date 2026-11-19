@@ -2,6 +2,7 @@
 
 import json
 import re
+import subprocess
 import sys
 import unittest
 import unittest.mock
@@ -9,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from test_check import CheckBase
-from test_flow import Base, ca, denied, hook
+from test_flow import ENV, Base, ca, denied, hook
 from test_quality import write
 
 
@@ -236,6 +237,61 @@ class WindowsPaths(CheckBase):
                 GW.split_args(r'C:\w\spec.md "C:\My Docs\x.md" RFC-0001'),
                 [r"C:\w\spec.md", r"C:\My Docs\x.md", "RFC-0001"],
             )
+
+
+class StaleShowsWhatChanged(CheckBase):
+    """A live run: agents guessed why an approved spec went stale. Status now shows the change."""
+
+    def commit(self):
+        for args in (["add", "-A"], ["commit", "-qm", "approved"]):
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(self.api),
+                    "-c",
+                    "user.name=t",
+                    "-c",
+                    "user.email=t@example.com",
+                    *args,
+                ],
+                env=ENV,
+                check=True,
+            )
+
+    def edit(self):
+        sp = self.fdir / "spec.md"
+        text = sp.read_text(encoding="utf-8")
+        old = next(ln for ln in text.splitlines() if ln.startswith("- **FR-1**"))
+        sp.write_text(
+            text.replace(old, "- **FR-1**: the list MUST show archived widgets too"),
+            encoding="utf-8",
+        )
+        return old
+
+    def test_status_names_the_section_and_lines_that_changed(self):
+        self.commit()
+        old = self.edit()
+        out = ca(self.api, "status").stdout
+        self.assertIn("EDITED AFTER APPROVAL", out)
+        self.assertIn("specs/001-widgets/spec.md", out)
+        self.assertRegex(
+            out, r"changed since the approved version \(commit [0-9a-f]+\)"
+        )
+        self.assertIn("Functional requirements: +1 -1 line(s)", out)
+        self.assertIn("+ - **FR-1**: the list MUST show archived widgets too", out)
+        self.assertIn("- " + old.strip()[:60], out)
+        self.assertIn("`groundwork.py status` shows what changed", out)
+
+    def test_an_uncommitted_approval_is_not_guessed(self):
+        self.edit()
+        out = ca(self.api, "status").stdout
+        self.assertIn("never committed", out)
+        self.assertIn("ask the user rather than guessing", out)
+
+    def test_nothing_is_listed_when_nothing_is_stale(self):
+        self.commit()
+        self.assertNotIn("EDITED AFTER APPROVAL", ca(self.api, "status").stdout)
 
 
 class AmendingRfcIsCarriedByTheSpec(CheckBase):

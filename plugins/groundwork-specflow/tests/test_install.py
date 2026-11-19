@@ -120,7 +120,7 @@ class CodexInstall(Base):
             self.p,
             self.hooks,
             "SessionStart",
-            "session-context",
+            "session-rules-2",
             {"hook_event_name": "SessionStart", "source": "startup"},
             cwd=sub,
         )
@@ -189,11 +189,43 @@ class DevinInstallUnchanged(Base):
             p,
             hooks,
             "SessionStart",
-            "session-context",
+            "session-rules-2",
             {"hook_event_name": "SessionStart"},
             env={"DEVIN_PROJECT_DIR": str(p)},
         )
         self.assertIn("HOST: Devin", o["hookSpecificOutput"]["additionalContext"])
+
+    def test_devin_install_speaks_devin_commands_everywhere(self):
+        # A live run saw /groundwork-specflow:<name> in denials, reminders, init output and written templates.
+        p = self.root / "proj"
+        git_init(p)
+        install(p)
+        hooks = json.loads((p / ".devin" / "hooks.v1.json").read_text())
+        env = {"DEVIN_PROJECT_DIR": str(p)}
+        deny = run_hook(
+            p,
+            hooks,
+            "PreToolUse",
+            "gate",
+            {"hook_event_name": "PreToolUse", "tool_name": "write", "tool_input": {"file_path": str(p / "app.py")}},
+            env=env,
+        )
+        rem = run_hook(p, hooks, "UserPromptSubmit", "prompt-reminder", {"prompt": "hi"}, env=env)
+        engine = p / ".devin" / "groundwork" / "engine" / "groundwork.py"
+        init = subprocess.run(
+            [sys.executable, str(engine), "init"], cwd=p, capture_output=True, text=True, env={**ENV, **env}, check=False
+        )
+        texts = [json.dumps(deny), json.dumps(rem), init.stdout + init.stderr]
+        texts += [f.read_text(encoding="utf-8") for f in p.glob("*.md")]
+        for t in texts:
+            self.assertNotIn("/groundwork-specflow:", t)
+        self.assertIn("/bypass", json.dumps(deny))
+
+    def test_installed_engine_ignores_its_bytecode(self):
+        p = self.root / "proj"
+        git_init(p)
+        install(p)
+        self.assertIn("__pycache__/", (p / ".devin" / "groundwork" / ".gitignore").read_text())
 
 
 if __name__ == "__main__":

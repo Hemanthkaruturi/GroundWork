@@ -96,7 +96,7 @@ class ShellGate(CheckBase):
             "python3 -c \"import subprocess; subprocess.run(['python3','/x/groundwork.py','approve','R'])\"",
             "python3 -c \"open('.groundwork/approvals.json','w').write('{}')\"",
             "echo {} > .groundwork/appr*.json",
-            "cat .groundwork/?ypass.json",
+            "cp x.json .groundwork/?ypass.json",
             "python3 - <<'P'\nimport subprocess; subprocess.run(['python3','groundwork.py','approve','R'])\nP",
             "bash sneaky.sh",
             "sh ./sneaky.sh",
@@ -105,6 +105,16 @@ class ShellGate(CheckBase):
         ]:
             self.assertTrue(self.blocked(cmd)[0], cmd)
             self.assertIn("human acts", self.blocked(cmd)[1], cmd)
+
+    def test_reading_the_records_is_not_a_human_act(self):
+        for cmd in (
+            "cat .groundwork/approvals.json",
+            "cat .groundwork/approvals.json | jq .",
+            "grep -n RFC .groundwork/approvals.json",
+        ):
+            self.assertFalse(self.blocked(cmd)[0], cmd)
+        for cmd in ("cat x > .groundwork/approvals.json", "cat .groundwork/approvals.json | tee .groundwork/bypass.json"):
+            self.assertTrue(self.blocked(cmd)[0], cmd)
 
     def test_the_protected_command_check_leaves_ordinary_commands_alone(self):
         (self.api / "fine.sh").write_text("echo hi\n")

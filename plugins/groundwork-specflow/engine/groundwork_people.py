@@ -272,6 +272,15 @@ def record(
             set_role(doc, role, val, append=True)
         else:
             set_role(doc, role, ", ".join(val) if isinstance(val, list) else val)
+    if event == "fixed" and kind == "bug":
+        # Recording the fix is the moment the agent claims it, so the record says so too: `check` then
+        # holds it to what a fixed bug needs (regression test on disk, verification) instead of it
+        # sitting at `diagnosed`, with status still pointing at the bug.
+        text_now = doc.read_text(encoding="utf-8")
+        status = str(C.split_fm(text_now)[0].get("status") or "").strip()
+        if status in ("open", "diagnosed"):
+            doc.write_text(C.set_fm(text_now, {"status": "fixed"}), encoding="utf-8")
+            e["status_changed"] = f"{status} -> fixed"
     return e
 
 

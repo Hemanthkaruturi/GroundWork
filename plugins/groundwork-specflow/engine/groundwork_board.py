@@ -104,15 +104,18 @@ def collect(ctx: C.Ctx, include_done: bool = False) -> list[Work]:
     cited: dict[str, list[str]] = {}
     for rc in repos:
         for fdir in C.feature_dirs(rc):
-            m, _ = (
+            m, body = (
                 C.split_fm((fdir / "spec.md").read_text(encoding="utf-8"))
                 if (fdir / "spec.md").is_file()
                 else ({}, "")
             )
-            if m.get("rfc"):
-                cited.setdefault(m["rfc"], []).append(
-                    f"{rc.repo.name}/{fdir.name}" if prefix else fdir.name
-                )
+            name = f"{rc.repo.name}/{fdir.name}" if prefix else fdir.name
+            # An RFC that amends a built feature is carried by that spec's `## Changes` entry, not a new spec.
+            changes = re.search(r"^## Changes\b(.*?)(?=^## |\Z)", body, re.MULTILINE | re.DOTALL)
+            amending = set(re.findall(r"\bRFC-\d{4}\b", changes.group(1))) if changes else set()
+            for rid in ({m["rfc"]} if m.get("rfc") else set()) | amending:
+                if name not in cited.get(rid, []):
+                    cited.setdefault(rid, []).append(name)
     rf = C.rfcs(ctx) if ctx.level != "unknown" else []
     superseded = {x for r in rf if r.approved for x in C.list_of(r.meta, "supersedes")}
     for r in rf:

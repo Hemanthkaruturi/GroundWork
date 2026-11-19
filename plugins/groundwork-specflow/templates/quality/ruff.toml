@@ -1,5 +1,7 @@
 # GroundWork standard Python lint and format rules (STANDARD.md §5i). Change a rule only on purpose, with a reason.
 line-length = 100
+# GroundWork's own engine copy and agent settings are not this project's code.
+extend-exclude = [".devin", ".codex", ".claude", ".agents"]
 
 [lint]
 select = [

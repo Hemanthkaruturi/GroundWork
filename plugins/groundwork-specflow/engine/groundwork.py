@@ -98,7 +98,7 @@ groundwork is active. These rules are enforced by hooks, not suggestions:
 22. EXISTING BEHAVIOUR: a spec with `origin: baseline` documents what already exists (baseline skill) — history, not work: no RFC, no tasks, never in flight. A feature that changes existing behaviour `extends`/`amends` the baseline; a bug with no requirement to cite gets a bounded baseline first. `origin: imported` is a legacy document awaiting classification — a reference, never an approved requirement. If the context lists DOCUMENTATION REVIEW items, they wait for a person, not for code.
 23. CONSTITUTION: CONSTITUTION.md (the repo's, and the workspace's above it) binds every reply, document and code edit, in every step — planning, tasks, evals, implementing and bug fixing, not only the RFC. Its guardrails are listed below at session start; read the file before a plan, a fix plan or code. Never work around a rule: a conflict is raised to the user as an amendment proposal. The RFC's §7 records the check once; other documents cite it.
 24. CHANGE LOG: every change to a built feature is recorded in its specs/NNN-slug/changes.md, however small. Before changing a feature's code read its RFC, spec and changes.md. After the change run `groundwork.py change "<what changed>" --requested-by <person who asked> --files <paths> --via claude-code` (the RFC/spec ref is filled in; pass --ref for another). A change that alters behaviour still amends the spec (rule 16) and is logged here too. `check` warns (GW093) about unrecorded code changes. A small, clear change that belongs to no RFC or feature (upgrading a package) needs no interview or RFC: the user opens it with /groundwork-specflow:change <what>, which lifts the gate and logs it in specs/changes.md; when done, complete its row with `groundwork.py change --standalone "<what you did>" --files <paths> --via claude-code`. You never open one yourself.
-Use `python3 ${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py status` (or `board`) any time you are unsure where you are."""
+Use `python3 "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py" status` (or `board`) any time you are unsure where you are."""
 RULES = RULES.replace("BREVITY_TEXT", BREVITY)
 
 
@@ -214,16 +214,61 @@ def describe(ctx: C.Ctx) -> str:
     return "\n".join(lines)
 
 
+# Claude Code caps each hook's context at 10,000 characters and shows the model only the first 2,000 of a
+# longer one, so the session context comes as three hooks: the project state and the rules in two halves.
+# The harness does not promise their order, so each part says what the others hold.
+CONTEXT_CAP = 10_000
+RULES_SPLIT = "\n13. "
+STATE_CUT = "\n... (cut to fit the context limit: run `groundwork.py status` for the rest)"
+
+
+def session_rules(host: str, part: int) -> str:
+    head, sep, rest = G.adapt_rules(RULES, host).partition(RULES_SPLIT)
+    assert sep, "RULES_SPLIT not found in RULES"
+    if part == 1:
+        return head + "\n(Rules 13-24 and this project's state arrive as separate session messages.)"
+    return (
+        "groundwork rules, continued (rules 0-12 and this project's state arrive as separate session messages):"
+        + RULES_SPLIT
+        + rest
+    )
+
+
 def cmd_session_context(_a) -> None:
     inp = hook_input()
     ctx = C.detect(G.cwd(inp))
-    out(
-        G.context(
-            inp,
-            "SessionStart",
-            G.adapt_rules(RULES, G.name(inp)) + "\n\n" + describe(ctx),
+    head = (
+        G.engine_note()
+        + "\n\ngroundwork is active. This message is the project's current state; "
+        + (
+            "the rules (0-24) are the ones given when this conversation started.\n\n"
+            if _resumed(inp)
+            else "the rules (0-24) arrive as two separate session messages.\n\n"
         )
     )
+    state = describe(ctx)
+    room = CONTEXT_CAP - len(head) - len(STATE_CUT)
+    if len(state) > room:  # past the cap the model would see only a file path and a preview
+        state = state[:room].rsplit("\n", 1)[0] + STATE_CUT
+    out(G.context(inp, "SessionStart", head + state))
+
+
+def _resumed(inp: dict) -> bool:
+    """A resumed conversation still holds the rules from its start (a compacted one does not): saying them again
+    cost ~12k characters per resume in live runs. The project state is still re-sent, as it may have changed."""
+    return inp.get("source") == "resume"
+
+
+def cmd_session_rules_1(_a) -> None:
+    inp = hook_input()
+    if not _resumed(inp):
+        out(G.context(inp, "SessionStart", session_rules(G.name(inp), 1)))
+
+
+def cmd_session_rules_2(_a) -> None:
+    inp = hook_input()
+    if not _resumed(inp):
+        out(G.context(inp, "SessionStart", session_rules(G.name(inp), 2)))
 
 
 # `/approve` (Claude, Devin) or `$source-command-approve`, the skill Codex makes from commands/approve.md.
@@ -265,7 +310,7 @@ def run_human_action(name: str, argstr: str, cwd: str) -> str:
         return f"ERROR: {e}"
 
 
-def after_human_action(name: str, res: str, cwd: str) -> str:
+def after_human_action(name: str, res: str, cwd: str, host: str = "claude") -> str:
     """What the agent does once the hook has run approve/bypass. The approval is the user's go-ahead,
     so a recorded one moves straight on to the next step instead of waiting for "continue" (issue #7)."""
     never = f"Never run {name} yourself."
@@ -274,11 +319,19 @@ def after_human_action(name: str, res: str, cwd: str) -> str:
             "Report this result in one line, then make the change in this same turn: it belongs to no RFC or feature, "
             "so it needs no interview or RFC. If it turns out to alter behaviour a spec describes, stop and tell the "
             "user it belongs to that feature. When done, record it: `groundwork.py change --standalone "
-            '"<what you did>" --files <paths> --via claude-code`. Never run bypass yourself.'
+            f'"<what you did>" --files <paths> --via {G.via(host)}`. Never run bypass yourself.'
         )
     if name != "approve" or res.startswith(("REFUSED", "ERROR")):
         return f"Report this result to the user in one or two lines. {never}"
-    phase, ins = C.next_step(C.detect(cwd))
+    ctx = C.detect(cwd)
+    approved_bug = "bugs/" in res
+    phase, ins = C.next_step(ctx, skip_bug=not approved_bug)
+    if not approved_bug:
+        import groundwork_bugs as B
+
+        open_bug = B.active_bug(ctx)
+        if open_bug and B.bug_state(ctx, open_bug).status != "closed":
+            ins += f" (Bug {open_bug} is also open; it is separate work and does not hold this step.)"
     return (
         f"Report this result to the user in one line, then carry on in this same turn without waiting to be "
         f"told to continue. Next step (phase={phase}): {ins} If that step needs another approval or sign-off, "
@@ -296,7 +349,7 @@ def cmd_prompt_reminder(_a) -> None:
                 inp,
                 "UserPromptSubmit",
                 f"[groundwork {m.group(1)}] The user's command was already executed by the hook. "
-                f"Result: {res}\n{after_human_action(m.group(1), res, G.cwd(inp))}",
+                f"Result: {res}\n{after_human_action(m.group(1), res, G.cwd(inp), G.name(inp))}\n{G.engine_reminder()}",
             )
         )
         return
@@ -316,7 +369,7 @@ def cmd_prompt_reminder(_a) -> None:
         G.context(
             inp,
             "UserPromptSubmit",
-            f"[groundwork] level={ctx.level} phase={phase}. {ins}{note} {TRIAGE} {BREVITY}"
+            f"[groundwork] level={ctx.level} phase={phase}. {ins}{note} {TRIAGE} {BREVITY} {G.engine_reminder()}"
             + (f" {G.codex_reminder()}" if G.name(inp) == "codex" else ""),
         )
     )
@@ -324,6 +377,12 @@ def cmd_prompt_reminder(_a) -> None:
 
 def deny(full: dict, reason: str) -> None:
     out(G.deny(full, reason))
+
+
+HELD_FOR_ALL = (
+    " This holds every code edit, not just this file: do not try your other planned edits. "
+    "Do what the message says first, or stop and tell the user."
+)
 
 
 def cmd_gate(_a) -> None:
@@ -351,7 +410,8 @@ def cmd_gate(_a) -> None:
             held.append((path, reason))
     if not held:
         return
-    reason = held[0][1]
+    # Agents kept firing their other planned edits after the first refusal (22 in one live run).
+    reason = held[0][1] + HELD_FOR_ALL
     if (
         len(held) < len(paths)
     ):  # one apply_patch can touch many files; name the held ones when others would pass
@@ -473,7 +533,7 @@ def cmd_skill_notice(_a) -> None:
     """When any non-groundwork skill loads, remind the agent it is a craft tool inside the process."""
     full = hook_input()
     name = G.skill_name(full)
-    if not name or name.startswith("groundwork-specflow:"):
+    if not name or G.is_groundwork_skill(name):
         return
     ctx = C.detect(G.cwd(full))
     if ctx.level == "unknown":
@@ -692,7 +752,7 @@ def scaffold_at(ctx: C.Ctx, dry: bool = False) -> list[str]:
             if not dry:
                 tpl = {
                     "AGENTS.md": "AGENTS.repo.md"
-                    if ctx.level == "repo"
+                    if ctx.level in ("repo", "standalone")  # a standalone repo holds code too
                     else "AGENTS.workspace.md"
                 }.get(f, f)
                 _write(
@@ -903,7 +963,10 @@ def cmd_layout(a) -> None:
             else ".prettierignore already excludes GroundWork's documents."
         )
         return
-    if a.action in ("init", "keep") and current is not None and not a.force:
+    # Re-running `init --create` under the standard toolchain only adds configs for languages that have
+    # appeared since (GW121 tells the agent to): the decision itself does not change, so no --force.
+    topping_up = a.action == "init" and a.create and current is not None and current.mode == "standard"
+    if a.action in ("init", "keep") and current is not None and not a.force and not topping_up:
         raise SystemExit(
             f"This repo already recorded its layout decision (mode: {current.mode}). "
             "Change it only if the user asked to: add --force."
@@ -1060,20 +1123,29 @@ def cmd_quality(a) -> None:
             else ".prettierignore already excludes GroundWork's documents."
         )
         return
-    if a.action in ("init", "keep") and current is not None and not a.force:
+    # Re-running `init --create` under the standard toolchain only adds configs for languages that have
+    # appeared since (GW121 tells the agent to): the decision itself does not change, so no --force.
+    topping_up = a.action == "init" and a.create and current is not None and current.mode == "standard"
+    if a.action in ("init", "keep") and current is not None and not a.force and not topping_up:
         raise SystemExit(
             f"This repo already recorded its quality decision (mode: {current.mode}). "
             "Change it only if the user asked to: add --force."
         )
     if a.action == "init":
-        entry = {"mode": "standard", **decided}
-        C.write_config(repo, quality=entry)
+        if not topping_up or a.force:
+            C.write_config(repo, quality={"mode": "standard", **decided})
         made = Q.write_configs(repo, langs) if a.create else []
         q = Q.load(repo)
         agents = Q.ensure_agents_section(repo, q)
         print(
-            "Recorded: GroundWork standard toolchain."
+            ("Kept: GroundWork standard toolchain." if topping_up and not a.force else "Recorded: GroundWork standard toolchain.")
             + (f" Created: {', '.join(made)}." if made else "")
+            + (
+                " No code yet, so no tool configs were written: once the first code exists, run "
+                "`groundwork.py quality init --create` again to add them."
+                if a.create and not langs
+                else ""
+            )
         )
         installs = [
             Q.install_line(repo, x)
@@ -1601,6 +1673,7 @@ def cmd_record(a) -> None:
         f"recorded {e['event']} on {e['ref']} by {e['by']}"
         + (f" → {', '.join(who)}" if who else "")
         + (f" ({e['env']} {e['version']})" if e.get("env") else "")
+        + (f"; bug status {e['status_changed']}" if e.get("status_changed") else "")
     )
 
 
@@ -1642,12 +1715,19 @@ def cmd_activate_bug(a) -> None:
     print(f"Active bug: {a.slug}")
 
 
-def cmd_plan_sync(_a) -> None:
+def cmd_plan_sync(a) -> None:
     ctx = C.detect(Path.cwd())
-    slug = C.active_slug(ctx)
-    if not ctx.repo or not slug:
-        raise SystemExit("No active feature (groundwork.py activate <NNN-slug>).")
+    if not ctx.repo:
+        raise SystemExit("plan-sync runs inside a repo.")
+    # Any feature, not only the active one: an amended, re-approved older spec is synced while newer work is active.
+    slug = (
+        Path(a.feature).parts[1] if a.feature and Path(a.feature).parts[:1] == ("specs",) else a.feature
+    ) or C.active_slug(ctx)
+    if not slug:
+        raise SystemExit("No active feature: name one (groundwork.py plan-sync <NNN-slug>).")
     fdir = ctx.repo / "specs" / slug
+    if not (fdir / "spec.md").is_file():
+        raise SystemExit(f"No specs/{slug}/spec.md.")
     spec = C.doc_state(fdir / "spec.md", ctx)
     if not spec.approved:
         raise SystemExit(
@@ -1664,7 +1744,7 @@ def cmd_plan_sync(_a) -> None:
             )
             done.append(name + ".md")
     print(
-        "Pinned to the current approved spec: "
+        f"specs/{slug}: pinned to the current approved spec: "
         + (", ".join(done) or "nothing (no finished documents yet)")
     )
 
@@ -1691,6 +1771,8 @@ def cmd_activate(a) -> None:
 
 HOOKS = (
     "session-context",
+    "session-rules-1",
+    "session-rules-2",
     "prompt-reminder",
     "gate",
     "gate-bash",
@@ -1715,6 +1797,8 @@ def main() -> None:
     sub = ap.add_subparsers(dest="cmd", required=True)
     for n, fn in (
         ("session-context", cmd_session_context),
+        ("session-rules-1", cmd_session_rules_1),
+        ("session-rules-2", cmd_session_rules_2),
         ("prompt-reminder", cmd_prompt_reminder),
         ("gate", cmd_gate),
         ("gate-bash", cmd_gate_bash),
@@ -2029,6 +2113,7 @@ def main() -> None:
     p = sub.add_parser(
         "plan-sync", help="record that plan/tasks/evals match the current approved spec"
     )
+    p.add_argument("feature", nargs="?", help="NNN-slug or specs/NNN-slug (default: the active feature)")
     p.set_defaults(fn=cmd_plan_sync)
     p = sub.add_parser(
         "alerts", help="sound and voice when the agent waits for you (your own setting)"
@@ -2040,10 +2125,9 @@ def main() -> None:
     p.add_argument("slug")
     p.set_defaults(fn=cmd_activate)
     a = ap.parse_args()
-    if (
-        a.cmd not in HOOKS and G.name() == "codex"
-    ):  # the agent relays this output to the user
-        sys.stdout, sys.stderr = G.CodexText(sys.stdout), G.CodexText(sys.stderr)
+    host = G.name()
+    if a.cmd not in HOOKS and (host == "codex" or G.BOOTSTRAPPED):  # the agent relays this output to the user
+        sys.stdout, sys.stderr = G.CodexText(sys.stdout, host), G.CodexText(sys.stderr, host)
     a.fn(a)
 
 

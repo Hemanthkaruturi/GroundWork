@@ -91,7 +91,7 @@ class Decision(Base):
         self.assertIn("uv add --dev ruff mypy pytest", r.stdout)
         shown = ca(self.repo, "quality").stdout
         for cmd in (
-            "uv run ruff check .",
+            "uv run ruff check --extend-exclude .devin,.codex,.claude,.agents .",
             "npx eslint .",
             "npx tsc --noEmit",
             "uv run pytest",

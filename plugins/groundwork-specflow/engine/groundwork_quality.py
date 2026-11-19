@@ -95,11 +95,19 @@ PRETTIER_CONFIGS = [
     ".prettierrc.yml",
     "biome.json",
 ]
+# GroundWork's engine copy (project installs) and agent settings are not the project's code: a formatter
+# run over them rewrote 24 engine files in a live run. Excluded on the command line too, so it holds
+# when the repo's own ruff config (pyproject) is used instead of ours.
+RUFF_SKIP = "--extend-exclude .devin,.codex,.claude,.agents"
 PRETTIER_IGNORE_MARK = "# groundwork: documents GroundWork owns"
 # Approvals and freshness snapshots hash these files' exact text, and groundwork.py regenerates
 # their tables, so a formatter rewriting them would make approved documents stale.
 PRETTIER_IGNORE_BLOCK = f"""{PRETTIER_IGNORE_MARK} (approvals hash their exact text)
 .groundwork/
+.devin/
+.codex/
+.claude/
+.agents/
 specs/
 bugs/
 DECISIONS/
@@ -235,12 +243,12 @@ def standard_commands(
         else "."
     )
     if "python" in langs:
-        cmds["format"].append("uv run ruff format --check .")
-        cmds["lint"].append("uv run ruff check .")
+        cmds["format"].append(f"uv run ruff format --check {RUFF_SKIP} .")
+        cmds["lint"].append(f"uv run ruff check {RUFF_SKIP} .")
         cmds["types"].append(f"uv run mypy {py_root}")
         cmds["test"].append("uv run pytest")
-        fix["format"].append("uv run ruff format .")
-        fix["lint"].append("uv run ruff check --fix .")
+        fix["format"].append(f"uv run ruff format {RUFF_SKIP} .")
+        fix["lint"].append(f"uv run ruff check --fix {RUFF_SKIP} .")
     if "javascript" in langs:
         cmds["format"].append("npx prettier --check .")
         cmds["lint"].append("npx eslint .")

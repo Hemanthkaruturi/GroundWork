@@ -249,9 +249,9 @@ if __name__ == "__main__":
 
 class UvPolicy(Base):
     def test_rule_is_injected_at_session_start(self):
-        from test_flow import hook
+        from test_flow import session
 
-        ctx = hook(self.root, "session-context", {})["additionalContext"]
+        ctx = session(self.root)
         self.assertIn("ALWAYS use `uv`, never pip", ctx)
         self.assertIn("uv add", ctx)
 

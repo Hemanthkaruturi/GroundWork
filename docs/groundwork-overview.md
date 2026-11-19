@@ -11,7 +11,7 @@ GroundWork is a plugin for Claude Code, Codex and Devin. It makes the agent foll
 | | |
 | --- | --- |
 | 19 skills | one for each step of the path, plus resume, refresh, bugs, ownership, code layout, code quality, baseline and plain writing |
-| 8 hooks | the gate before edits and shell commands, session awareness, reminders, reply length, and optional alerts when the agent waits for you |
+| 10 hooks | the gate before edits and shell commands, session awareness, reminders, reply length, and optional alerts when the agent waits for you |
 | 87 numbered rules | checked with no AI and no network, on a laptop, in a git hook and in CI |
 | 313 automated tests | the whole lifecycle, and every rule has a test that breaks exactly that rule |
 | 3 coding agents | Claude Code, Codex (CLI) and Devin (CLI and Desktop), from the same plugin |
@@ -231,7 +231,7 @@ It tries the shell instead (`cat > src/search.py <<'EOF' ...`). Same answer, wit
 — blocked because this shell command writes src/search.py. The shell is gated exactly like
 the Write/Edit tools; do not route around the gate.
 ```
-The gate covers redirections, heredocs, `tee`, `sed -i`, `cp` and `mv`, downloads saved to files, `patch` and `git apply`, and inline scripts that write files.
+The gate covers redirections, heredocs, `tee`, `sed -i`, `cp` and `mv`, downloads saved to files, `patch` and `git apply`, and inline scripts that write files. Every denial also says that it holds every code edit, not just that file, so the agent does what the message says instead of trying its other edits one by one. Commands that only read are never blocked. Project config files such as `.env.example`, `ruff.toml`, `mypy.ini`, `.editorconfig` and prettier's configs are not code to the gate. `pyproject.toml` and `package.json` stay gated, because a dependency change is a standalone change (5.11). Package-manager commands such as `uv add` and `npm install <pkg>` are not gated: changing the manifest is their job.
 
 ### 5.4 Only a human approves
 The agent tries to approve its own RFC *(real output)*:
@@ -244,7 +244,7 @@ Priya types the command herself:
 > /groundwork-specflow:approve RFC-0001
 RFC-0001-product-search.md: approved (1/1 sign-offs: Priya Nair)
 ```
-If anyone edits the RFC afterwards, its status becomes `stale` and it must be approved again.
+If anyone edits the RFC afterwards, its status becomes `stale` and it must be approved again. The agent may read `.groundwork/approvals.json`; writing it is a human act.
 
 The approve command runs from a prompt hook. If no hook ran, for example because a company policy (`allowManagedHooksOnly`) turned plugin hooks off, the agent approves nothing. It says the hooks are off and gives the person the engine command to run in their own terminal. After that, the person tells the agent to continue: a command run outside the chat does not start the agent. An approval typed in the chat starts the next step straight away.
 
@@ -372,7 +372,7 @@ ERROR   GW063  shop-api/bugs/001-empty-query-crash.md: §7 Verification is empty
 **6. Close it, and keep the record.** The agent tells Priya how to check the fix by hand. When she is satisfied, the status becomes `closed` and the bug leaves the board. Who did what is recorded like any other work *(real output)*:
 ```
 > groundwork.py record fixed --ref bugs/001-empty-query-crash --via claude-code
-recorded fixed on bugs/001-empty-query-crash by ravi@shop.example
+recorded fixed on bugs/001-empty-query-crash by ravi@shop.example; bug status diagnosed -> fixed
 
 > groundwork.py who bugs/001-empty-query-crash
 bugs/001-empty-query-crash  [bug]  Search crashes on an empty query
@@ -591,7 +591,7 @@ CONSTITUTION GUARDRAILS (bind every reply, document and code edit; never work ar
   - [workspace] No secrets, keys or provider credentials in any repository.
   - [repo] Card numbers are never stored or logged. Payments go through the payment provider only.
 ```
-The agent reads the constitution during the interview and checks the RFC against it; the spec, plan, evals and bug-fix steps read it again before they write, the evals carry a scenario for each guardrail the feature could break, and the implement step tells the agent to follow it. The tool checks that the check was done, not that the reasoning is right. To make a rule hold hard, write it as something a reviewer can check in a diff, and put the command that proves it in the quality gates and in `AGENTS.md`. The agent runs the repo's checks and may not mark a task done while one fails. Changing the constitution is always deliberate: the agent proposes an amendment, and never edits it on its own.
+The agent reads the constitution during the interview and checks the RFC against it; the spec, plan, evals and bug-fix steps read it again before they write, the evals carry a scenario for each guardrail the feature could break, and the implement step tells the agent to follow it. The tool checks that the check was done, not that the reasoning is right. To make a rule hold hard, write it as something a reviewer can check in a diff, and put the command that proves it in the quality gates and in `AGENTS.md`. The agent runs the repo's checks and may not mark a task done while one fails. In a new project the rules come from the people: the agent asks for the guardrails, quality gates and scope, and never fills them in itself. Changing the constitution is always deliberate: the agent proposes an amendment, and never edits it on its own.
 
 ### 5.21 A change across repos: a cross-repo RFC needs a contract and two sign-offs
 Search touches `shop-api` and `shop-web`, so the RFC is classified `api`. If it has no contract, or asks for only one sign-off, the check refuses it *(real output)*:
@@ -721,7 +721,7 @@ When a feature is finished, or work is paused or passed on, the agent writes a h
    Owner · Requested by · Implemented by · Deployed by · Support (first contact, escalation, hours)
 ## Next three recommended actions
 ```
-The test: could a new engineer continue without asking why each major decision was made? If not, the missing reason is written down. Ownership moves with it *(real output)*:
+The test: could a new engineer continue without asking why each major decision was made? If not, the missing reason is written down. Once every task is done and the handover has no placeholders left, `status` shows the feature's phase as `done`. Ownership moves with it *(real output)*:
 ```
 > groundwork.py record handover --ref 001-product-search --who "Meena Iyer"
 recorded handover on 001-product-search by priya@shop.example → Meena Iyer
@@ -796,7 +796,7 @@ Approval stays human: the user types `/groundwork-specflow:approve`, and Devin's
 
 **Differences to know about.** Devin cloud sessions don't run plugin hooks. There, the skills guide the agent, but nothing blocks a code edit. Devin also runs plugin hooks "best effort": a hook that fails is skipped rather than stopping the session. The git hook and CI check (5.28) close that gap, because they check every commit whichever agent made it.
 
-**Without Devin's plugin system.** Some companies turn Devin plugins off, and then no plugin install loads. For that case, Devin can install GroundWork into the project itself (§11). `setup/install.py` puts the engine in `.devin/groundwork/`, each skill and command in `.devin/skills/`, and the hooks in `.devin/hooks.v1.json`. These are Devin's project skills and hooks, not a plugin. The gate, approvals, documents, code layout and code map work the same, and commands have no prefix: `/approve`, `/bypass`, `/change`, `/status`. The script checks its own install by running the session-start hook the way Devin will. It runs on Linux, macOS, Windows and WSL. Committing `.devin/` gives the whole team GroundWork. That this works while plugins are turned off hasn't been confirmed yet.
+**Without Devin's plugin system.** Some companies turn Devin plugins off, and then no plugin install loads. For that case, Devin can install GroundWork into the project itself (§11). `setup/install.py` puts the engine in `.devin/groundwork/`, each skill and command in `.devin/skills/`, and the hooks in `.devin/hooks.v1.json`. These are Devin's project skills and hooks, not a plugin. The gate, approvals, documents, code layout and code map work the same, and commands have no prefix: `/approve`, `/bypass`, `/change`, `/status`. The script checks its own install by running the session-start hook the way Devin will, and keeps the engine's bytecode out of git. It runs on Linux, macOS, Windows and WSL. Committing `.devin/` gives the whole team GroundWork. That this works while plugins are turned off hasn't been confirmed yet.
 
 ### 5.30 Code layout: one decision per repo, never a surprise migration
 `shop-api` already has code. Before any code is written, `groundwork.py layout` shows that no decision exists yet, and offers both choices *(real output)*:
@@ -917,7 +917,7 @@ Commands the repo's files show (evidence, not a decision):
   lint    make lint
   test    make test
 ```
-Meena keeps the team's own tools, so no file is reformatted. A new repo instead gets GroundWork's standard toolchain: ruff, mypy and pytest for Python; prettier, eslint and tsc for TypeScript (plus Next.js's own lint rules in a Next.js app); golangci-lint and go test for Go. Its configs ship with the plugin. The formatter is kept off GroundWork's own documents through `.prettierignore`, because approvals hash their exact text and a reformat would make approved specs stale; `quality ignore` adds those lines to a repo that already uses prettier. Either way, after every task the agent runs `groundwork.py verify`, and a task can't be marked done while it fails *(real output)*:
+Meena keeps the team's own tools, so no file is reformatted. A new repo instead gets GroundWork's standard toolchain: ruff, mypy and pytest for Python; prettier, eslint and tsc for TypeScript (plus Next.js's own lint rules in a Next.js app); golangci-lint and go test for Go. Its configs ship with the plugin. The formatter is kept off GroundWork's own documents through `.prettierignore`, because approvals hash their exact text and a reformat would make approved specs stale; `quality ignore` adds those lines to a repo that already uses prettier. The configs and `verify` also skip the agents' own folders (`.claude`, `.codex`, `.agents`, `.devin`), so the engine a project install copies there is never linted or reformatted. In a new repo with no code yet, `quality init --create` records the toolchain and writes no configs; run it again once code exists, and it adds them without `--force`. Either way, after every task the agent runs `groundwork.py verify`, and a task can't be marked done while it fails *(real output)*:
 ```
 PASS  lint    make lint  (0.0s)
 FAIL  test    make test  (0.0s)
@@ -1023,13 +1023,13 @@ Approval stays human. The user types the approve command, and Codex's agent is r
 groundwork-specflow: approvals and bypasses are human acts. Ask the user to run $source-command-approve or
 $source-command-bypass themselves.
 ```
-Work is recorded `--via codex`, so `who` shows which agent built what. The code layout, code map, credentials, code quality and alerts (5.30–5.35) need nothing Codex-specific, except that Codex never sends the before-a-question event, so the question alert stays silent; the alert at reply end still rings.
+Work is recorded `--via codex`, so `who` shows which agent built what. The code layout, code map, credentials, code quality and alerts (5.30–5.35) need nothing Codex-specific, except for the question alert: it listens for Codex's `request_user_input` tool too, but GroundWork asks Codex for questions in numbered text rounds, so in practice only the alert at reply end rings.
 
 **Trust the hooks first.** Codex installs plugin and project hooks switched off and skips untrusted hooks without a warning. Each person types `/hooks` in Codex, trusts the GroundWork hooks and starts a new session, and does it again after each update, because the hooks have changed. The `workflow` skill checks for GroundWork's session message and, if it is missing, tells the user that nothing is being enforced and how to trust the hooks.
 
 **Differences to know about.** The Codex IDE extension doesn't load plugins, and plugin hooks don't run in Codex cloud sessions. The skills can guide the agent there, but nothing blocks a code edit, so add the git hook or CI check (5.28). Codex's sandbox has no network by default, so installing the quality tools fails until network access is allowed. The plugin relies on Codex reading Claude-format plugins, and on the `source-command-` names Codex gives commands, neither of which Codex documents. The ChatGPT desktop app and Windows haven't been tested with GroundWork yet.
 
-**Without Codex's plugin system.** For a team that wants GroundWork in the repo, or a company that turns plugins off, `setup/install.py --codex` installs it into the project (§11). It puts the engine in `.codex/groundwork/`, each skill and command in `.agents/skills/`, and the hooks in `.codex/hooks.json`, next to any hooks the project already has. These are Codex's project skills and hooks, not a plugin. Commands have no prefix: `$bootstrap`, `$approve`, `$bypass`, `$change`, `$status`. The approve, bypass, change and status skills are marked so that only the user can invoke them; Codex's agent can't choose them on its own. The script checks its own install by running the session-start hook the way Codex will, and `--codex --uninstall` removes it and keeps the project's own hooks. Committing `.codex/` and `.agents/` gives the whole team GroundWork; each person still trusts the project and its hooks once.
+**Without Codex's plugin system.** For a team that wants GroundWork in the repo, or a company that turns plugins off, `setup/install.py --codex` installs it into the project (§11). It puts the engine in `.codex/groundwork/`, each skill and command in `.agents/skills/`, and the hooks in `.codex/hooks.json`, next to any hooks the project already has. These are Codex's project skills and hooks, not a plugin. Commands have no prefix: `$bootstrap`, `$approve`, `$bypass`, `$change`, `$status`. The approve, bypass, change and status skills are marked so that only the user can invoke them; Codex's agent can't choose them on its own. The script checks its own install by running the session-start hook the way Codex will, and `--codex --uninstall` removes it and keeps the project's own hooks. Committing `.codex/` and `.agents/` gives the whole team GroundWork (the engine's bytecode is git-ignored); each person still trusts the project and its hooks once.
 
 ## 6. How it helps
 
@@ -1087,7 +1087,7 @@ The step-by-step version is in `docs/manual-testing.md`.
 | `baseline` | Writes what existing code already does as baseline specs, and classifies legacy specs imported with `adopt-specs` |
 | `plain-writing` | Keeps replies and documents short, plain and decision-first |
 
-**8 hooks:** session start (awareness, guardrails, the code map and in-flight work), every prompt (triage and style reminder), before edits and before shell commands (the gate, which can only deny and never approves anything), when another skill loads, at reply end (optional length limit), and two alert hooks, at reply end and before a question, that stay silent unless you turned alerts on. The same hook file serves Claude Code, Codex and Devin. Its matchers name every agent's tools.
+**10 hooks:** three at session start (the project's state, the code map and in-flight work; then the rules in two parts, so each stays under Claude Code's 10,000-character limit for one hook's message; a resumed session gets the state again but not the rules), every prompt (triage and style reminder), before edits and before shell commands (the gate, which can only deny and never approves anything), when another skill loads, at reply end (optional length limit), and two alert hooks, at reply end and before a question, that stay silent unless you turned alerts on. The same hook file serves Claude Code, Codex and Devin. Its matchers name every agent's tools.
 
 **Commands you type:** `/groundwork-specflow:approve` (one or more documents), `/groundwork-specflow:bypass` (emergencies, logged), `/groundwork-specflow:change` (a standalone change such as a package upgrade, logged), `/groundwork-specflow:status`. They are the same in Claude Code and Devin. In Devin, only the user can run them. In a Devin project installed without the plugin system (5.29), they have no prefix: `/approve`, `/bypass`, `/change`, `/status`. Codex has no plugin slash commands, so there they are typed with `$`: `$source-command-approve`, `$source-command-bypass`, `$source-command-change` and `$groundwork-specflow:source-command-status` with the plugin, or `$approve`, `$bypass`, `$change` and `$status` in a project install (5.36).
 
@@ -1099,7 +1099,7 @@ The step-by-step version is in `docs/manual-testing.md`.
 | `check`, `check --strict`, `check --json` | verify the 87 rules |
 | `status`, `board`, `note`, `activate` | where things stand, what is in flight, where work stopped |
 | `change` | records a change made to a built feature in its `changes.md`, or (`--standalone`) completes a standalone change in `specs/changes.md` |
-| `new-rfc`, `new-feature`, `new-bug`, `activate-bug`, `plan-sync` | create documents; switch the active bug; pin the plan to the approved spec |
+| `new-rfc`, `new-feature`, `new-bug`, `activate-bug`, `plan-sync [NNN-slug]` | create documents; switch the active bug; pin a feature's plan to its approved spec (the active feature by default) |
 | `new-contract` (`--as-built`), `new-adr` (`--rfc` or `--retrospective`) | a contract with named reviewers; a decision record after an RFC, or one found in existing code |
 | `adopt-specs`, `adopt-specs --classify`, `new-baseline`, `capability`, `capabilities` | import legacy specs and classify them; write a baseline spec; record capabilities and rebuild their table |
 | `approve`, `bypass`, `bypass --change` | human sign-off (several documents at once, all or none), the emergency bypass, and opening a standalone change |
@@ -1112,7 +1112,7 @@ The step-by-step version is in `docs/manual-testing.md`.
 | `quality`, `quality init`, `quality keep`, `quality set`, `quality ignore`, `verify` (`--fix`, `--step`) | record the repo's code quality toolchain; run format, lint, types and tests |
 | `codemap`, `codemap --check` | write `CODEMAP.md` (where each kind of code lives) from the code; check it is current |
 
-**Quality:** 313 automated tests cover the whole lifecycle, on Linux, macOS and Windows, on Python 3.10 and 3.12. Every numbered rule has a test that breaks exactly that rule.
+**Quality:** 367 automated tests cover the whole lifecycle, on Linux, macOS and Windows, on Python 3.10 and 3.12. Every numbered rule has a test that breaks exactly that rule.
 
 **Privacy:** it runs locally, makes no network requests, has no telemetry, and never uses, stores or sends credentials. The key check reports only where a key is, never the key itself, and never opens `.env`. See `PRIVACY.md`.
 

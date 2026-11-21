@@ -218,14 +218,14 @@ class WindowsPaths(CheckBase):
         sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "engine"))
         import groundwork_core as C
 
-        rfc = next((self.ws / "DECISIONS").glob("RFC-*.md"))
-        f = self.ws / ".groundwork" / "approvals.json"
+        rfc = next((self.api / "DECISIONS").glob("RFC-*.md"))
+        f = self.api / ".groundwork" / "approvals.json"
         store = json.loads(f.read_text(encoding="utf-8"))
-        rel = rfc.relative_to(self.ws).as_posix()
+        rel = rfc.relative_to(self.api).as_posix()
         self.assertIn(rel, store)
         store[rel.replace("/", "\\")] = store.pop(rel)
         f.write_text(json.dumps(store), encoding="utf-8")
-        ctx = C.detect(self.ws)
+        ctx = C.detect(self.api)
         self.assertEqual(C.doc_state(rfc, ctx).status, "approved")
 
     def test_windows_arguments_keep_their_backslashes(self):
@@ -306,18 +306,23 @@ class AmendingRfcIsCarriedByTheSpec(CheckBase):
         self.assertEqual(approved.returncode, 0, approved.stdout + approved.stderr)
         before = ca(self.ws, "board").stdout
         self.assertTrue(
-            any(rid in line and "no spec yet" in line for line in before.splitlines()),
+            any(
+                rid in line and "no repo RFC yet" in line
+                for line in before.splitlines()
+            ),
             before,
         )
         spec = self.fdir / "spec.md"
         spec.write_text(
             spec.read_text(encoding="utf-8")
-            + f"\n## Changes\n- 2026-11-19: archive habits, following {rid}.\n",
+            + f"\n## Changes\n- 2026-11-19: archive habits, following workspace/{rid}.\n",
             encoding="utf-8",
         )
         after = ca(self.ws, "board").stdout
         self.assertFalse(
-            any(rid in line and "no spec yet" in line for line in after.splitlines()),
+            any(
+                rid in line and "no repo RFC yet" in line for line in after.splitlines()
+            ),
             after,
         )
 

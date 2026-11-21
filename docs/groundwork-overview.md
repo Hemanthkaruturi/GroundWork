@@ -12,8 +12,8 @@ GroundWork is a plugin for Claude Code, Codex and Devin. It makes the agent foll
 | --- | --- |
 | 20 skills | one for each step of the path, plus resume, refresh, bugs, ownership, code layout, code quality, baseline, plain writing and feedback |
 | 10 hooks | the gate before edits and shell commands, session awareness, reminders, reply length, and optional alerts when the agent waits for you |
-| 87 numbered rules | checked with no AI and no network, on a laptop, in a git hook and in CI |
-| 385 automated tests | the whole lifecycle, and every rule has a test that breaks exactly that rule |
+| 88 numbered rules | checked with no AI and no network, on a laptop, in a git hook and in CI |
+| 389 automated tests | the whole lifecycle, and every rule has a test that breaks exactly that rule |
 | 3 coding agents | Claude Code, Codex (CLI) and Devin (CLI and Desktop), from the same plugin |
 | 3 platforms | Linux, macOS and Windows, tested on Python 3.10 and 3.12 |
 | 0 network calls | it runs on your machine, collects nothing and sends nothing; feedback is a link you choose to open |
@@ -108,9 +108,9 @@ Fix *where* things live, *what* each document contains, and *who* approves. Leav
 ## 4. What you get
 
 ### Structure everyone shares
-- **Two levels, plus standalone.** A *workspace* holds the product-level truth (project brief, architecture, rules, contracts, decisions). Each *repo* holds its own code, specs and internals. A single repo with no workspace above it is *standalone* and carries both sets of documents. The agent always knows which level it is on, and a directory that is neither is *unknown*: nothing may be built there.
+- **Two levels, plus standalone.** A *workspace* holds the product-level truth (project brief, architecture, rules, contracts, cross-repo decisions). Each *repo* holds its own code, specs, internals and decisions: a change in one repo has a repo RFC; a change across repos has a workspace RFC and, under it, one repo RFC per repo that links up to it. A single repo with no workspace above it is *standalone* and carries both sets of documents. The agent always knows which level it is on, and a directory that is neither is *unknown*: nothing may be built there.
 - **Standard documents:** `PROJECT`, `ARCHITECTURE`, `CONSTITUTION` (the non-negotiable rules), `AGENTS`, RFCs, contracts, specs, plans, tasks, evals, bug records, handovers.
-- **A written standard** (`STANDARD.md`) with 87 numbered rules. `groundwork check` verifies them with no AI and no network, so it runs the same on a laptop, in a git hook and in CI.
+- **A written standard** (`STANDARD.md`) with 88 numbered rules. `groundwork check` verifies them with no AI and no network, so it runs the same on a laptop, in a git hook and in CI.
 
 ### Every repo looks the same inside
 - **A standard code layout.** Business logic lives in `core/`. Code that talks to an outside system (an LLM, a database, an HTTP API, a queue, email) lives in `connectors/`, one folder per system. Routes, commands and workers live in `entrypoints/`, and settings are read only in `config/`. A small wiring file plugs connectors into core. There are profiles for services, command-line tools, web front ends and libraries.
@@ -1060,7 +1060,7 @@ https://github.com/Hemanthkaruturi/GroundWork/issues/new?template=groundwork-fee
 The draft *(real output, each heading and its text put on one line)*:
 ```
 # [feedback] gate blocks an edit the approved spec allows
-## GroundWork version        0.1.28
+## GroundWork version        0.1.29
 ## Agent                     Claude Code
 ## System                    Linux (WSL) x86_64, Python 3.12.3
 ## Where in GroundWork       gate hook
@@ -1140,7 +1140,7 @@ The step-by-step version is in `docs/manual-testing.md`.
 | Command | Purpose |
 | --- | --- |
 | `init` (`--dry-run`, `--retrofit`, `--as repo\|workspace`), `doctor` | onboard a project; show its stage and next steps |
-| `check`, `check --strict`, `check --json` | verify the 87 rules |
+| `check`, `check --strict`, `check --json` | verify the 88 rules |
 | `status`, `board`, `note`, `activate` | where things stand, what is in flight, where work stopped |
 | `change` | records a change made to a built feature in its `changes.md`, or (`--standalone`) completes a standalone change in `specs/changes.md` |
 | `new-rfc`, `new-feature`, `new-bug`, `activate-bug`, `plan-sync [NNN-slug]` | create documents; switch the active bug; pin a feature's plan to its approved spec (the active feature by default) |
@@ -1157,7 +1157,7 @@ The step-by-step version is in `docs/manual-testing.md`.
 | `quality`, `quality init`, `quality keep`, `quality set`, `quality ignore`, `verify` (`--fix`, `--step`) | record the repo's code quality toolchain; run format, lint, types and tests |
 | `codemap`, `codemap --check` | write `CODEMAP.md` (where each kind of code lives) from the code; check it is current |
 
-**Quality:** 385 automated tests cover the whole lifecycle, on Linux, macOS and Windows, on Python 3.10 and 3.12. Every numbered rule has a test that breaks exactly that rule.
+**Quality:** 389 automated tests cover the whole lifecycle, on Linux, macOS and Windows, on Python 3.10 and 3.12. Every numbered rule has a test that breaks exactly that rule.
 
 **Privacy:** it runs locally, makes no network requests, has no telemetry, and never uses, stores or sends credentials. The key check reports only where a key is, never the key itself, and never opens `.env`. Feedback is a draft and a link: nothing is sent unless the person opens the link and presses Submit. See `PRIVACY.md`.
 

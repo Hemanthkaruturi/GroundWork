@@ -100,8 +100,9 @@ def collect(ctx: C.Ctx, include_done: bool = False) -> list[Work]:
     out: list[Work] = []
     repos = _contexts(ctx)
     prefix = ctx.level == "workspace"
-    # every spec's RFC citation, for "does this RFC have a spec yet?"
-    cited: dict[str, list[str]] = {}
+    # every spec's RFC citation, for "does this RFC have a spec yet?" (keyed by the RFC file: a repo
+    # and the workspace each number their own RFCs)
+    cited: dict[Path, list[str]] = {}
     for rc in repos:
         for fdir in C.feature_dirs(rc):
             m, body = (
@@ -115,21 +116,42 @@ def collect(ctx: C.Ctx, include_done: bool = False) -> list[Work]:
                 r"^## Changes\b(.*?)(?=^## |\Z)", body, re.MULTILINE | re.DOTALL
             )
             amending = (
-                set(re.findall(r"\bRFC-\d{4}\b", changes.group(1)))
+                set(re.findall(r"(?:\bworkspace/)?\bRFC-\d{4}\b", changes.group(1)))
                 if changes
                 else set()
             )
             for rid in ({m["rfc"]} if m.get("rfc") else set()) | amending:
-                if name not in cited.get(rid, []):
-                    cited.setdefault(rid, []).append(name)
-    rf = C.rfcs(ctx) if ctx.level != "unknown" else []
-    superseded = {x for r in rf if r.approved for x in C.list_of(r.meta, "supersedes")}
-    for r in rf:
-        rid = r.meta.get("id") or r.path.stem
-        if rid in superseded and not include_done:
+                rp = C.find_rfc(rc, rid)
+                if rp and name not in cited.get(rp.resolve(), []):
+                    cited.setdefault(rp.resolve(), []).append(name)
+    # this level's RFCs, and from the workspace also each repo's own (labelled repo/RFC-000N)
+    owners = [(ctx, "")] + (
+        [(rc, rc.repo.name + "/") for rc in repos] if prefix else []
+    )
+    rf = [(oc, pre, r) for oc, pre in owners for r in C.rfcs(oc)]
+    children: dict[
+        Path, list[str]
+    ] = {}  # workspace RFC -> the repo RFCs that are its shares
+    superseded: set[Path] = set()
+    for oc, pre, r in rf:
+        _, par = C.rfc_parent(oc, r.meta)
+        if par is not None:
+            children.setdefault(par.resolve(), []).append(pre + C.rfc_id(r.path))
+        if r.approved:
+            for x in C.list_of(r.meta, "supersedes"):
+                sp = C.find_rfc(oc, x)
+                if sp:
+                    superseded.add(sp.resolve())
+    for oc, pre, r in rf:
+        key = r.path.resolve()
+        rid = pre + (r.meta.get("id") or r.path.stem)
+        if key in superseded and not include_done:
             continue
+        cross = oc.level == "workspace"
+        pref, par = C.rfc_parent(oc, r.meta)
         text = r.path.read_text(encoding="utf-8")
         n = interview_rows(text)
+        label = f"{rid} {r.meta.get('title', '')}".strip()
         if not r.approved:
             state = (
                 "stale — edited after approval; needs re-approval (status shows what changed)"
@@ -143,38 +165,60 @@ def collect(ctx: C.Ctx, include_done: bool = False) -> list[Work]:
                 if r.status in ("in-review", "stale") or (r.placeholders == 0)
                 else "continue the interview / finish the RFC (interview, write-rfc skills)"
             )
+            blocked = []
+            if par is not None and not C.doc_state(par, oc).approved:
+                nxt = f"get {pref} approved first; this repo RFC is its share"
+                blocked = [pref]
             out.append(
                 Work(
                     "rfc",
                     rid,
-                    f"{rid} {r.meta.get('title', '')}".strip(),
+                    label,
                     state,
                     nxt,
                     "write-rfc" if r.placeholders else "resume",
                     _newest(r.path),
+                    blocked_by=blocked,
                     owner=str(r.meta.get("owner", "")),
                 )
             )
-        elif not cited.get(rid):
+        elif cross and not cited.get(key) and not children.get(key):
             out.append(
                 Work(
                     "rfc",
                     rid,
-                    f"{rid} {r.meta.get('title', '')}".strip(),
+                    label,
+                    "approved — no repo RFC yet",
+                    f"in each repo it touches, write that repo's RFC: new-rfc <slug> --parent {rid} (write-rfc skill)",
+                    "write-rfc",
+                    _newest(r.path),
+                    owner=str(r.meta.get("owner", "")),
+                )
+            )
+        elif not cross and not cited.get(key):
+            out.append(
+                Work(
+                    "rfc",
+                    rid,
+                    label,
                     "approved — no spec yet",
-                    "write the spec in each repo the RFC touches (write-spec skill)",
+                    "write the spec in this repo (write-spec skill)",
                     "write-spec",
                     _newest(r.path),
                     owner=str(r.meta.get("owner", "")),
                 )
             )
         elif include_done:
+            done = ["specs: " + ", ".join(cited[key])] if cited.get(key) else []
+            done += (
+                ["repo RFCs: " + ", ".join(children[key])] if children.get(key) else []
+            )
             out.append(
                 Work(
                     "rfc",
                     rid,
-                    f"{rid} {r.meta.get('title', '')}".strip(),
-                    "approved, specs: " + ", ".join(cited[rid]),
+                    label,
+                    "approved, " + "; ".join(done),
                     "",
                     "",
                     _newest(r.path),

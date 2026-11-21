@@ -16,7 +16,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-STANDARD_VERSION = "0.11.0"  # the version of STANDARD.md this code implements
+STANDARD_VERSION = "0.12.0"  # the version of STANDARD.md this code implements
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 TEMPLATES = PLUGIN_ROOT / "templates"
@@ -78,6 +78,13 @@ class Ctx:
 
     @property
     def rfc_home(self) -> Path:
+        """Where this level's own RFCs and ADRs live: a repo always owns its `DECISIONS/`, even
+        inside a workspace (a cross-repo change adds a parent RFC in the workspace's)."""
+        return self.repo or self.workspace or self.root
+
+    @property
+    def shared_home(self) -> Path:
+        """Where the documents shared across repos live (CONTRACTS/): the workspace, if any."""
         return self.workspace or self.repo or self.root
 
     @property
@@ -407,6 +414,15 @@ def approve_preflight(path: Path, ctx: Ctx) -> str | None:
             bad = BL.approval_problems(path.parent, meta, text)
             if bad:
                 return f"{path.parent.name}: " + "; ".join(bad)
+    if path.name.startswith("RFC-"):
+        ref, parent = rfc_parent(ctx, meta)
+        if ref and parent is None:
+            return f"{path.name}: its parent '{ref}' is not an RFC in the workspace DECISIONS/"
+        if parent is not None and not doc_state(parent, ctx).approved:
+            return (
+                f"{path.name} is this repo's share of workspace {rfc_id(parent)}, which is "
+                f"{doc_state(parent, ctx).status}. Approve the workspace RFC first."
+            )
     root = owner_root(path, ctx)
     rel = path.relative_to(root.resolve()).as_posix()
     rec = load_approvals(root).get(rel)
@@ -558,8 +574,13 @@ def rfcs(ctx: Ctx) -> list[DocState]:
     return [doc_state(p, ctx) for p in sorted(d.glob("RFC-*.md"))]
 
 
-def find_rfc(ctx: Ctx, ref: str) -> Path | None:
-    d = ctx.rfc_home / "DECISIONS"
+WS_REF = "workspace/"
+
+
+def _rfc_in(home: Path | None, ref: str) -> Path | None:
+    if home is None:
+        return None
+    d = home / "DECISIONS"
     m = re.match(r"(?:RFC-)?0*(\d+)", ref or "", re.IGNORECASE)
     if not m or not d.is_dir():
         return None
@@ -567,6 +588,41 @@ def find_rfc(ctx: Ctx, ref: str) -> Path | None:
         if int(re.match(r"RFC-0*(\d+)", p.name).group(1)) == int(m.group(1)):
             return p
     return None
+
+
+def find_rfc(ctx: Ctx, ref: str) -> Path | None:
+    """``RFC-000N`` is this level's own RFC; ``workspace/RFC-000N`` names the workspace's.
+    A bare reference from a repo that the repo does not hold falls back to the workspace: specs
+    written before repos owned their RFCs cite the workspace RFC that way (check warns, GW016)."""
+    ref = str(ref or "").strip()
+    if ref.lower().startswith(WS_REF):
+        return _rfc_in(ctx.workspace, ref[len(WS_REF) :])
+    p = _rfc_in(ctx.rfc_home, ref)
+    if p is None and ctx.level == "repo":
+        p = _rfc_in(ctx.workspace, ref)
+    return p
+
+
+def is_workspace_rfc(ctx: Ctx, path: Path) -> bool:
+    """A repo-level context resolved ``path`` to an RFC of the workspace above it."""
+    return bool(
+        ctx.level == "repo"
+        and ctx.workspace
+        and _within(path, ctx.workspace / "DECISIONS")
+    )
+
+
+def rfc_parent(ctx: Ctx, meta: dict) -> tuple[str, Path | None]:
+    """(reference, workspace RFC) for a repo RFC's ``parent:``; ("", None) when it has none."""
+    ref = str(meta.get("parent") or "").strip()
+    if not ref:
+        return "", None
+    bare = ref[len(WS_REF) :] if ref.lower().startswith(WS_REF) else ref
+    return ref, _rfc_in(ctx.workspace, bare)
+
+
+def rfc_id(path: Path) -> str:
+    return "-".join(path.stem.split("-")[:2])
 
 
 def active_slug(ctx: Ctx) -> str | None:

@@ -58,7 +58,7 @@ class Adrs(CheckBase):
         p2 = self.ws / "DECISIONS" / "ADR-0002-vertex.md"
         self.assertEqual(fm(p2)["rationale_source"], "documented")
         self.assertEqual(fm(p2)["source"], "docs/why-vertex.md")
-        # a retrospective ADR has no RFC; from a repo it lands in the workspace
+        # a retrospective ADR has no RFC; from a repo it lands in the repo's own DECISIONS/
         self.assertNotEqual(
             ca(
                 self.ws, "new-adr", "x", "--retrospective", "--rfc", "RFC-0001"
@@ -66,7 +66,7 @@ class Adrs(CheckBase):
             0,
         )
         ca(self.api, "new-adr", "from-repo", "--retrospective")
-        self.assertTrue((self.ws / "DECISIONS" / "ADR-0003-from-repo.md").is_file())
+        self.assertTrue((self.api / "DECISIONS" / "ADR-0001-from-repo.md").is_file())
 
     def test_rationale_source_must_be_labelled_honestly(self):
         ca(self.ws, "new-adr", "integer-money", "--retrospective")
@@ -140,7 +140,7 @@ class Adrs(CheckBase):
 
     def test_metadata_rules_and_rfc_adr(self):
         out = ca(
-            self.ws,
+            self.api,  # the RFC is the repo's own, so its ADR is too
             "new-adr",
             "widgets-built",
             "--title",
@@ -149,7 +149,7 @@ class Adrs(CheckBase):
             "RFC-0001",
         )
         self.assertEqual(out.returncode, 0, out.stderr)
-        p = self.ws / "DECISIONS" / "ADR-0001-widgets-built.md"
+        p = self.api / "DECISIONS" / "ADR-0001-widgets-built.md"
         meta = fm(p)
         self.assertEqual(meta["status"], "proposed")
         self.assertEqual(meta["rfc"], "RFC-0001")
@@ -349,15 +349,15 @@ class AdrHardening(CheckBase):
         self.assertIn("GW019", check(self.api)[1])
 
     def test_rfc_backed_adr_needs_an_approved_rfc_and_claims_no_date(self):
-        ca(self.ws, "new-rfc", "later", "--title", "Later")
-        out = ca(self.ws, "new-adr", "later-built", "--rfc", "RFC-0002")
+        ca(self.api, "new-rfc", "later", "--title", "Later")
+        out = ca(self.api, "new-adr", "later-built", "--rfc", "RFC-0002")
         self.assertNotEqual(out.returncode, 0)
         self.assertIn("not approved", out.stderr)
-        self.assertFalse(list((self.ws / "DECISIONS").glob("ADR-*")))
-        out = ca(self.ws, "new-adr", "widgets-built", "--rfc", "RFC-0001")
+        self.assertFalse(list((self.api / "DECISIONS").glob("ADR-*")))
+        out = ca(self.api, "new-adr", "widgets-built", "--rfc", "RFC-0001")
         self.assertEqual(out.returncode, 0, out.stderr)
         self.assertEqual(
-            fm(self.ws / "DECISIONS" / "ADR-0001-widgets-built.md")["decided_at"],
+            fm(self.api / "DECISIONS" / "ADR-0001-widgets-built.md")["decided_at"],
             "unknown",
         )
         self.assertNotIn(
@@ -407,7 +407,7 @@ class AdrHardening(CheckBase):
         )
         self.assertIn("GW018", check(self.ws)[1])
         self.edit(
-            idx,
+            self.api / "DECISIONS" / "README.md",  # the fixture's RFC is the repo's own
             lambda t: (
                 "\n".join(
                     ln for ln in t.splitlines() if not ln.startswith("| RFC-0001")

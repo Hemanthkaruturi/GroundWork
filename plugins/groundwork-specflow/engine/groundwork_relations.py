@@ -113,7 +113,7 @@ def downstream(ctx: C.Ctx, target: Node) -> dict[str, list[str]]:
 
 
 def describe(ctx: C.Ctx, ref: str) -> str:
-    rfc = re.match(r"(?i)rfc-?\d+", ref)
+    rfc = re.match(r"(?i)(workspace/)?rfc-?\d+", ref)
     lines = []
     if rfc:
         p = C.find_rfc(ctx, ref)
@@ -128,8 +128,15 @@ def describe(ctx: C.Ctx, ref: str) -> str:
                     if (fdir / "spec.md").is_file()
                     else ({}, "")
                 )
-                if m.get("rfc") == rid:
+                rp = C.find_rfc(rc, m.get("rfc", "")) if m.get("rfc") else None
+                if rp is not None and rp.resolve() == p.resolve():
                     lines.append(f"  - {rc.repo.name}/{fdir.name}")
+            for r in C.rfcs(rc) if rc.level == "repo" else []:
+                par = C.rfc_parent(rc, r.meta)[1]
+                if par is not None and par.resolve() == p.resolve():
+                    lines.append(
+                        f"  - {rc.repo.name}/{r.path.stem}  (this repo's share of it)"
+                    )
         for r in C.rfcs(ctx):
             if rid in C.list_of(r.meta, "supersedes") or rid in C.list_of(
                 r.meta, "related_rfcs"

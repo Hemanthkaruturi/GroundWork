@@ -1,6 +1,6 @@
 # The Groundwork Standard
 
-**Version 0.11.0** · the specification that `groundwork check` enforces and the templates implement.
+**Version 0.12.0** · the specification that `groundwork check` enforces and the templates implement.
 
 Everything a team or an agent needs to know to work "the Groundwork way" is here. If two
 projects follow the same version of this document, a person or an agent moving between them
@@ -42,8 +42,8 @@ then built in each repo against it. A change that needs another repo is never a 
   AGENTS.md                         specs/NNN-slug/spec.md only, for a baseline (§5j)
   CONTRACTS/<provider>-<topic>.md   specs/README.md    (capability table, generated, §5j)
   DECISIONS/RFC-NNNN-slug.md        bugs/NNN-slug.md   (one record per defect)
-  DECISIONS/ADR-NNNN-slug.md        .groundwork/       (approvals.json, freshness.json, capabilities.json, config.json)
-  DECISIONS/README.md  (index)
+  DECISIONS/ADR-NNNN-slug.md        DECISIONS/RFC-NNNN-slug.md, ADR-NNNN-slug.md, README.md  (the repo's own)
+  DECISIONS/README.md  (index)      .groundwork/       (approvals.json, freshness.json, capabilities.json, config.json)
   DECISIONS/handovers/RFC-NNNN.md  (cross-repo handover)
   .groundwork/  (approvals.json, freshness.json, config.json)
 ```
@@ -54,8 +54,14 @@ then built in each repo against it. A change that needs another repo is never a 
 | repo | `ARCHITECTURE.md`, `AGENTS.md` (and the workspace above satisfies its own list) |
 | standalone | `PROJECT.md`, `ARCHITECTURE.md`, `CONSTITUTION.md`, `AGENTS.md`, `DECISIONS/` |
 
-RFCs live in the workspace `DECISIONS/` (in the repo's own `DECISIONS/` when standalone). Specs
-live in the repo that builds them. File names are case-insensitive on lookup; the canonical
+Every repo owns its RFCs and ADRs in its own `DECISIONS/`, inside a workspace or standalone. A
+change that touches one repo has only a repo RFC. A change that spans repos starts with a
+**workspace RFC** in the workspace `DECISIONS/` (the whole need, the interview, the cross-repo
+contract); each repo it touches then gets a **repo RFC** for its share, whose `parent:` names the
+workspace RFC and whose first line links to it. Within a repo, `RFC-000N` means the repo's own RFC;
+`workspace/RFC-000N` names the workspace's. Specs live in the repo that builds them and cite that
+repo's RFC. (A spec written before repos owned their RFCs may still cite the workspace RFC by its
+bare id; it keeps resolving, and `check` warns, GW016.) File names are case-insensitive on lookup; the canonical
 spelling is as shown.
 
 ## 3a. The workspace in git
@@ -100,9 +106,10 @@ evals file repeats sentences of its spec, or an ADR repeats sentences of the RFC
 
 **AGENTS.md** — instructions for agents: what to read first, exact commands, conventions. Free-form, but MUST be finished.
 
-**RFC** (`DECISIONS/RFC-NNNN-slug.md`) — records a decision. Front matter: `id, title, status, classification (internal|api), signoffs_required, author, created`. Numbered `##` sections, in order: *1 Summary · 2 The need · 3 Interview record · 4 Proposal · 5 Alternatives considered · 6 Risks and objections · 7 Impact · 8 Cross-repo contract · 9 Out of scope · 10 Open questions*.
+**RFC** (`DECISIONS/RFC-NNNN-slug.md`) — records a decision. Front matter: `id, title, status, classification (internal|api), signoffs_required, author, created`, and for a repo RFC that is the share of a workspace RFC, `parent: workspace/RFC-000N`. Numbered `##` sections, in order: *1 Summary · 2 The need · 3 Interview record · 4 Proposal · 5 Alternatives considered · 6 Risks and objections · 7 Impact · 8 Cross-repo contract · 9 Out of scope · 10 Open questions*.
 §4 states the chosen option as behaviour a user would notice; it MUST NOT hold numbered requirements, the exact wording of UI text (spec) or the mechanism — attributes, components, libraries (plan). §7 holds the feature's **constitution check**: the only one on the path. §9 is the boundary of the decision that the spec cites.
 An `api` RFC (one that crosses a repository boundary) MUST fill §8 and MUST require at least two sign-offs — one for every lead it touches.
+A **repo RFC with a parent** keeps the ten sections but owns only what changes in its repo: §2, §3 and §8 point at the workspace RFC ("As workspace/RFC-0007 §2.") and add only the repo's part; §7 holds the check against the repo's own constitution. It is signed off by the repo's owner, and MUST NOT be approved before its workspace RFC (GW016).
 
 **Spec** (`specs/NNN-slug/spec.md`) — *what and why*, never *how*. Front matter: `id` (= directory name), `rfc`, `title`, `status`, `created`, `author`, the ownership roles (§5e), the relations `extends`, `depends_on`, `builds_against`, `amends` (§5c), and optionally `origin` (§5j: absent for a planned feature, `baseline` for existing behaviour, `imported` for a legacy document, which also carries `adoption_state`). An amended spec gains a `## Changes` section after the required ones. Numbered sections: *1 Problem · 2 Users and context · 3 User stories · 4 Functional requirements · 5 Non-functional requirements · 6 Acceptance criteria · 7 Failure behaviour · 8 Manual test · 9 Out of scope*.
 §1 is one or two lines naming this repo's share of RFC §2, not a restatement of it. §9 lists only what the repo leaves out beyond RFC §9, else "As RFC-000N §9." The spec has no constitution check: a requirement that touches a rule the RFC's §7 did not consider is a discovery (§5a′) that goes back to the RFC.
@@ -129,8 +136,8 @@ interview → RFC → [approve] → spec → [approve] → plan → tasks → ev
 ```
 
 1. **Interview.** Before any RFC, the agent questions the human until the picture is unambiguous, and records the exchange in RFC §3.
-2. **RFC.** Decides. Classified `internal` or `api`. Filed in `DECISIONS/` and indexed in `DECISIONS/README.md`.
-3. **Spec.** Descends from exactly one approved RFC (`rfc:` front matter). One spec per repo touched. (A *baseline* spec, §5j, descends from no RFC: it records what already exists.)
+2. **RFC.** Decides. Classified `internal` or `api`. Filed in `DECISIONS/` and indexed in `DECISIONS/README.md`. A cross-repo change: the workspace RFC first (the interview is recorded there, once), then after its approval one repo RFC per repo touched (`groundwork.py new-rfc <slug> --parent RFC-000N`, run in the repo).
+3. **Spec.** Descends from exactly one approved RFC of its own repo (`rfc:` front matter). One spec per repo touched. (A *baseline* spec, §5j, descends from no RFC: it records what already exists.)
 4. **Plan, tasks, evals.** Complete before code. Evals are written *before* implementation.
 5. **Implement.** One task at a time; checks green after each; docs updated in the same change.
 6. **Handover.** So the next engineer or agent continues without reverse-engineering decisions.
@@ -146,7 +153,7 @@ Later the current snapshot is compared with the baseline; each difference is a r
 
 | Document | Derived from (snapshot) |
 | --- | --- |
-| repo `ARCHITECTURE.md` | manifests, Dockerfiles/compose, CI, infra (`*.tf`, `k8s/`, `helm/`), migrations, API schemas; top-level folders; the code layout decision (standalone: approved RFCs) |
+| repo `ARCHITECTURE.md` | manifests, Dockerfiles/compose, CI, infra (`*.tf`, `k8s/`, `helm/`), migrations, API schemas; top-level folders; the code layout decision; the repo's approved RFCs (standalone always; a repo in a workspace once it has any) |
 | repo `AGENTS.md` | manifests, `Makefile`/task runners, CI — the things that define commands |
 | workspace `ARCHITECTURE.md` | the set of repos, each repo's `ARCHITECTURE.md`, `CONTRACTS/*`, approved RFCs |
 | workspace `PROJECT.md`, `AGENTS.md` | the set of repos |
@@ -383,6 +390,7 @@ sections; they never invalidate a conforming project.
 | GW012 | E | An `api` RFC lacks a §8 contract or requires fewer than 2 sign-offs |
 | GW013 | E | An RFC claims `approved` but its approval is invalid (stale or forged) |
 | GW014 | W | An RFC has no table row in `DECISIONS/README.md` |
+| GW016 | E/W | A repo RFC's `parent` is not a workspace RFC, is set outside a workspace repo, or the repo RFC is approved before its parent (E); a spec cites a workspace RFC directly instead of its repo's RFC (W) |
 | GW017 | E | An ADR's front matter is missing or blank a field, its id mismatches the file name, its status, origin or rationale_source is not a recognised value or they contradict each other (a retrospective ADR with an `rfc`), or its rfc/supersedes does not exist |
 | GW018 | W | An ADR has no table row in `DECISIONS/README.md` (a mention in prose does not count), or is unfinished |
 | GW019 | E | A finished ADR lacks a required section, or §3 does not begin with a complete `**Source:**` label (a retrospective explanation names the person and a date), or the label contradicts `rationale_source` |

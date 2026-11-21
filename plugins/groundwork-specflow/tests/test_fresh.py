@@ -90,9 +90,9 @@ class Freshness(CheckBase):
     def test_new_approved_rfc_makes_workspace_architecture_stale(self):
         rfc2 = Path(ca(self.ws, "new-rfc", "queue").stdout.strip())
         fill(rfc2)
-        ca(self.ws, "approve", "RFC-0002", "--as", "lead")
+        ca(self.ws, "approve", "RFC-0001", "--as", "lead")  # the workspace's first
         f = fresh(self.ws)["ARCHITECTURE.md"]
-        self.assertTrue(any("rfcs added: RFC-0002" in r for r in f["reasons"]), f)
+        self.assertTrue(any("rfcs added: RFC-0001" in r for r in f["reasons"]), f)
 
     def test_age_makes_any_document_stale(self):
         p = self.ws / ".groundwork" / "freshness.json"

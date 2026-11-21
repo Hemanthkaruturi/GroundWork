@@ -128,11 +128,8 @@ def diagnose_ctx(ctx: C.Ctx, ws_children: bool = True) -> Diagnosis:
     K.check_version(ctx, rep)
     K.check_foundation(ctx, rep)
     K.check_freshness(ctx, rep)
-    if ctx.level == "workspace":
-        K.check_rfcs(ctx, rep)
-    else:
-        if ctx.level == "standalone":
-            K.check_rfcs(ctx, rep)
+    K.check_rfcs(ctx, rep)
+    if ctx.level != "workspace":
         K.check_features(ctx, rep)
     errs = [f for f in rep.items if f.severity == "error" and f.id not in ("GW001",)]
     for f in errs:

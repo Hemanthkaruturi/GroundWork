@@ -35,11 +35,13 @@ class CheckBase(Base):
         for d in (self.ws, self.api):
             for f in d.glob("*.md"):
                 fill(f)
-        created = ca(self.ws, "new-rfc", "widgets")
+        created = ca(
+            self.api, "new-rfc", "widgets"
+        )  # one repo touched: a repo RFC only
         self.assertEqual(created.returncode, 0, created.stdout + created.stderr)
         self.rfc = Path(created.stdout.strip())
         fill(self.rfc)
-        (self.ws / "DECISIONS" / "README.md").write_text(
+        (self.api / "DECISIONS" / "README.md").write_text(
             "| RFC-0001 | Widgets | approved | |\n", encoding="utf-8"
         )
         ca(self.api, "new-feature", "widgets", "--rfc", "RFC-0001")
@@ -54,12 +56,12 @@ class CheckBase(Base):
             encoding="utf-8",
         )
         for ref in ("RFC-0001", "001-widgets"):
-            cwd = self.ws if ref.startswith("RFC") else self.api
+            cwd = self.api
             ca(cwd, "record", "requested", "--ref", ref, "--who", "Lead Person")
             ca(cwd, "record", "owner", "--ref", ref, "--who", "Lead Person")
         for f in self.fdir.glob("*.md"):
             fill(f)
-        ca(self.ws, "approve", "RFC-0001", "--as", "lead")
+        ca(self.api, "approve", "RFC-0001", "--as", "lead")
         ca(self.api, "approve", str(self.fdir / "spec.md"), "--as", "lead")
         assert (
             ca(self.api, "plan-sync").returncode == 0
@@ -138,7 +140,7 @@ class Rules(CheckBase):
         self.assertFires("GW013")
 
     def test_gw014_rfc_not_indexed(self):
-        (self.ws / "DECISIONS" / "README.md").write_text("empty\n", encoding="utf-8")
+        (self.api / "DECISIONS" / "README.md").write_text("empty\n", encoding="utf-8")
         self.assertFires("GW014")
 
     def test_gw020_feature_shape(self):
@@ -254,9 +256,9 @@ class Rules(CheckBase):
         )
         why = "We chose a styled tooltip because the native one is slow, unstyled and absent on touch."
         self.edit(self.rfc, lambda t: t.replace("## 6.", why + "\n\n## 6.", 1))
-        ca(self.ws, "approve", "RFC-0001", "--as", "lead")
+        ca(self.api, "approve", "RFC-0001", "--as", "lead")
         made = ca(
-            self.ws, "new-adr", "tooltip", "--title", "Tooltip", "--rfc", "RFC-0001"
+            self.api, "new-adr", "tooltip", "--title", "Tooltip", "--rfc", "RFC-0001"
         )
         self.assertEqual(made.returncode, 0, made.stdout + made.stderr)
         adr = Path(made.stdout.strip().splitlines()[0])

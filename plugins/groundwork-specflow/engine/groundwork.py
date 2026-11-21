@@ -1352,21 +1352,41 @@ def cmd_new_rfc(a) -> None:
     ctx = C.detect(Path.cwd())
     if ctx.level == "unknown":
         raise SystemExit("Not in a repo or workspace.")
+    parent = None
+    if a.parent:
+        if ctx.level != "repo":
+            raise SystemExit(
+                "--parent links a repo RFC to the workspace RFC above it; run it inside a repo of the workspace."
+            )
+        ref = a.parent.strip()
+        parent = C.find_rfc(
+            ctx, ref if ref.lower().startswith(C.WS_REF) else C.WS_REF + ref
+        )
+        if parent is None:
+            raise SystemExit(
+                f"workspace RFC '{a.parent}' not found in {ctx.workspace / 'DECISIONS'}"
+            )
     d = ctx.rfc_home / "DECISIONS"
     d.mkdir(exist_ok=True)
+    if not (d / "README.md").is_file():
+        _write(d / "README.md", C.render("DECISIONS-index.md", name=ctx.rfc_home.name))
     n = C.next_number([p.name for p in d.glob("RFC-*.md")], r"RFC-0*(\d+)")
     slug = C.slugify(a.slug)
     p = d / f"RFC-{n:04d}-{slug}.md"
-    _write(
-        p,
-        C.render(
-            "RFC.md",
-            id=f"RFC-{n:04d}",
-            title=a.title or slug.replace("-", " ").title(),
-            date=time.strftime("%F"),
-            author=C.signer(),
-        ),
-    )
+    v = {
+        "id": f"RFC-{n:04d}",
+        "title": a.title or slug.replace("-", " ").title(),
+        "date": time.strftime("%F"),
+        "author": C.signer(),
+    }
+    if parent is not None:
+        v["parent"] = C.WS_REF + C.rfc_id(parent)
+        v["parent_title"] = str(
+            C.split_fm(parent.read_text(encoding="utf-8"))[0].get("title")
+            or parent.stem
+        )
+        v["parent_link"] = Path(os.path.relpath(parent, d)).as_posix()
+    _write(p, C.render("RFC-repo.md" if parent else "RFC.md", **v))
     P.auto_created(ctx, "rfc", p, a.requested_by)
     print(p)
 
@@ -1378,6 +1398,13 @@ def cmd_new_feature(a) -> None:
     rfc = C.find_rfc(ctx, a.rfc)
     if not rfc:
         raise SystemExit(f"RFC '{a.rfc}' not found in {ctx.rfc_home / 'DECISIONS'}")
+    if C.is_workspace_rfc(ctx, rfc):
+        # kept working for projects that predate repo RFCs; check warns too (GW016)
+        print(
+            f"warning: {C.rfc_id(rfc)} is a workspace RFC. A spec normally descends from this repo's own RFC: "
+            f"`groundwork.py new-rfc <slug> --parent {C.rfc_id(rfc)}` (write-rfc skill), approved, then cited here.",
+            file=sys.stderr,
+        )
     if M.ensure(ctx.repo):
         print(f"code map → {M.FILE} (describe each folder in its Holds column)")
     specs = ctx.repo / "specs"
@@ -2007,6 +2034,10 @@ def main() -> None:
     p.add_argument("slug")
     p.add_argument("--title")
     p.add_argument("--requested-by")
+    p.add_argument(
+        "--parent",
+        help="RFC-000N of the workspace: this repo RFC is that cross-repo RFC's share for this repo",
+    )
     p.set_defaults(fn=cmd_new_rfc)
     p = sub.add_parser("new-feature")
     p.add_argument("slug")

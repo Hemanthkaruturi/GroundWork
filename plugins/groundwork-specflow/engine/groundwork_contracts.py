@@ -39,7 +39,7 @@ SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
 
 
 def home(ctx: C.Ctx) -> Path:
-    return ctx.rfc_home / "CONTRACTS"
+    return ctx.shared_home / "CONTRACTS"
 
 
 def paths(ctx: C.Ctx) -> list[Path]:
@@ -75,7 +75,7 @@ def new_contract(
     import groundwork_baseline as BL
 
     for target in (d, p):  # every component, including a linked CONTRACTS/ itself
-        problem = BL.path_problem_under(ctx.rfc_home, target)
+        problem = BL.path_problem_under(ctx.shared_home, target)
         if problem:
             raise SystemExit(problem)
     if p.exists() or p.is_symlink():

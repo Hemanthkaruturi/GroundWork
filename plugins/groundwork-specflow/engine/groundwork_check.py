@@ -307,6 +307,26 @@ def check_rfcs(ctx: C.Ctx, r: Report) -> None:
             for ref in C.list_of(meta, key):
                 if C.find_rfc(ctx, ref) is None:
                     r.err("GW015", p, f"{key}: {ref} does not exist")
+        pref, parent = C.rfc_parent(ctx, meta)
+        if pref and ctx.level != "repo":
+            r.err(
+                "GW016",
+                p,
+                f"parent: {pref} — only a repo inside a workspace has a parent RFC",
+            )
+        elif pref and parent is None:
+            r.err(
+                "GW016", p, f"parent: {pref} is not an RFC in the workspace DECISIONS/"
+            )
+        elif (
+            parent is not None and st.approved and not C.doc_state(parent, ctx).approved
+        ):
+            r.err(
+                "GW016",
+                p,
+                f"approved, but its workspace RFC {C.rfc_id(parent)} is not",
+                "the workspace RFC is approved first, then each repo's share",
+            )
         if not AD.indexed(index, meta["id"]):
             r.warn("GW014", p, "not listed in DECISIONS/README.md (needs a table row)")
         if st.placeholders:
@@ -612,6 +632,14 @@ def _feature(ctx: C.Ctx, r: Report, fdir: Path, spec: C.DocState) -> None:
         )
     elif spec.approved and not C.doc_state(rfc_path, ctx).approved:
         r.err("GW021", fdir / "spec.md", f"spec is approved but {rfc_path.name} is not")
+    if rfc_path is not None and C.is_workspace_rfc(ctx, rfc_path):
+        r.warn(
+            "GW016",
+            fdir / "spec.md",
+            f"cites workspace {C.rfc_id(rfc_path)} directly; a repo now owns its RFCs",
+            f"for new work, write this repo's RFC with `new-rfc <slug> --parent {C.rfc_id(rfc_path)}`; "
+            "this spec keeps working as it is",
+        )
     if spec.meta.get("id") != fdir.name:
         r.err(
             "GW021",
@@ -1010,7 +1038,13 @@ def _repeats(
 
 def check_overlap(ctx: C.Ctx, r: Report) -> None:
     """GW092: a downstream document cites its upstream; it does not repeat it (§4, one owner per fact)."""
-    if ctx.level in ("workspace", "standalone"):
+    if ctx.level == "repo":
+        for st in C.rfcs(ctx):
+            ref, parent = C.rfc_parent(ctx, st.meta)
+            text = _finished_text(st.path, ctx) if parent else None
+            if text is not None:
+                _repeats(r, st.path, text, ref, parent.read_text(encoding="utf-8"))
+    if ctx.level in ("workspace", "standalone", "repo"):
         for p in AD.paths(ctx):
             text = _finished_text(p, ctx)
             if text is None:
@@ -1211,9 +1245,9 @@ def check_ctx(ctx: C.Ctx, r: Report, seen: set[Path]) -> None:
         for kid in C.child_repos(ctx.workspace):
             check_ctx(C.detect(kid, ctx.workspace), r, seen)
     else:
+        check_rfcs(ctx, r)
+        check_adrs(ctx, r)
         if ctx.level == "standalone":
-            check_rfcs(ctx, r)
-            check_adrs(ctx, r)
             check_contracts(ctx, r)
         elif ctx.workspace and ctx.workspace.resolve() not in seen:
             # a repo reads upward: the workspace's contracts and decisions bind it, so their findings show here too

@@ -200,7 +200,12 @@ def snapshot(ctx: C.Ctx, doc: str) -> dict:
         return {
             "signals": signals(repo, MANIFESTS | INFRA_NAMES, INFRA_GLOBS),
             "toplevel": toplevel(repo),
-            **({"rfcs": approved_rfcs(ctx)} if ctx.level == "standalone" else {}),
+            # a repo in a workspace adds its RFCs once it owns some (an older repo's snapshot stays as it was)
+            **(
+                {"rfcs": approved_rfcs(ctx)}
+                if ctx.level == "standalone" or approved_rfcs(ctx)
+                else {}
+            ),
             **(
                 {
                     "layout": {

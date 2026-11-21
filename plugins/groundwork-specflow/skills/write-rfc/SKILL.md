@@ -18,11 +18,15 @@ An RFC records **a decision** — the need, the proposal, the alternatives and t
 that the people it touches can sign it. It is the input to the spec.
 
 1. Confirm the interview is complete (the user said "yes, that's it"). If not, go back to **interview**.
-2. Create it (or open the draft the interview already created — never start a second one): `python3 "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py" new-rfc <short-slug> --title "<title>"`
-   (creates `DECISIONS/RFC-000N-slug.md` at the workspace, or the repo if standalone).
+1b. **Where it goes.** Every repo owns its RFCs in its own `DECISIONS/`.
+   - The change touches **one repo** → a repo RFC only: run `new-rfc` inside that repo, even in a workspace.
+   - It spans **two or more repos** → first the **workspace RFC** (run `new-rfc` at the workspace root): the whole need, the interview, the cross-repo contract. After the user approves it, write **one repo RFC per repo touched**, run inside each repo with `--parent RFC-000N` (the workspace RFC's id). Each repo RFC says only what changes in that repo; its first line links up to the workspace RFC so a reader knows a higher-level decision exists.
+2. Create it (or open the draft the interview already created — never start a second one): `python3 "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py" new-rfc <short-slug> --title "<title>" [--parent RFC-000N]`
+   (creates `DECISIONS/RFC-000N-slug.md` where you run it; with `--parent`, the repo RFC template with `parent: workspace/RFC-000N`).
+2b. **A repo RFC with a parent** does not repeat its parent (one owner per fact): §2, §3, §5, §8 and §9 begin "As workspace/RFC-000N §N." and add only this repo's part; §3 gets rows only for repo questions the workspace interview did not settle (ask them with the picker). §4 is this repo's change; §7 is the check against this repo's CONSTITUTION.md. `classification: internal`, `signoffs_required: 1` (the repo owner). It cannot be approved before its workspace RFC.
 3. Fill every section from the interview. §3 is the Q&A log with an effect label on every row, plus the read-back. Copy every **Open decision** to §10 and every **Out of scope** item to §9. Be concrete about behaviour; leave code out.
 3b. **§4 is the decision, not the spec or the plan.** State the chosen option as behaviour a user would notice. No numbered requirements, no exact UI wording, no mechanism (attributes, components, libraries): the spec and the plan own those, and they will cite this RFC rather than copy it. The RFC owns the need (§2), the alternatives (§5), the risks (§6), the constitution check (§7) and the boundary (§9); say each once, here.
-4. **Classification.** If the change crosses a repo boundary, set `classification: api`, fill §8
+4. **Classification.** If the change crosses a repo boundary (a workspace RFC), set `classification: api`, fill §8
    (use **write-contract**) and set `signoffs_required` to the number of leads it touches. Otherwise `internal`.
 4b. If it replaces an earlier decision set `supersedes: [RFC-000N]`; if it merely relates, `related_rfcs: [...]`. State in §7 which existing features it extends, amends or depends on.
 5. Check it against CONSTITUTION.md and fill the constitution check in §7. If it conflicts, say so in the RFC.

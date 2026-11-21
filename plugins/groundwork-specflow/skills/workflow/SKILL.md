@@ -32,11 +32,14 @@ Run `python3 "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py" status`. It tells you 
 
 A repo reads *upward* to its workspace. Anything two repos must agree on is settled in the
 workspace (RFC → CONTRACTS/) before either repo builds it. Never make a quiet cross-repo edit.
+Every repo owns its RFCs. A change in one repo has only a repo RFC. A cross-repo change has a
+workspace RFC (the whole picture) and, once that is approved, one repo RFC per repo touched
+(`parent:` points up to it); spec, plan, tasks, evals and handover then run in each repo.
 
 ## The pipeline (never skip forward)
 1. **bootstrap** — PROJECT.md, ARCHITECTURE.md, CONSTITUTION.md, AGENTS.md exist and are real.
 2. **interview** — question the user until the picture is unambiguous.
-3. **write-rfc** — the interview becomes an RFC. **Human approves** (`/groundwork-specflow:approve`).
+3. **write-rfc** — the interview becomes an RFC (cross-repo: workspace RFC, then a repo RFC in each repo). **Human approves** (`/groundwork-specflow:approve`), the workspace RFC before its repo RFCs.
 4. **write-spec** — what and why, numbered FR/NFR/AC. **Human approves.**
 5. **write-plan** → 6. **write-tasks** → 7. **write-evals** (before code).
 8. **implement** — one task at a time, checks green after each, update docs in the same change.

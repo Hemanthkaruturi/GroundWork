@@ -30,24 +30,37 @@ class Resume(CheckBase):
     """The fixture leaves: RFC-0001 approved, 001-widgets fully built-ready (nothing implemented)."""
 
     def test_board_shows_every_stage_across_the_workspace(self):
-        ca(self.ws, "new-rfc", "drafty")  # RFC-0002: just started
-        rfc3 = Path(ca(self.ws, "new-rfc", "approved-nospec").stdout.strip())
+        ca(self.ws, "new-rfc", "drafty")  # workspace RFC-0001: just started
+        rfc2 = Path(ca(self.ws, "new-rfc", "approved-norepo").stdout.strip())
+        fill(rfc2)
+        ca(
+            self.ws, "approve", "RFC-0002", "--as", "lead"
+        )  # approved, no repo RFC anywhere
+        rfc3 = Path(ca(self.api, "new-rfc", "approved-nospec").stdout.strip())
         fill(rfc3)
-        ca(self.ws, "approve", "RFC-0003", "--as", "lead")  # approved, no spec anywhere
+        ca(
+            self.api, "approve", "RFC-0002", "--as", "lead"
+        )  # api's own RFC-0002: approved, no spec
         ca(
             self.api, "new-feature", "half", "--rfc", "RFC-0001"
         )  # spec scaffolded, nothing written
         items = board(self.ws)
-        self.assertIn("drafting", by_ref(items, "RFC-0002")["state"])
-        self.assertEqual(by_ref(items, "RFC-0003")["state"], "approved — no spec yet")
-        self.assertEqual(by_ref(items, "RFC-0003")["skill"], "write-spec")
+        self.assertIn("drafting", by_ref(items, "RFC-0001")["state"])
+        self.assertEqual(
+            by_ref(items, "RFC-0002")["state"], "approved — no repo RFC yet"
+        )
+        self.assertEqual(by_ref(items, "RFC-0002")["skill"], "write-rfc")
+        self.assertEqual(
+            by_ref(items, "api/RFC-0002")["state"], "approved — no spec yet"
+        )
+        self.assertEqual(by_ref(items, "api/RFC-0002")["skill"], "write-spec")
         half = by_ref(items, "api/002-half")
         self.assertIn("spec.md is draft", half["state"])
         self.assertEqual(half["skill"], "write-spec")
         widgets = by_ref(items, "api/001-widgets")
         self.assertIn("building", widgets["state"])
         self.assertNotIn(
-            "RFC-0001", [i["ref"] for i in items]
+            "api/RFC-0001", [i["ref"] for i in items]
         )  # approved and has a spec: not itself in flight
 
     def test_session_context_lists_in_flight_and_next_step_says_resume(self):
@@ -69,7 +82,7 @@ class Resume(CheckBase):
             ),
             encoding="utf-8",
         )
-        w = by_ref(board(self.ws), "RFC-0002")
+        w = by_ref(board(self.ws), "RFC-0001")  # the workspace's first RFC
         self.assertIn("2 interview answer(s)", w["state"])
 
     def test_note_is_shown_on_resume(self):
@@ -97,22 +110,22 @@ class Resume(CheckBase):
         old = Path(ca(self.ws, "new-rfc", "old-way").stdout.strip())
         fill(old)
         ca(
-            self.ws, "approve", "RFC-0002", "--as", "lead"
-        )  # approved, no spec: shows as in flight
-        self.assertIn("RFC-0002", [i["ref"] for i in board(self.ws)])
+            self.ws, "approve", "RFC-0001", "--as", "lead"
+        )  # approved, no repo RFC: shows as in flight
+        self.assertIn("RFC-0001", [i["ref"] for i in board(self.ws)])
         new = Path(ca(self.ws, "new-rfc", "new-way").stdout.strip())
         fill(new)
         new.write_text(
             new.read_text(encoding="utf-8").replace(
-                "supersedes: []", "supersedes: [RFC-0002]"
+                "supersedes: []", "supersedes: [RFC-0001]"
             ),
             encoding="utf-8",
         )
-        ca(self.ws, "approve", "RFC-0003", "--as", "lead")
+        ca(self.ws, "approve", "RFC-0002", "--as", "lead")
         refs = [i["ref"] for i in board(self.ws)]
-        self.assertNotIn("RFC-0002", refs)  # superseded: no longer waiting for a spec
-        self.assertIn("RFC-0003", refs)
-        self.assertIn("RFC-0002", [i["ref"] for i in board(self.ws, "--all")])
+        self.assertNotIn("RFC-0001", refs)  # superseded: no longer waiting
+        self.assertIn("RFC-0002", refs)
+        self.assertIn("RFC-0001", [i["ref"] for i in board(self.ws, "--all")])
 
 
 class Relations(CheckBase):
@@ -160,6 +173,8 @@ class Relations(CheckBase):
         for f in web.glob("*.md"):
             fill(f)
         ca(web, "confirm")
+        fill(Path(ca(web, "new-rfc", "ui").stdout.strip()))  # web's own RFC
+        ca(web, "approve", "RFC-0001", "--as", "lead")
         ca(
             web,
             "new-feature",
@@ -344,11 +359,11 @@ class Bugs(CheckBase):
     def test_design_flaw_requires_an_approved_rfc(self):
         (self.api / ".groundwork" / "active").unlink()
         p = self.new_bug("flaw")
-        rfc2 = Path(ca(self.ws, "new-rfc", "rethink").stdout.strip())
+        rfc2 = Path(ca(self.api, "new-rfc", "rethink").stdout.strip())  # the repo's own
         self.diagnose(p, "design-flaw", rfc="RFC-0002", regression_test="tests/t.py")
         self.assertTrue(denied(self.api, self.code())[0])
         fill(rfc2)
-        ca(self.ws, "approve", "RFC-0002", "--as", "lead")
+        ca(self.api, "approve", "RFC-0002", "--as", "lead")
         self.assertFalse(denied(self.api, self.code())[0])
 
     def test_unclassified_or_missing_regression_test_blocks(self):

@@ -282,6 +282,116 @@ class Detection(Base):
         self.assertEqual(self.level(self.root / "projects" / "a"), "STANDALONE")
 
 
+class RepoOwnsRfcs(Base):
+    """Every repo owns its RFCs; a cross-repo change adds a parent RFC in the workspace (issue #9)."""
+
+    def setUp(self):
+        super().setUp()
+        self.ws = self.root / "ws"
+        self.web = self.ws / "frontend"
+        self.api = self.ws / "backend"
+        git_init(self.web)
+        git_init(self.api)
+        (self.ws / "PROJECT.md").write_text("# ws", encoding="utf-8")
+
+    def test_repo_inside_workspace_keeps_its_own_rfcs(self):
+        # issue #9: a repo that already had RFCs before a workspace appeared above it
+        d = self.api / "DECISIONS"
+        d.mkdir()
+        (d / "RFC-0001-x.md").write_text(
+            "---\ntitle: x\n---\n# RFC-0001\n", encoding="utf-8"
+        )
+        (self.api / "specs" / "001-x").mkdir(parents=True)
+        (self.api / "specs" / "001-x" / "spec.md").write_text(
+            "---\nrfc: RFC-0001\n---\n# spec\n", encoding="utf-8"
+        )
+        # a workspace RFC with the same number must not capture the repo's spec
+        ca(self.ws, "new-rfc", "other")
+        out = ca(self.api, "status").stdout
+        self.assertNotIn("does not exist", out)
+        self.assertIn("RFC-0001-x.md is", out)
+        self.assertEqual(Path(ca(self.api, "new-rfc", "y").stdout.strip()).parent, d)
+
+    def test_cross_repo_change_has_workspace_rfc_then_repo_rfcs(self):
+        top = Path(
+            ca(
+                self.ws, "new-rfc", "feedback-button", "--title", "Feedback button"
+            ).stdout.strip()
+        )
+        self.assertEqual(top.parent, self.ws / "DECISIONS")
+        r = ca(self.web, "new-rfc", "feedback-icon", "--parent", "RFC-0001")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        share = Path(r.stdout.strip())
+        self.assertEqual(share.parent, self.web / "DECISIONS")
+        self.assertTrue((self.web / "DECISIONS" / "README.md").is_file())
+        text = share.read_text(encoding="utf-8")
+        self.assertIn("parent: workspace/RFC-0001", text)
+        self.assertIn("**Workspace RFC:** [workspace/RFC-0001 — Feedback button]", text)
+        self.assertIn("../../DECISIONS/RFC-0001-feedback-button.md", text)
+        # the parent must exist, and only a workspace repo has one
+        self.assertNotEqual(
+            ca(self.web, "new-rfc", "z", "--parent", "RFC-0009").returncode, 0
+        )
+        self.assertNotEqual(
+            ca(self.ws, "new-rfc", "z", "--parent", "RFC-0001").returncode, 0
+        )
+        # a repo RFC is approved only after its workspace RFC
+        fill(share)
+        r = ca(self.web, "approve", "RFC-0001", "--as", "lead")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("Approve the workspace RFC first", r.stderr + r.stdout)
+        b = ca(self.ws, "board").stdout
+        self.assertIn("frontend/RFC-0001", b)
+        self.assertIn("blocked by: workspace/RFC-0001", b)
+        fill(top)
+        self.assertEqual(
+            ca(self.ws, "approve", "RFC-0001", "--as", "lead").returncode, 0
+        )
+        self.assertEqual(
+            ca(self.web, "approve", "RFC-0001", "--as", "lead").returncode, 0
+        )
+        # the spec cites the repo's RFC; a workspace RFC is refused
+        r = ca(self.api, "new-feature", "store", "--rfc", "RFC-0001")
+        self.assertIn("warning: RFC-0001 is a workspace RFC", r.stderr)
+        self.assertIn("--parent RFC-0001", r.stderr)
+        r = ca(self.web, "new-feature", "icon", "--rfc", "RFC-0001")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        spec = self.web / "specs" / "001-icon" / "spec.md"
+        self.assertIn("rfc: RFC-0001", spec.read_text(encoding="utf-8"))
+        st = ca(self.web, "status").stdout
+        self.assertIn("RFC-0001-feedback-icon.md is approved", st)
+        # the workspace board lists the repo shares under the workspace RFC
+        b = ca(self.ws, "board", "--all").stdout
+        self.assertIn("repo RFCs: frontend/RFC-0001", b)
+        self.assertIn(
+            "frontend/RFC-0001-feedback-icon", ca(self.ws, "deps", "RFC-0001").stdout
+        )
+
+    def test_approved_workspace_rfc_without_repo_rfcs_is_on_the_board(self):
+        top = Path(ca(self.ws, "new-rfc", "x").stdout.strip())
+        fill(top)
+        self.assertEqual(
+            ca(self.ws, "approve", "RFC-0001", "--as", "lead").returncode, 0
+        )
+        b = ca(self.ws, "board").stdout
+        self.assertIn("approved — no repo RFC yet", b)
+        self.assertIn("--parent RFC-0001", b)
+
+    def test_old_spec_citing_workspace_rfc_still_resolves_with_a_warning(self):
+        top = Path(ca(self.ws, "new-rfc", "legacy").stdout.strip())
+        (self.api / "specs" / "001-old").mkdir(parents=True)
+        for n in ("spec", "plan", "tasks", "evals"):
+            (self.api / "specs" / "001-old" / f"{n}.md").write_text(
+                "---\nid: 001-old\nrfc: RFC-0001\n---\n", encoding="utf-8"
+            )
+        out = ca(self.api, "status").stdout
+        self.assertIn(f"{top.name} is", out)
+        self.assertNotIn("does not exist", out)
+        chk = ca(self.api, "check").stdout
+        self.assertIn("GW016", chk)
+        self.assertIn("cites workspace RFC-0001 directly", chk)
+
+
 class Unreadable(Base):
     @unittest.skipIf(
         os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0),

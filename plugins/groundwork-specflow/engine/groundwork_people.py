@@ -133,8 +133,11 @@ def whoami(ctx: C.Ctx) -> str:
 def locate(ctx: C.Ctx, ref: str) -> tuple[str, C.Ctx, Path] | None:
     """(kind, owning ctx, document) for a feature / RFC / bug reference."""
     ref = ref.strip()
-    if re.match(r"(?i)rfc-?\d+", ref):
+    if re.match(r"(?i)(workspace/)?rfc-?\d+", ref):
         p = C.find_rfc(ctx, ref)
+        if p and C.is_workspace_rfc(ctx, p):
+            # the workspace owns that RFC, and its ledger
+            return "rfc", C.detect(ctx.workspace), p
         return ("rfc", ctx, p) if p else None
     repo_part, _, rest = ref.partition("/")
     if rest.startswith("bugs/") or ref.startswith("bugs/"):
@@ -472,6 +475,10 @@ def person_items(ctx: C.Ctx, who: str) -> str:
 def _all_items(ctx: C.Ctx):
     for r in C.rfcs(ctx):
         yield "rfc", r.path.stem, r.meta
+    if ctx.level == "workspace":  # each repo owns its RFCs too
+        for rc in R.contexts(ctx):
+            for r in C.rfcs(rc):
+                yield "rfc", f"{rc.repo.name}/{r.path.stem}", r.meta
     for rc in R.contexts(ctx):
         for fdir in C.feature_dirs(rc):
             if (fdir / "spec.md").is_file():

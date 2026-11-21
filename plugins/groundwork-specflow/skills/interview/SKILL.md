@@ -65,7 +65,7 @@ Record the answer in RFC §7 (Impact) and it becomes the spec's front matter (`e
 - **Scope:** what is explicitly *out*; smallest useful version vs. later.
 - **Behaviour:** the happy path step by step; inputs, outputs, formats; empty/huge/duplicate/concurrent cases.
 - **Failure:** what the user sees when it breaks; what must never happen; data loss, cost, abuse.
-- **Boundaries:** which repos/services it touches; who consumes it; contract changes; who must sign off.
+- **Boundaries:** which repos/services it touches; who consumes it; contract changes; who must sign off. Ask this in the first round: it decides where the RFC goes. One repo → run `new-rfc` inside that repo. Two or more → run it at the workspace root; the interview is recorded there once, and each repo later gets a short repo RFC pointing up to it (write-rfc).
 - **Constraints:** performance, security, privacy, compliance, budget, deadlines, tech the team has ruled in/out.
 - **Look and feel / UX (any UI change, including "make it look modern")** — this is a change request, not a free-hand design task. Ask (with the picker): which screens/flows are in scope; the feel wanted (offer 3–4 concrete directions with a one-line description each, and "show me references"); brand constraints (colours, fonts, logo); light/dark; density; accessibility target (e.g. WCAG AA contrast, keyboard use); responsive targets (phone/tablet/desktop); what must NOT change; how the user will judge "better" (before/after screenshots, a checklist). Their answers become testable requirements in the spec.
 - **Source of truth:** which system, document or dataset is authoritative for each piece of data, and who may change it.

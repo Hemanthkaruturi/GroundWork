@@ -1,0 +1,56 @@
+# Filled in by `groundwork.py feedback` (the /groundwork-specflow:send-feedback command): the agent's draft arrives
+# here through the link's query parameters, one per field id. Keep the ids in step with FIELDS in
+# plugins/groundwork-specflow/engine/groundwork_feedback.py.
+name: GroundWork feedback
+description: Something in GroundWork did not work as expected.
+title: "[feedback] "
+labels: ["feedback"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Prepared by your coding agent from your session, with project details removed. Read every field and change anything you like before you submit. This issue is public.
+  - type: input
+    id: version
+    attributes:
+      label: GroundWork version
+  - type: input
+    id: platform
+    attributes:
+      label: Agent
+      description: Claude Code, Codex or Devin
+  - type: input
+    id: environment
+    attributes:
+      label: System
+  - type: input
+    id: where
+    attributes:
+      label: Where in GroundWork
+      description: The command, hook, skill or check code
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What was expected
+  - type: textarea
+    id: user-words
+    attributes:
+      label: In your own words
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      render: text
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy
+      options:
+        - label: I read this and it contains nothing private about my project or company.
+          required: true

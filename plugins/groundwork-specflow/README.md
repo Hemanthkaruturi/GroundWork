@@ -5,7 +5,7 @@ GroundWork is a plugin for Claude Code (and Devin and Codex) that makes a coding
 ## What it adds to Claude Code
 
 - **Skills** for each step: bootstrap, interview, RFC, spec, plan, tasks, evals, implement, handover, resume, bug fixing, ownership, code layout, code quality, baseline (existing behaviour and legacy specs) and plain writing.
-- **Commands you type:** `/groundwork-specflow:approve`, `/groundwork-specflow:bypass` (emergencies, logged) and `/groundwork-specflow:status`.
+- **Commands you type:** `/groundwork-specflow:approve`, `/groundwork-specflow:bypass` (emergencies, logged), `/groundwork-specflow:status` and `/groundwork-specflow:send-feedback` (tell us what went wrong with GroundWork).
 - **Hooks** that run at session start, on each prompt, before file edits and shell commands, and at the end of a reply.
 - **A local command-line engine** (`engine/groundwork.py`) that checks projects against the written standard (`STANDARD.md`).
 
@@ -30,6 +30,7 @@ All hooks run the explicit path `${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py` wit
 - The Bash hook parses the proposed tool command as text to identify file writes. It never executes that command, dumps the process environment, or transmits hook input. Download commands mentioned in the standard are examples of writes to check, not commands the plugin runs.
 - `groundwork.py verify` runs the repo's own recorded check commands (formatter, linter, type checker, tests), and only when a person, an agent or CI runs it. No hook ever runs project tools. `quality init --create` copies GroundWork's tool configs into the repo, and never overwrites one.
 - `groundwork check` looks for key-shaped text in files that can be committed, to catch credentials pasted into code. It reports only the file, the line and the kind of key, never the text, and it never opens `.env` files. `init` adds `.env` to `.gitignore` if it is missing, and says so.
+- **Feedback** (`/groundwork-specflow:send-feedback`, or offered by the agent when GroundWork fails) is a draft written to `~/.groundwork/feedback/` and a link to GroundWork's GitHub issue form with the fields filled in. The draft holds only GroundWork's version, the agent, the OS and Python version, and a description of GroundWork's behaviour. Before saving, the engine removes paths, file names, the project's folder, feature, RFC and bug names, people from PROJECT.md, your git identity, emails, URLs, keys, IP addresses and code blocks. When GroundWork itself crashes, the draft carries only the error's type and the engine's own file and line numbers, never the error message. GroundWork sends nothing: you read the draft, open the link, and GitHub posts the issue under your account only when you press Submit.
 - Discovery and freshness scans skip common secret files (`.env*`, keys, credential files, Terraform variables/state) and file symlinks.
 - It reads and writes files inside your project: the documents it manages, plus a `.groundwork/` folder for approvals, notes and freshness records. Only if you turn alerts on does it also keep two small files in `~/.groundwork/`.
 - With alerts on, it starts your operating system's own notification, sound and speech tools (PowerShell on Windows and WSL; `osascript`, `afplay` and `say` on macOS; `notify-send`, a sound player and `spd-say` or `espeak` on Linux). Over SSH it only rings the terminal bell.
@@ -61,7 +62,7 @@ Claude Code, Python 3.10 or newer (found as `python3` or `python` on PATH), and 
 
 ## Privacy
 
-GroundWork runs locally, collects no data and makes no network requests. See the [Privacy Policy](https://github.com/Hemanthkaruturi/GroundWork/blob/main/PRIVACY.md).
+GroundWork runs locally, collects no data and makes no network requests. Feedback is a link you choose to open and submit yourself. See the [Privacy Policy](https://github.com/Hemanthkaruturi/GroundWork/blob/main/PRIVACY.md).
 
 ## License
 

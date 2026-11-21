@@ -13,6 +13,7 @@ Decisions:  groundwork.py new-adr <slug> [--title T] [--rfc RFC-000N | --retrosp
 Contracts:  groundwork.py new-contract <provider-topic> [--title T] [--provider P] [--consumers a,b] [--as-built]
             groundwork.py new-baseline <slug> [--title T] [--capability C] | capability set|link|unlink ... | capabilities
 Quality:    groundwork.py verify [--fix] [--step S] | quality [show|init [--create]|keep|set step=CMD|ignore]
+Feedback:   groundwork.py feedback --title T --happened TEXT [--expected T] [--where W] [--user-words T] [--json]
 Code:       groundwork.py codemap [--check] | layout [--json] | layout init --profile P [--root R] [--create] | layout keep | layout map role=path [--legacy P]
 """
 
@@ -44,6 +45,7 @@ import groundwork_core as C
 import groundwork_decisions as AD
 import groundwork_discover as D
 import groundwork_doctor as X
+import groundwork_feedback as FB
 import groundwork_fresh as F
 import groundwork_hooks as H
 import groundwork_host as G
@@ -56,7 +58,7 @@ import groundwork_stale as ST
 import groundwork_submodules as SM
 
 TRIAGE = (
-    "Before changing any file, triage the request: a defect -> fix-bug skill; new or changed behaviour OR LOOK "
+    "Before changing any file, triage the request: a defect -> fix-bug skill (GroundWork itself misbehaving -> groundwork-feedback skill); new or changed behaviour OR LOOK "
     "(UI redesign, restyle, copy) -> interview -> RFC -> approval -> spec -> plan -> tasks -> evals; continuing earlier work -> "
     "resume skill; a small change to built work that changes no behaviour (move a file, rename, refactor) -> read the "
     "feature's RFC, spec and changes.md, make it, record it with `groundwork.py change`; a small, clear change that "
@@ -1680,6 +1682,39 @@ def cmd_note(a) -> None:
     print("noted in " + str(W.add_note(ctx, " ".join(a.text))))
 
 
+def cmd_feedback(a) -> None:
+    """A draft about GroundWork itself, scrubbed of project details, and a pre-filled issue link."""
+    ctx = C.detect(Path.cwd())
+    rep = FB.build(
+        title=a.title,
+        happened=a.happened,
+        expected=a.expected or "",
+        where=a.where or "",
+        user_words=a.user_words or "",
+        details=a.details or "",
+        host=a.platform,
+        ctx=None if ctx.level == "unknown" else ctx,
+    )
+    try:
+        path = FB.save(rep)
+    except OSError:  # no writable folder: the link alone still carries the whole report
+        path = None
+    if a.json:
+        print(
+            json.dumps(
+                {
+                    "draft": str(path),
+                    "url": rep.url(),
+                    "removed": rep.removed,
+                    "report": rep.fields,
+                },
+                indent=2,
+            )
+        )
+    else:
+        print(FB.announce(rep, path))
+
+
 def cmd_change(a) -> None:
     ctx = C.detect(Path.cwd())
     if not ctx.repo:
@@ -1844,6 +1879,9 @@ HOOKS = (
     "alert-stop",
     "alert-question",
 )
+
+
+FB.G_HOOKS = HOOKS
 
 
 def main() -> None:
@@ -2191,6 +2229,30 @@ def main() -> None:
     p = sub.add_parser("activate")
     p.add_argument("slug")
     p.set_defaults(fn=cmd_activate)
+    p = sub.add_parser(
+        "feedback",
+        help="draft feedback about GroundWork itself (no project details) and a pre-filled GitHub issue link",
+    )
+    p.add_argument(
+        "--title", required=True, help="one line: what went wrong with GroundWork"
+    )
+    p.add_argument("--happened", required=True, help="what GroundWork did")
+    p.add_argument("--expected", help="what it should have done")
+    p.add_argument(
+        "--where", help="the GroundWork command, hook, skill or check code (e.g. GW092)"
+    )
+    p.add_argument(
+        "--user-words",
+        help="the user's own words, added as they wrote them (still scrubbed)",
+    )
+    p.add_argument("--details", help="anything else about GroundWork's behaviour")
+    p.add_argument(
+        "--platform",
+        choices=sorted(FB.HOSTS),
+        help="the agent harness (default: detected)",
+    )
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(fn=cmd_feedback)
     a = ap.parse_args()
     host = G.name()
     if a.cmd not in HOOKS and (
@@ -2200,7 +2262,16 @@ def main() -> None:
             G.CodexText(sys.stdout, host),
             G.CodexText(sys.stderr, host),
         )
-    a.fn(a)
+    try:
+        a.fn(a)
+    except (SystemExit, KeyboardInterrupt, BrokenPipeError):
+        raise
+    except (
+        Exception
+    ) as e:  # a failure inside GroundWork itself: offer the person a feedback report
+        if a.cmd != "feedback":
+            FB.on_crash(e, a.cmd)
+        raise
 
 
 if __name__ == "__main__":

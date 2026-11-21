@@ -5,6 +5,8 @@ description: The lifecycle for fixing a defect — reproduce, find the root caus
 
 # Fix a bug
 
+This is for the user's project. If GroundWork itself is what misbehaves, use the **groundwork-feedback** skill instead.
+
 A bug is a **violated or missing requirement**. Code edits for a fix are blocked until the bug record is *diagnosed*: complete, classified, tied to real approved specs (or RFC), and naming a regression test. That is what stops "fixes" that silently change behaviour.
 
 ## Ask questions the right way

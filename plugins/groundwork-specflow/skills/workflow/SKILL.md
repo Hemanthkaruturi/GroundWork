@@ -17,6 +17,9 @@ every plugin hook while the plugin's skills and commands still load. Only their 
 plugin's hooks. Until then, the user approves and bypasses by running the engine in their own terminal.
 Elsewhere, ask them to check that the plugin is installed and enabled.
 
+## When GroundWork itself goes wrong
+If GroundWork reports an internal error, or its own behaviour is clearly wrong, use the **groundwork-feedback** skill: it prepares a draft with no project details and a link the user can send, or ignore.
+
 ## Know your level first
 Run `python3 "${CLAUDE_PLUGIN_ROOT}/engine/groundwork.py" status`. It tells you which you are in:
 

@@ -101,7 +101,7 @@ def session_cwd(full: dict) -> str | None:
 # Codex has no plugin slash commands: its TUI rejects /groundwork-specflow:approve as unrecognised. It turns
 # commands/<name>.md into the skill `groundwork-specflow:source-command-<name>`, and skills are mentioned with `$`.
 # Approve and bypass keep a short form: the prompt hook runs them from the typed text (HUMAN_CMD), skill or not.
-COMMANDS = ("approve", "bypass", "change", "status")
+COMMANDS = ("approve", "bypass", "change", "status", "send-feedback")
 HUMAN_ACTS = ("approve", "bypass", "change")
 SLASH_CMD = re.compile(r"/groundwork-specflow:([a-z-]+)")
 

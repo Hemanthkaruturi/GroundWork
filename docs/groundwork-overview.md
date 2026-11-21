@@ -10,13 +10,13 @@ GroundWork is a plugin for Claude Code, Codex and Devin. It makes the agent foll
 
 | | |
 | --- | --- |
-| 19 skills | one for each step of the path, plus resume, refresh, bugs, ownership, code layout, code quality, baseline and plain writing |
+| 20 skills | one for each step of the path, plus resume, refresh, bugs, ownership, code layout, code quality, baseline, plain writing and feedback |
 | 10 hooks | the gate before edits and shell commands, session awareness, reminders, reply length, and optional alerts when the agent waits for you |
 | 87 numbered rules | checked with no AI and no network, on a laptop, in a git hook and in CI |
-| 373 automated tests | the whole lifecycle, and every rule has a test that breaks exactly that rule |
+| 385 automated tests | the whole lifecycle, and every rule has a test that breaks exactly that rule |
 | 3 coding agents | Claude Code, Codex (CLI) and Devin (CLI and Desktop), from the same plugin |
 | 3 platforms | Linux, macOS and Windows, tested on Python 3.10 and 3.12 |
-| 0 network calls | it runs on your machine, collects nothing and sends nothing |
+| 0 network calls | it runs on your machine, collects nothing and sends nothing; feedback is a link you choose to open |
 
 ---
 
@@ -53,6 +53,7 @@ Every feature, in one line, with where to see it.
 | **As-built contracts and evidence-led bootstrap** | Discovery finds routes, commands, schemas, API docs and rule-shaped lines; a surface others consume becomes a contract with named provider and consumer reviewers | 5.34 |
 | **Baselines for existing behaviour** | What the code already does becomes approved specs; legacy specs are imported and classified, never rewritten; later features extend or amend them and bugs can cite them; the files a baseline cites are watched for drift | 5.34 |
 | **Alerts when the agent waits for you** | A sound, a desktop notification and a short spoken phrase when a document is ready for approval, a question is asked, or a handover is written. Off until you turn it on | 5.35 |
+| **Feedback about GroundWork** | When GroundWork gets in the way or fails, the agent writes a short report with the project's names, paths, people and code removed, and gives you a link to GitHub with the issue form filled in. Nothing is sent unless you press Submit | 5.37 |
 | **Enforcement dial and emergency bypass** | Block, warn or off, and a logged 60-minute bypass for real emergencies | 5.27 |
 | **Git hook and CI** | The same check on every commit and every pull request | 5.2, 5.13, 5.28 |
 | **Short, plain replies** | Answer first, about 150 words, nothing important lost | 5.15 |
@@ -168,7 +169,7 @@ Fix *where* things live, *what* each document contains, and *who* approves. Leav
 - Other skills (like a frontend design skill) are treated as tools for the build step. They can't skip the process.
 
 ### Private, portable and easy to keep current
-- Runs entirely on your machine. No network requests, no telemetry, no accounts. It reads your local git name and email only to record who did what, and keeps that in your own project files. If you turn alerts on, two small settings files are kept in `~/.groundwork/`.
+- Runs entirely on your machine. No network requests, no telemetry, no accounts. It reads your local git name and email only to record who did what, and keeps that in your own project files. If you turn alerts on, two small settings files are kept in `~/.groundwork/`. Feedback drafts are kept there too, and only you can send one.
 - Works on Linux, macOS and Windows. It needs Python 3.10 or newer and git, and nothing else.
 - Works in **Claude Code**, in **Codex** (CLI) and in **Devin** (CLI and Desktop). All three run the same hooks, skills and engine, so a team can mix them on one project.
 - Two commands to install. Auto-update, or one command to update.
@@ -192,6 +193,7 @@ One sample product is used throughout. **ShopFront** is a workspace called `shop
 | Code | 5.30 code layout · 5.31 code map · 5.32 credentials · 5.33 code quality |
 | Existing systems | 5.34 baselines, imported specs, retrospective decisions and as-built contracts |
 | Attention | 5.35 alerts |
+| Telling us | 5.37 feedback about GroundWork |
 
 ### 5.1 The agent always knows where it is
 `groundwork init` in the empty workspace, then `groundwork doctor` *(real output)*:
@@ -1041,6 +1043,37 @@ Work is recorded `--via codex`, so `who` shows which agent built what. The code 
 
 **Without Codex's plugin system.** For a team that wants GroundWork in the repo, or a company that turns plugins off, `setup/install.py --codex` installs it into the project (§11). It puts the engine in `.codex/groundwork/`, each skill and command in `.agents/skills/`, and the hooks in `.codex/hooks.json`, next to any hooks the project already has. These are Codex's project skills and hooks, not a plugin. Commands have no prefix: `$bootstrap`, `$approve`, `$bypass`, `$change`, `$status`. The approve, bypass, change and status skills are marked so that only the user can invoke them; Codex's agent can't choose them on its own. The script checks its own install by running the session-start hook the way Codex will, and `--codex --uninstall` removes it and keeps the project's own hooks. Committing `.codex/` and `.agents/` gives the whole team GroundWork (the engine's bytecode is git-ignored); each person still trusts the project and its hooks once.
 
+### 5.37 Feedback: tell us when GroundWork gets in the way
+A tool that blocks people will sometimes block them wrongly, and most people never report it: they just stop using the tool. So reporting a problem is one command, and the report is written for you. Ravi types:
+```
+/groundwork-specflow:send-feedback Ravi was blocked editing shop-api/src/search.py for Product search, ask priya@shopfront.example
+```
+In Devin it is `/send-feedback`, and in Codex `$send-feedback` (project install) or `$groundwork-specflow:source-command-send-feedback` (plugin). It is not called `/feedback`, because Devin and Codex already use that name for their own feedback.
+
+The `groundwork-feedback` skill has the agent describe **GroundWork's behaviour only**: what it did, what it should have done, and which command, hook, skill or check code was involved. Ravi's own words go in as he typed them. The engine then removes everything it can recognise as ShopFront's before saving: paths and file names, the workspace and repo folders and their single words, feature, RFC and bug names and titles, people in PROJECT.md (full names and each part), the git name and email, the machine name, and any email, URL, key, IP address, commit hash or code block. GroundWork's own words, such as `/groundwork-specflow:approve`, `engine/groundwork_core.py` or `GW092`, stay *(real output, the link and path shortened)*:
+```
+Feedback draft for GroundWork, with no project details: ~/.groundwork/feedback/2026-11-21-111706.md
+Removed before saving: 1 email, 1 path, 1 person, 2 project names (shown as placeholders such as <path>).
+Read it first. To send it, open this link: GitHub shows the form already filled in, and nothing is sent until you press Submit there.
+https://github.com/Hemanthkaruturi/GroundWork/issues/new?template=groundwork-feedback.yml&title=%5Bfeedback%5D%20gate%20blocks…
+```
+The draft *(real output, each heading and its text put on one line)*:
+```
+# [feedback] gate blocks an edit the approved spec allows
+## GroundWork version        0.1.28
+## Agent                     Claude Code
+## System                    Linux (WSL) x86_64, Python 3.12.3
+## Where in GroundWork       gate hook
+## What happened             The gate refused an edit to a code file although the RFC and spec were approved and plan, tasks and evals were finished.
+## What was expected         The edit is allowed once every earlier step is approved.
+## In the user's own words   <person> was blocked editing <path> for <name>, ask <email>
+```
+The link opens GroundWork's issue form on GitHub with every field filled in. Ravi can change anything there, and a required tick box asks him to confirm it holds nothing private. The issue is posted, publicly and under his GitHub account, only when he presses Submit. His team's own code can live on GitLab or anywhere else; the link only needs a browser. Drafts are kept in `~/.groundwork/feedback/`, outside every project, so they are never committed. Where that folder can't be written, as in Codex's default sandbox, they go to the system temp folder, and the link alone still carries the whole report.
+
+**When GroundWork notices it failed.** If the engine itself crashes, in a hook or a command, it writes the draft on its own and prints the link once. The draft holds only the error's type and the engine's own file and line numbers, never the error message, because the message can quote the project's files. The same crash again prints one short line. The agent tells the user once and carries on with the work. The agent also offers a draft when it sees GroundWork clearly misbehave: a gate blocking an edit the approved documents allow, a check reporting something untrue, or rules that contradict each other.
+
+**What is not feedback.** A bug in the project's own code goes to the `fix-bug` skill, and GroundWork working as designed (an unapproved spec blocking code) is the point, not a fault. Tested live in Claude Code: a broken function described as "not working as expected" was treated as project work, and a blocked edit was explained, with no feedback draft in either case.
+
 ## 6. How it helps
 
 | If you are… | You get… |
@@ -1073,7 +1106,7 @@ The step-by-step version is in `docs/manual-testing.md`.
 
 ## 8. What's inside
 
-**19 skills**
+**20 skills**
 
 | Skill | What it does |
 | --- | --- |
@@ -1096,10 +1129,11 @@ The step-by-step version is in `docs/manual-testing.md`.
 | `code-quality` | Records the repo's toolchain (standard or its own), runs `verify` after every task, and carries the ten coding rules |
 | `baseline` | Writes what existing code already does as baseline specs, and classifies legacy specs imported with `adopt-specs` |
 | `plain-writing` | Keeps replies and documents short, plain and decision-first |
+| `groundwork-feedback` | Writes a report about GroundWork itself, with project details removed, and a pre-filled GitHub issue link the user can send |
 
 **10 hooks:** three at session start (the project's state, the code map and in-flight work; then the rules in two parts, so each stays under Claude Code's 10,000-character limit for one hook's message; a resumed session gets the state again but not the rules), every prompt (triage and style reminder), before edits and before shell commands (the gate, which can only deny and never approves anything), when another skill loads, at reply end (optional length limit), and two alert hooks, at reply end and before a question, that stay silent unless you turned alerts on. The same hook file serves Claude Code, Codex and Devin. Its matchers name every agent's tools.
 
-**Commands you type:** `/groundwork-specflow:approve` (one or more documents), `/groundwork-specflow:bypass` (emergencies, logged), `/groundwork-specflow:change` (a standalone change such as a package upgrade, logged), `/groundwork-specflow:status`. They are the same in Claude Code and Devin. In Devin, only the user can run them. In a Devin project installed without the plugin system (5.29), they have no prefix: `/approve`, `/bypass`, `/change`, `/status`. Codex has no plugin slash commands, so there they are typed with `$`: `$source-command-approve`, `$source-command-bypass`, `$source-command-change` and `$groundwork-specflow:source-command-status` with the plugin, or `$approve`, `$bypass`, `$change` and `$status` in a project install (5.36).
+**Commands you type:** `/groundwork-specflow:approve` (one or more documents), `/groundwork-specflow:bypass` (emergencies, logged), `/groundwork-specflow:change` (a standalone change such as a package upgrade, logged), `/groundwork-specflow:status`, `/groundwork-specflow:send-feedback` (a report about GroundWork, 5.37). They are the same in Claude Code and Devin. In Devin, only the user can run them. In a Devin project installed without the plugin system (5.29), they have no prefix: `/approve`, `/bypass`, `/change`, `/status`, `/send-feedback`. Codex has no plugin slash commands, so there they are typed with `$`: `$source-command-approve`, `$source-command-bypass`, `$source-command-change`, `$groundwork-specflow:source-command-status` and `$groundwork-specflow:source-command-send-feedback` with the plugin, or `$approve`, `$bypass`, `$change`, `$status` and `$send-feedback` in a project install (5.36).
 
 **A command-line engine** (`groundwork.py`), pure Python with no dependencies and no Claude needed:
 
@@ -1116,15 +1150,16 @@ The step-by-step version is in `docs/manual-testing.md`.
 | `deps`, `who`, `record` | relations, responsibility, and recording who did what |
 | `fresh`, `confirm`, `confirm --baseline` | detect stale documents and baselines whose sources changed; record that a person checked them |
 | `alerts on\|off\|status\|test`, `alerts voice on\|off` | your own alert setting, for every project |
+| `feedback` (`--title`, `--happened`, `--expected`, `--where`, `--user-words`, `--platform`, `--json`) | a report about GroundWork with project details removed, saved outside the project, and a pre-filled GitHub issue link |
 | `hooks install`, `hooks status`, `hooks uninstall` | manage the git hook, with `--vendor`, `--pre-push`, `--strict` |
 | `submodules`, `submodules init` (`--dry-run`), `submodules skip` | put the workspace in git with its repos as submodules (nothing moves), or keep it a plain folder |
 | `layout`, `layout init`, `layout keep`, `layout map` | show or record the repo's code layout: standard folders, or keep the existing structure |
 | `quality`, `quality init`, `quality keep`, `quality set`, `quality ignore`, `verify` (`--fix`, `--step`) | record the repo's code quality toolchain; run format, lint, types and tests |
 | `codemap`, `codemap --check` | write `CODEMAP.md` (where each kind of code lives) from the code; check it is current |
 
-**Quality:** 373 automated tests cover the whole lifecycle, on Linux, macOS and Windows, on Python 3.10 and 3.12. Every numbered rule has a test that breaks exactly that rule.
+**Quality:** 385 automated tests cover the whole lifecycle, on Linux, macOS and Windows, on Python 3.10 and 3.12. Every numbered rule has a test that breaks exactly that rule.
 
-**Privacy:** it runs locally, makes no network requests, has no telemetry, and never uses, stores or sends credentials. The key check reports only where a key is, never the key itself, and never opens `.env`. See `PRIVACY.md`.
+**Privacy:** it runs locally, makes no network requests, has no telemetry, and never uses, stores or sends credentials. The key check reports only where a key is, never the key itself, and never opens `.env`. Feedback is a draft and a link: nothing is sent unless the person opens the link and presses Submit. See `PRIVACY.md`.
 
 ## 9. Honest limits
 
@@ -1136,6 +1171,7 @@ The step-by-step version is in `docs/manual-testing.md`.
 - The coding rules are instructions, and agents can still slip. The linters, type checkers and tests run by `verify` are what actually hold the line, so a repo is only as strict as the tools it records. `verify` runs those tools, so they must be installed where it runs.
 - The key check looks for well-known key formats (Anthropic, OpenAI, AWS, GitHub, Slack, Google, Stripe, private keys). It doesn't find passwords or keys in unknown formats; use a dedicated secret scanner for that.
 - The code layout checks read imports as text, for Python, JavaScript/TypeScript and Go only. They can miss an unusual import or flag the odd false one, which is why they are warnings. Code in other languages is not checked and does not appear in the code map.
+- Feedback removes the names GroundWork can see (folders, features, RFCs, bugs, people in PROJECT.md, the git identity) and common shapes (paths, emails, URLs, keys, code). It can't recognise a client or product name it has never seen, so a name typed only in free text can get through. That is why the person reads the draft before sending, and the issue form asks them to confirm. Sending needs a GitHub account, and the issue is public.
 - It adds steps. That is the point, but tiny fixes need the human-run bypass.
 
 ## 10. Questions you may get
@@ -1153,6 +1189,8 @@ The step-by-step version is in `docs/manual-testing.md`.
 **Does it work on Windows and macOS?** Yes. It runs on Linux, macOS and Windows. It needs Python 3.10 or newer (as `python3` or `python`) and git.
 
 **Does it send our code or data anywhere?** No. It makes no network requests and has no telemetry. It reads your local git name and email to record who did what, and keeps that in your own project files.
+
+**How do we report a problem with GroundWork?** Type `/groundwork-specflow:send-feedback`, with your own words if you like. The agent writes the report with your project's details removed and gives you a link to GitHub with the form filled in. You read it and decide whether to press Submit (5.37).
 
 **Does it work with Devin?** Yes, in the Devin CLI and Desktop app, with the same gate and documents. Devin cloud sessions get the skills but no hook enforcement, so add the git hook or the CI check there (5.28, 5.29). If your company has turned Devin plugins off, let Devin install GroundWork into the project instead (§11).
 

@@ -148,6 +148,14 @@ Restart Claude Code (or run `/reload-plugins`) to start using the new version. I
 python3 <engine path>/groundwork.py approve <document>
 ```
 
+**Is GroundWork getting in your way?** Tell us. Run this, with or without your own words:
+
+```
+/groundwork-specflow:send-feedback the gate blocked an edit my approved spec allows
+```
+
+The agent writes a short report about GroundWork's behaviour, with your project's names, paths, people and code removed, and gives you a link to GitHub with the issue form already filled in. Read it, change anything you like, and press Submit, or don't: nothing is sent unless you do. If GroundWork itself fails during a session, the agent offers the same draft and link once. In Codex, type `$groundwork-specflow:source-command-send-feedback` (or `$send-feedback` for a project install). In Devin it is the same command, or `/send-feedback` for a project install. It is not called `/feedback`, because Devin and Codex already use that name for their own feedback.
+
 ### Using Devin instead
 
 GroundWork also runs in [Devin](https://devin.ai) (Devin CLI and Devin Desktop), from this same repository. You need Python 3.10+ and git, as above.
@@ -165,7 +173,7 @@ If `python3` isn't found or opens the Microsoft Store message (common on Windows
 Do every step yourself; don't ask me to run anything. If a command fails, show me its error and stop there. Don't try to install GroundWork another way. If it succeeds, tell me that GroundWork is installed, and that to start using it I should open a new Devin session in this project and type /bootstrap there. That sets GroundWork up for this project (it runs groundwork init and writes the project documents with me).
 ```
 
-Devin runs [setup/install.py](setup/install.py), which puts GroundWork in your project's `.devin/` folder as Devin project skills and hooks rather than as a plugin. Commit that folder, and everyone who opens the project in Devin gets GroundWork. Commands have no prefix in this install: `/bootstrap`, `/approve`, `/bypass`, `/change` and `/status`.
+Devin runs [setup/install.py](setup/install.py), which puts GroundWork in your project's `.devin/` folder as Devin project skills and hooks rather than as a plugin. Commit that folder, and everyone who opens the project in Devin gets GroundWork. Commands have no prefix in this install: `/bootstrap`, `/approve`, `/bypass`, `/change`, `/status` and `/send-feedback`.
 
 The install script checks its own work: it runs GroundWork's session-start hook the way Devin will, and fails with the error if that doesn't work. GroundWork loads when a Devin session starts, so after installing, open a new Devin session in the project and type `/bootstrap`. That sets GroundWork up for the project: it runs `groundwork init` and writes the project documents with you. You only need it once per project.
 

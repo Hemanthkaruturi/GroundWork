@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**GroundWork (`groundwork-specflow`)** is a Claude Code plugin that also runs in Devin. This page says what it does with data. Last updated: 2026-10-05.
+**GroundWork (`groundwork-specflow`)** is a Claude Code plugin that also runs in Devin. This page says what it does with data. Last updated: 2026-11-21.
 
 ## Short version
 
@@ -23,6 +23,14 @@ GroundWork writes plain files inside your own project, under your control:
 These files live in your repository. You decide whether to commit or share them, and you can delete them at any time.
 
 If you turn on attention alerts (`groundwork.py alerts on`), two small files are kept outside any project, in `~/.groundwork/`: `settings.json` (alerts on or off, voice on or off) and `alert-state.json` (which document version was last announced, so the same one does not ring twice). A desktop notification and a spoken phrase are produced by your own operating system's tools. Nothing leaves your machine.
+
+## Feedback
+
+If you ask for it (`/groundwork-specflow:send-feedback`), or GroundWork notices that it failed, your agent prepares a feedback draft about GroundWork's behaviour. It is saved in `~/.groundwork/feedback/`, outside your projects, and comes with a link to GroundWork's public issue form on GitHub with the fields filled in.
+
+- The draft holds GroundWork's version, the agent (Claude Code, Codex or Devin), your OS and Python version, and a description of what GroundWork did. For a crash it holds the error's type and the GroundWork engine's own file and line numbers, never the error message.
+- Before saving, GroundWork removes what it can recognise as yours: paths and file names, the project's folder name, feature, RFC and bug names, people listed in PROJECT.md, your git name and email, emails, URLs, keys, IP addresses and code blocks. Git remote URLs are never read.
+- Nothing is sent. You read the draft, open the link if you choose, edit anything in GitHub's form, and the issue is posted, publicly and under your GitHub account, only when you press Submit. You can delete the drafts at any time.
 
 ## What it sends
 
